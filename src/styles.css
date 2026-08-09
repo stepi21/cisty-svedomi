@@ -136,3 +136,13 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
 .ticket-line .lab{ color:var(--ink-soft); }
 .ticket-line .val{ font-weight:600; font-family:'IBM Plex Mono', monospace; font-size:12.5px; }
 .note{ font-size:11.5px; color:var(--ink-soft); padding:8px 22px 14px; font-family:'IBM Plex Mono', monospace; }
+
+/* ---------- side panel (forms that need the map clickable underneath) ---------- */
+.side-panel{
+  position:fixed; top:90px; right:20px; z-index:500;
+  max-height:calc(100vh - 110px); overflow-y:auto;
+}
+.side-panel .ticket{ box-shadow:0 20px 50px rgba(22,57,61,.35); }
+@media (max-width:860px){
+  .side-panel{ top:auto; bottom:0; left:0; right:0; max-height:70vh; }
+}
