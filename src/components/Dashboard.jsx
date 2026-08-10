@@ -702,6 +702,8 @@ function SettingsModal({ userId, profile, onClose, onSaved }) {
     </div>
   )
 }
+
+function RodEditRow({ rod, color, onArmPosition, onDone, onCancel }) {
   const [name, setName] = useState(rod.name)
   const initialBaits = (rod.baits && rod.baits.length > 0)
     ? rod.baits.map((b) => ({ name: b.name, photo_url: b.photo_url, photoFile: null }))
