@@ -90,8 +90,19 @@ header h1 .accent{ color:var(--amber); }
 .color-swatches{ display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
 .color-swatch{ width:30px; height:30px; border-radius:50%; border:2px solid transparent; cursor:pointer; }
 .color-swatch.selected{ border-color:var(--ink); box-shadow:0 0 0 2px var(--white) inset; }
+.stats-row{ padding:12px 0; border-bottom:1px solid #EFEBDF; }
+.stats-row-head{ display:flex; align-items:center; gap:8px; font-size:14px; }
+.stats-visits{ margin-left:auto; font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--ink-soft); }
+.stats-species{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+.stats-total{ margin-top:6px; font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--ink-soft); }
+.stats-total-row{ border-bottom:none; border-top:2px solid var(--paper-line); margin-top:4px; padding-top:14px; }
 
 .session-item{ padding:13px 18px; border-bottom:1px solid #EFEBDF; cursor:pointer; display:flex; gap:11px; }
+.month-header{
+  padding:10px 18px 4px; font-family:'IBM Plex Mono', monospace; font-size:10.5px;
+  text-transform:uppercase; letter-spacing:.07em; color:var(--ink-soft); background:var(--paper);
+  position:sticky; top:0; z-index:1;
+}
 .session-item:hover{ background:#F7F4EA; }
 .session-item.active{ background:var(--water-soft); border-left:3px solid var(--water-mid); padding-left:15px; }
 .s-icon{ width:34px; height:34px; flex:none; border-radius:8px; display:flex; align-items:center; justify-content:center; background:var(--paper); border:1px solid var(--paper-line); }

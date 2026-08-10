@@ -11,6 +11,19 @@ const WEATHER_DESC = {
   95: 'bouřka', 96: 'bouřka s kroupami', 99: 'silná bouřka s kroupami',
 }
 
+export function moonPhaseName(dateStr) {
+  if (!dateStr) return null
+  const synodic = 29.53058867
+  const known = new Date('2000-01-06T18:14:00Z')
+  const target = new Date(`${dateStr}T12:00:00Z`)
+  const days = (target - known) / 86400000
+  let phase = (days % synodic) / synodic
+  if (phase < 0) phase += 1
+  const names = ['Nov', 'Dorůstající srpek', 'První čtvrť', 'Dorůstající měsíc', 'Úplněk', 'Couvající měsíc', 'Poslední čtvrť', 'Couvající srpek']
+  const idx = Math.round(phase * 8) % 8
+  return names[idx]
+}
+
 export async function fetchWeather(lat, lng, dateStr, timeStr) {
   if (lat == null || lng == null || !dateStr) {
     throw new Error('Chybí pozice nebo datum.')

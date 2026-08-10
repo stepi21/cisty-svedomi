@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, Fragment } from 'react'
 import L from 'leaflet'
 import { supabase } from '../supabaseClient'
 import CatchTicket from './CatchTicket.jsx'
-import { fetchWeather } from '../lib/weather.js'
+import { fetchWeather, moonPhaseName } from '../lib/weather.js'
 import { uploadPhoto } from '../lib/storage.js'
 
 const iconCarp = `<svg viewBox="0 0 24 24" fill="none"><path d="M3 12c0-4 5-7 10-7s8 3 8 7-3 7-8 7-10-3-10-7Z" stroke="#2C6E71" stroke-width="1.6"/><circle cx="16" cy="10.5" r="1" fill="#2C6E71"/></svg>`
@@ -34,6 +34,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [viewMode, setViewMode] = useState('aggregate') // 'aggregate' | 'detail'
   const [myProfile, setMyProfile] = useState(profile)
   const [showSettings, setShowSettings] = useState(false)
+  const [showStats, setShowStats] = useState(false)
   const [loading, setLoading] = useState(true)
   const [ticketCatch, setTicketCatch] = useState(null)
   const [inviteInfo, setInviteInfo] = useState(null)
@@ -46,6 +47,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [draftCatch, setDraftCatch] = useState(null)             // otevřený formulář nového úlovku
   const [catchChoosing, setCatchChoosing] = useState(false)      // mini panel "na jaké pozici?"
   const [editingRodId, setEditingRodId] = useState(null)         // id prutu, co se právě edituje inline
+  const [editingSession, setEditingSession] = useState(null)     // rozepsaná editace výpravy (datum, počasí...)
 
   const placementTargetRef = useRef(null)
   useEffect(() => { placementTargetRef.current = placementTarget }, [placementTarget])
@@ -163,7 +165,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     }
 
     if (target === 'area-point') {
-      setAreaDraft((prev) => ({ points: [...(prev?.points || []), point] }))
+      setAreaDraft((prev) => ({ areas: prev?.areas || [], current: [...(prev?.current || []), point] }))
       return
     }
 
@@ -198,12 +200,21 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   const pendingTypeRef = useRef('kapr')
 
-  // --- kreslení preview polygonu při tvorbě oblasti ---
+  // --- kreslení preview polygonu(ů) při tvorbě oblasti ---
   useEffect(() => {
     if (!draftLayer.current) return
     draftLayer.current.clearLayers()
-    if (areaDraft && areaDraft.points.length) {
-      const latlngs = areaDraft.points.map((p) => [p.lat, p.lng])
+    if (!areaDraft) return
+
+    areaDraft.areas.forEach((pts) => {
+      L.polygon(pts.map((p) => [p.lat, p.lng]), {
+        color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.15,
+      }).addTo(draftLayer.current)
+    })
+
+    const cur = areaDraft.current
+    if (cur.length) {
+      const latlngs = cur.map((p) => [p.lat, p.lng])
       if (latlngs.length === 1) {
         L.circleMarker(latlngs[0], { radius: 6, color: '#6B7A4F' }).addTo(draftLayer.current)
       } else {
@@ -217,6 +228,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return sessions.find((s) => s.id === c.session_id)
   }
 
+  function normalizeAreas(area) {
+    if (!area || area.length === 0) return []
+    if (area[0] && typeof area[0].lat === 'number') return [area] // starý formát: jeden plochý seznam bodů
+    return area // nový formát: pole polygonů
+  }
+
   // --- render markerů: agregovaný pohled (podle filtrů, přes všechny výpravy) nebo detail jedné výpravy ---
   useEffect(() => {
     if (!mapInstance.current || !markersLayer.current) return
@@ -226,13 +243,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (viewMode === 'detail' && activeSession) {
       map.setView([activeSession.lat, activeSession.lng], 14)
 
-      if (activeSession.area && activeSession.area.length > 2) {
-        L.polygon(activeSession.area.map((p) => [p.lat, p.lng]), {
+      normalizeAreas(activeSession.area).forEach((pts) => {
+        L.polygon(pts.map((p) => [p.lat, p.lng]), {
           color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.12,
         }).addTo(markersLayer.current)
-      }
+      })
 
-      ;(activeCategory === 'all' ? (activeSession.rods || []) : []).forEach((r, i) => {
+      ;(activeSession.rods || []).forEach((r, i) => {
         const color = rodColors[i % rodColors.length]
         L.circleMarker([r.lat ?? activeSession.lat, r.lng ?? activeSession.lng], {
           radius: 8, color, weight: 2, fillColor: color, fillOpacity: 0.5,
@@ -295,7 +312,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setPickingType(false)
     pendingTypeRef.current = type
     if (AREA_TYPES.includes(type)) {
-      setAreaDraft({ points: [] })
+      setAreaDraft({ areas: [], current: [] })
       setPlacementTarget('area-point')
     } else {
       setPlacementTarget('session-point')
@@ -303,7 +320,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   function undoAreaPoint() {
-    setAreaDraft((prev) => ({ points: prev.points.slice(0, -1) }))
+    setAreaDraft((prev) => ({ ...prev, current: prev.current.slice(0, -1) }))
   }
 
   function cancelAreaOrPoint() {
@@ -311,12 +328,18 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setPlacementTarget(null)
   }
 
-  function finishArea() {
-    const points = areaDraft.points
-    if (points.length < 3) return
+  function finishCurrentArea() {
+    if (areaDraft.current.length < 3) return
+    setAreaDraft({ areas: [...areaDraft.areas, areaDraft.current], current: [] })
+  }
+
+  function proceedToForm() {
+    const areas = areaDraft.current.length >= 3 ? [...areaDraft.areas, areaDraft.current] : areaDraft.areas
+    if (areas.length === 0) return
+    const allPoints = areas.flat()
     const centroid = {
-      lat: points.reduce((s, p) => s + p.lat, 0) / points.length,
-      lng: points.reduce((s, p) => s + p.lng, 0) / points.length,
+      lat: allPoints.reduce((s, p) => s + p.lat, 0) / allPoints.length,
+      lng: allPoints.reduce((s, p) => s + p.lng, 0) / allPoints.length,
     }
     setAreaDraft(null)
     setPlacementTarget(null)
@@ -324,7 +347,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       type: pendingTypeRef.current,
       title: '', date: '', timeFrom: '', timeTo: '',
       temp: '', pressure: '', wind: '', desc: '',
-      point: centroid, area: points,
+      point: centroid, area: areas,
       rods: [{ name: 'Prut 1', lat: centroid.lat, lng: centroid.lng, baits: [{ name: '', photoFile: null }] }],
     })
   }
@@ -397,6 +420,34 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     await loadSessions()
   }
 
+  function startEditSession(s) {
+    setEditingSession({
+      id: s.id, title: s.title, date: s.session_date,
+      timeFrom: s.time_from || '', timeTo: s.time_to || '',
+      temp: s.weather_temp_c ?? '', pressure: s.weather_pressure_hpa ?? '',
+      wind: s.weather_wind || '', desc: s.weather_desc || '',
+      lat: s.lat, lng: s.lng,
+    })
+  }
+
+  async function saveEditSession() {
+    const e = editingSession
+    const { error } = await supabase.from('sessions').update({
+      title: e.title, session_date: e.date, time_from: e.timeFrom || null, time_to: e.timeTo || null,
+      weather_temp_c: e.temp || null, weather_pressure_hpa: e.pressure || null,
+      weather_wind: e.wind || null, weather_desc: e.desc || null,
+    }).eq('id', e.id)
+    if (error) { alert(error.message); return }
+    setEditingSession(null)
+    await loadSessions()
+  }
+
+  function monthLabel(dateStr) {
+    const d = new Date(dateStr)
+    const label = d.toLocaleDateString('cs-CZ', { month: 'long', year: 'numeric' })
+    return label.charAt(0).toUpperCase() + label.slice(1)
+  }
+
   const visibleSessions = sessions.filter((s) => {
     const catOk = activeCategory === 'all' || TYPE_CATEGORY[s.type] === activeCategory || filteredCatches(s).length > 0
     const userOk = activeUserFilter === 'all' || s.user_id === activeUserFilter
@@ -412,6 +463,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           <h1>Čistý<span className="accent">svědomí</span></h1>
           <div className="head-actions">
             <span className="whoami">{myProfile?.display_name}</span>
+            <button className="new-btn" onClick={() => setShowStats(true)} title="Statistiky">📊</button>
             <button className="new-btn" onClick={() => setShowSettings(true)} title="Nastavení">⚙️</button>
             <button className="new-btn" onClick={createInvite}>+ pozvat parťáka</button>
             <button className="new-btn" onClick={onSignOut}>Odhlásit</button>
@@ -442,7 +494,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               </button>
             ))}
           </div>
-          {members.length > 1 && (
+          {members.length >= 1 && (
             <div className="filter-row">
               <button
                 className={`filter-chip ${activeUserFilter === 'all' ? 'active' : ''}`}
@@ -469,24 +521,30 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               Žádná výprava. Zkus přidat první přes "+ nová výprava".
             </div>
           ) : (
-            visibleSessions.map((s) => (
-              <div
-                key={s.id}
-                className={`session-item ${viewMode === 'detail' && s.id === activeId ? 'active' : ''}`}
-                style={{ borderLeft: `3px solid ${userColor(s.user_id)}`, paddingLeft: 15 }}
-                onClick={() => { setActiveId(s.id); setViewMode('detail') }}
-              >
-                <div className="s-icon" dangerouslySetInnerHTML={{ __html: s.type === 'kapr' ? iconCarp : iconSpin }} />
-                <div className="s-body">
-                  <div className="s-title">{s.title}</div>
-                  <div className="s-sub">{s.session_date} · {s.time_from}–{s.time_to} · {userName(s.user_id)}</div>
-                  <div className="s-tags">
-                    <span className="s-tag">{s.type}</span>
-                    <span className="s-tag catch">{filteredCatches(s).length} úlovky</span>
+            visibleSessions.map((s, idx) => {
+              const group = monthLabel(s.session_date)
+              const prevGroup = idx > 0 ? monthLabel(visibleSessions[idx - 1].session_date) : null
+              return (
+                <Fragment key={s.id}>
+                  {group !== prevGroup && <div className="month-header">{group}</div>}
+                  <div
+                    className={`session-item ${viewMode === 'detail' && s.id === activeId ? 'active' : ''}`}
+                    style={{ borderLeft: `3px solid ${userColor(s.user_id)}`, paddingLeft: 15 }}
+                    onClick={() => { setActiveId(s.id); setViewMode('detail') }}
+                  >
+                    <div className="s-icon" dangerouslySetInnerHTML={{ __html: s.type === 'kapr' ? iconCarp : iconSpin }} />
+                    <div className="s-body">
+                      <div className="s-title">{s.title}</div>
+                      <div className="s-sub">{s.session_date} · {s.time_from}–{s.time_to} · {userName(s.user_id)}</div>
+                      <div className="s-tags">
+                        <span className="s-tag">{s.type}</span>
+                        <span className="s-tag catch">{filteredCatches(s).length} úlovky</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))
+                </Fragment>
+              )
+            })
           )}
         </aside>
 
@@ -532,10 +590,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
           {areaDraft && (
             <div className="place-hint area-hint">
-              Klikej podél trasy/oblasti, kde jsi chytal ({areaDraft.points.length} bodů, potřeba aspoň 3).
+              Klikej podél trasy/oblasti ({areaDraft.current.length} bodů v aktuální, potřeba aspoň 3){areaDraft.areas.length > 0 ? ` · hotových oblastí: ${areaDraft.areas.length}` : ''}.
               <div className="area-controls">
-                <button className="new-btn" onClick={undoAreaPoint} disabled={!areaDraft.points.length}>Zpět o bod</button>
-                <button className="btn-primary" style={{ margin: 0 }} onClick={finishArea} disabled={areaDraft.points.length < 3}>Dokončit oblast</button>
+                <button className="new-btn" onClick={undoAreaPoint} disabled={!areaDraft.current.length}>Zpět o bod</button>
+                <button className="new-btn" onClick={finishCurrentArea} disabled={areaDraft.current.length < 3}>+ Další oblast</button>
+                <button className="btn-primary" style={{ margin: 0 }} onClick={proceedToForm} disabled={areaDraft.areas.length === 0 && areaDraft.current.length < 3}>Hotovo, pokračovat</button>
                 <button className="new-btn" onClick={cancelAreaOrPoint}>Zrušit</button>
               </div>
             </div>
@@ -551,13 +610,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           {activeSession && viewMode === 'detail' && !draftSession && (
             <div className="detail-strip">
               <div className="det-block">
-                <h3>Podmínky</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <h3>Podmínky</h3>
+                  <button className="new-btn" onClick={() => startEditSession(activeSession)}>✏️ Upravit výpravu</button>
+                </div>
                 <div className="weather-row">
                   <div className="w-item"><div className="num">{activeSession.weather_temp_c ?? '—'}°C</div><div className="lab">teplota</div></div>
                   <div className="w-item"><div className="num">{activeSession.weather_pressure_hpa ?? '—'} hPa</div><div className="lab">tlak</div></div>
                   <div className="w-item"><div className="num">{activeSession.weather_wind || '—'}</div><div className="lab">vítr</div></div>
                 </div>
                 <div style={{ marginTop: 8, fontSize: 13, color: 'var(--ink-soft)' }}>{activeSession.weather_desc}</div>
+                <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-soft)' }}>🌙 {moonPhaseName(activeSession.session_date)}</div>
               </div>
               <div className="det-block">
                 <h3>Pruty a nástrahy</h3>
@@ -637,6 +700,19 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         />
       )}
 
+      {showStats && (
+        <StatsModal sessions={sessions} members={members} userColor={userColor} onClose={() => setShowStats(false)} />
+      )}
+
+      {editingSession && (
+        <SessionEditModal
+          draft={editingSession}
+          setDraft={setEditingSession}
+          onSave={saveEditSession}
+          onClose={() => setEditingSession(null)}
+        />
+      )}
+
       {showSettings && (
         <SettingsModal
           userId={userId}
@@ -649,6 +725,158 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       {ticketCatch && (
         <CatchTicket catchData={ticketCatch} session={sessionForCatch(ticketCatch)} onClose={() => setTicketCatch(null)} onUpdated={loadSessions} />
       )}
+    </div>
+  )
+}
+
+function StatsModal({ sessions, members, userColor, onClose }) {
+  const byUser = {}
+  sessions.forEach((s) => {
+    const uid = s.user_id
+    if (!byUser[uid]) byUser[uid] = { visits: 0, species: {} }
+    byUser[uid].visits += 1
+    ;(s.catches || []).forEach((c) => {
+      const sp = c.species || 'Neuvedeno'
+      byUser[uid].species[sp] = (byUser[uid].species[sp] || 0) + 1
+    })
+  })
+
+  const totalVisits = sessions.length
+  const totalSpecies = {}
+  Object.values(byUser).forEach((u) => {
+    Object.entries(u.species).forEach(([sp, n]) => { totalSpecies[sp] = (totalSpecies[sp] || 0) + n })
+  })
+  const totalCatches = Object.values(totalSpecies).reduce((a, b) => a + b, 0)
+
+  function speciesTotal(speciesObj) {
+    return Object.values(speciesObj).reduce((a, b) => a + b, 0)
+  }
+
+  return (
+    <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="ticket" style={{ maxWidth: 480 }}>
+        <div className="ticket-top">
+          <button className="ticket-close" onClick={onClose}>✕</button>
+          <div className="eyebrow">Přehled</div>
+          <h2>Statistiky party</h2>
+        </div>
+        <div className="perforation"></div>
+        <div className="ticket-body">
+          {members.map((m) => {
+            const u = byUser[m.id] || { visits: 0, species: {} }
+            return (
+              <div className="stats-row" key={m.id}>
+                <div className="stats-row-head">
+                  <span className="user-dot" style={{ background: userColor(m.id) }} />
+                  <strong>{m.name}</strong>
+                  <span className="stats-visits">{u.visits} výprav</span>
+                </div>
+                <div className="stats-species">
+                  {Object.entries(u.species).length === 0 && <span className="rod-bait">zatím žádný úlovek</span>}
+                  {Object.entries(u.species).map(([sp, n]) => (
+                    <span className="bait-chip" key={sp}>{sp} ×{n}</span>
+                  ))}
+                </div>
+                <div className="stats-total">Celkem úlovků: {speciesTotal(u.species)}</div>
+              </div>
+            )
+          })}
+
+          <div className="stats-row stats-total-row">
+            <div className="stats-row-head"><strong>Celkem (celá parta)</strong><span className="stats-visits">{totalVisits} výprav</span></div>
+            <div className="stats-species">
+              {Object.entries(totalSpecies).map(([sp, n]) => (
+                <span className="bait-chip" key={sp}>{sp} ×{n}</span>
+              ))}
+            </div>
+            <div className="stats-total">Celkem úlovků: {totalCatches}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SessionEditModal({ draft, setDraft, onSave, onClose }) {
+  const [busy, setBusy] = useState(false)
+  const [weatherBusy, setWeatherBusy] = useState(false)
+  const [weatherError, setWeatherError] = useState(null)
+
+  function set(field, value) { setDraft((d) => ({ ...d, [field]: value })) }
+
+  async function handleFetchWeather() {
+    setWeatherBusy(true); setWeatherError(null)
+    try {
+      const w = await fetchWeather(draft.lat, draft.lng, draft.date, draft.timeFrom)
+      setDraft((d) => ({ ...d, temp: w.temp, pressure: w.pressure, wind: w.wind, desc: w.desc }))
+    } catch (e) {
+      setWeatherError(e.message)
+    }
+    setWeatherBusy(false)
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setBusy(true)
+    await onSave()
+    setBusy(false)
+  }
+
+  return (
+    <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="ticket" style={{ maxWidth: 400 }}>
+        <div className="ticket-top">
+          <button className="ticket-close" onClick={onClose}>✕</button>
+          <div className="eyebrow">Úprava výpravy</div>
+          <h2>{draft.title || 'Výprava'}</h2>
+        </div>
+        <div className="perforation"></div>
+        <div className="ticket-body">
+          <form onSubmit={handleSubmit}>
+            <label className="field-label">Název výpravy</label>
+            <input className="text-input" required value={draft.title} onChange={(e) => set('title', e.target.value)} />
+            <div className="input-row">
+              <div>
+                <label className="field-label">Datum</label>
+                <input className="text-input" type="date" required value={draft.date} onChange={(e) => set('date', e.target.value)} />
+              </div>
+              <div>
+                <label className="field-label">Od</label>
+                <input className="text-input" type="time" value={draft.timeFrom} onChange={(e) => set('timeFrom', e.target.value)} />
+              </div>
+              <div>
+                <label className="field-label">Do</label>
+                <input className="text-input" type="time" value={draft.timeTo} onChange={(e) => set('timeTo', e.target.value)} />
+              </div>
+            </div>
+            <p className="hint-text">🌙 {moonPhaseName(draft.date)}</p>
+
+            <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy}>
+              {weatherBusy ? 'Zjišťuji počasí…' : '🌤 Přepočítat počasí pro nové datum'}
+            </button>
+            {weatherError && <p className="error-text">{weatherError}</p>}
+
+            <div className="input-row" style={{ marginTop: 10 }}>
+              <div>
+                <label className="field-label">Teplota °C</label>
+                <input className="text-input" type="number" value={draft.temp} onChange={(e) => set('temp', e.target.value)} />
+              </div>
+              <div>
+                <label className="field-label">Tlak hPa</label>
+                <input className="text-input" type="number" value={draft.pressure} onChange={(e) => set('pressure', e.target.value)} />
+              </div>
+              <div>
+                <label className="field-label">Vítr</label>
+                <input className="text-input" value={draft.wind} onChange={(e) => set('wind', e.target.value)} />
+              </div>
+            </div>
+            <label className="field-label">Popis počasí</label>
+            <input className="text-input" value={draft.desc} onChange={(e) => set('desc', e.target.value)} />
+
+            <button className="btn-primary" type="submit" disabled={busy}>{busy ? 'Ukládám…' : 'Uložit změny'}</button>
+          </form>
+        </div>
+      </div>
     </div>
   )
 }
@@ -860,6 +1088,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose }) {
               {weatherBusy ? 'Zjišťuji počasí…' : '🌤 Doplnit počasí automaticky'}
             </button>
             {weatherError && <p className="error-text">{weatherError}</p>}
+            {draft.date && <p className="hint-text" style={{ marginTop: 8 }}>🌙 {moonPhaseName(draft.date)}</p>}
 
             <div className="input-row" style={{ marginTop: 10 }}>
               <div>
