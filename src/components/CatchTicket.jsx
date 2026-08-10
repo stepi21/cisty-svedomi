@@ -24,7 +24,7 @@ export default function CatchTicket({ catchData: c, session, onClose, onUpdated 
     species: c.species, category: c.category,
     length_cm: c.length_cm ?? '', weight_kg: c.weight_kg ?? '', bait: c.bait ?? '',
     time: c.caught_at ? toLocalTimeInput(c.caught_at) : '',
-    photoFile: null,
+    photoFile: null, baitPhotoFile: null,
   })
   const color = c.category === 'dravec' ? '#6B7A4F' : '#B97F35'
 
@@ -36,6 +36,11 @@ export default function CatchTicket({ catchData: c, session, onClose, onUpdated 
       const url = await uploadPhoto(form.photoFile, `catches/${c.session_id}`)
       if (url) photo_url = url
     }
+    let bait_photo_url = c.bait_photo_url
+    if (form.baitPhotoFile) {
+      const url = await uploadPhoto(form.baitPhotoFile, `catches/${c.session_id}`)
+      if (url) bait_photo_url = url
+    }
     const sessionDate = session?.session_date || (c.caught_at ? c.caught_at.slice(0, 10) : null)
     const caught_at = form.time && sessionDate
       ? new Date(`${sessionDate}T${form.time}:00`).toISOString()
@@ -43,7 +48,7 @@ export default function CatchTicket({ catchData: c, session, onClose, onUpdated 
     const { error } = await supabase.from('catches').update({
       species: form.species, category: form.category,
       length_cm: form.length_cm || null, weight_kg: form.weight_kg || null,
-      bait: form.bait, photo_url, caught_at,
+      bait: form.bait, photo_url, bait_photo_url, caught_at,
     }).eq('id', c.id)
     setBusy(false)
     if (error) { alert(error.message); return }
@@ -73,6 +78,11 @@ export default function CatchTicket({ catchData: c, session, onClose, onUpdated 
                 <div className="stat"><div className="num">{c.weight_kg ?? '—'} kg</div><div className="lab">váha</div></div>
               </div>
               <div className="ticket-line"><span className="lab">Nástraha</span><span className="val">{c.bait || '—'}</span></div>
+              {c.bait_photo_url && (
+                <div className="ticket-illustration" style={{ marginTop: 6 }}>
+                  <img src={c.bait_photo_url} alt="nástraha" style={{ maxHeight: 90, borderRadius: 8 }} />
+                </div>
+              )}
               <div className="ticket-line"><span className="lab">Čas úlovku</span><span className="val">{c.caught_at ? new Date(c.caught_at).toLocaleTimeString('cs-CZ') : '—'}</span></div>
               <div className="ticket-line"><span className="lab">Lokace</span><span className="val">{c.lat?.toFixed(4)}, {c.lng?.toFixed(4)}</span></div>
               {session && <div className="ticket-line"><span className="lab">Výprava</span><span className="val" style={{ fontFamily: 'inherit', fontWeight: 600 }}>{session.title}</span></div>}
@@ -112,6 +122,11 @@ export default function CatchTicket({ catchData: c, session, onClose, onUpdated 
               </div>
               <label className="field-label">Nástraha</label>
               <input className="text-input" value={form.bait} onChange={(e) => setForm({ ...form, bait: e.target.value })} />
+              <label className="photo-label" style={{ display: 'inline-block', marginTop: 4 }}>
+                📷 {form.baitPhotoFile ? form.baitPhotoFile.name : (c.bait_photo_url ? 'změnit foto nástrahy' : 'foto nástrahy')}
+                <input type="file" accept="image/*" hidden onChange={(e) => setForm({ ...form, baitPhotoFile: e.target.files[0] })} />
+              </label>
+              <br />
               <label className="field-label">Foto úlovku</label>
               <label className="photo-label" style={{ display: 'inline-block', marginTop: 4 }}>
                 📷 {form.photoFile ? form.photoFile.name : (c.photo_url ? 'změnit foto' : 'vybrat foto')}

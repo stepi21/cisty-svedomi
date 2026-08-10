@@ -171,7 +171,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
     if (target === 'catch-point') {
       setPlacementTarget(null)
-      setDraftCatch({ point, species: '', category: 'dravec', length: '', weight: '', bait: '', rodId: '', time: '', photoFile: null })
+      setDraftCatch({ point, species: '', category: 'dravec', length: '', weight: '', bait: '', rodId: '', time: '', photoFile: null, baitPhotoFile: null })
       return
     }
 
@@ -234,6 +234,24 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return area // nový formát: pole polygonů
   }
 
+  function areaCentroid(pts) {
+    return {
+      lat: pts.reduce((s, p) => s + p.lat, 0) / pts.length,
+      lng: pts.reduce((s, p) => s + p.lng, 0) / pts.length,
+    }
+  }
+
+  function focusOnPoint(lat, lng) {
+    if (!mapInstance.current || lat == null || lng == null) return
+    mapInstance.current.setView([lat, lng], 16)
+  }
+
+  function focusOnArea(pts) {
+    if (!mapInstance.current || !pts.length) return
+    const bounds = L.latLngBounds(pts.map((p) => [p.lat, p.lng]))
+    mapInstance.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 })
+  }
+
   // --- render markerů: agregovaný pohled (podle filtrů, přes všechny výpravy) nebo detail jedné výpravy ---
   useEffect(() => {
     if (!mapInstance.current || !markersLayer.current) return
@@ -243,18 +261,24 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (viewMode === 'detail' && activeSession) {
       map.setView([activeSession.lat, activeSession.lng], 14)
 
-      normalizeAreas(activeSession.area).forEach((pts) => {
+      normalizeAreas(activeSession.area).forEach((pts, ai) => {
         L.polygon(pts.map((p) => [p.lat, p.lng]), {
           color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.12,
         }).addTo(markersLayer.current)
+        const c = areaCentroid(pts)
+        L.circleMarker([c.lat, c.lng], {
+          radius: 7, color: '#6B7A4F', weight: 2, fillColor: '#EDE9DC', fillOpacity: 1,
+        }).bindPopup(`Oblast ${ai + 1}`).addTo(markersLayer.current)
       })
 
-      ;(activeSession.rods || []).forEach((r, i) => {
-        const color = rodColors[i % rodColors.length]
-        L.circleMarker([r.lat ?? activeSession.lat, r.lng ?? activeSession.lng], {
-          radius: 8, color, weight: 2, fillColor: color, fillOpacity: 0.5,
-        }).bindPopup(`<b>${r.name}</b>`).addTo(markersLayer.current)
-      })
+      if (!AREA_TYPES.includes(activeSession.type)) {
+        (activeSession.rods || []).forEach((r, i) => {
+          const color = rodColors[i % rodColors.length]
+          L.circleMarker([r.lat ?? activeSession.lat, r.lng ?? activeSession.lng], {
+            radius: 8, color, weight: 2, fillColor: color, fillOpacity: 0.5,
+          }).bindPopup(`<b>${r.name}</b>`).addTo(markersLayer.current)
+        })
+      }
 
       filteredCatches(activeSession).forEach((c) => {
         const fillColor = c.category === 'dravec' ? '#6B7A4F' : '#B97F35'
@@ -336,19 +360,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   function proceedToForm() {
     const areas = areaDraft.current.length >= 3 ? [...areaDraft.areas, areaDraft.current] : areaDraft.areas
     if (areas.length === 0) return
-    const allPoints = areas.flat()
-    const centroid = {
-      lat: allPoints.reduce((s, p) => s + p.lat, 0) / allPoints.length,
-      lng: allPoints.reduce((s, p) => s + p.lng, 0) / allPoints.length,
-    }
+    const overallCentroid = areaCentroid(areas.flat())
+    const firstAreaCentroid = areaCentroid(areas[0])
     setAreaDraft(null)
     setPlacementTarget(null)
     setDraftSession({
       type: pendingTypeRef.current,
       title: '', date: '', timeFrom: '', timeTo: '',
       temp: '', pressure: '', wind: '', desc: '',
-      point: centroid, area: areas,
-      rods: [{ name: 'Prut 1', lat: centroid.lat, lng: centroid.lng, baits: [{ name: '', photoFile: null }] }],
+      point: overallCentroid, area: areas,
+      rods: [{ name: 'Prut 1', lat: firstAreaCentroid.lat, lng: firstAreaCentroid.lng, baits: [{ name: '', photoFile: null }] }],
     })
   }
 
@@ -358,7 +379,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function chooseCatchOnRod(rod) {
     setCatchChoosing(false)
-    setDraftCatch({ point: { lat: rod.lat, lng: rod.lng }, species: '', category: 'dravec', length: '', weight: '', bait: rod.bait || '', rodId: rod.id, time: '', photoFile: null })
+    setDraftCatch({ point: { lat: rod.lat, lng: rod.lng }, species: '', category: 'dravec', length: '', weight: '', bait: rod.bait || '', rodId: rod.id, time: '', photoFile: null, baitPhotoFile: null })
   }
 
   function chooseCatchOnMap() {
@@ -410,10 +431,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (c.photoFile) {
       photo_url = await uploadPhoto(c.photoFile, `catches/${session.id}`)
     }
+    let bait_photo_url = null
+    if (c.baitPhotoFile) {
+      bait_photo_url = await uploadPhoto(c.baitPhotoFile, `catches/${session.id}`)
+    }
     const { error } = await supabase.from('catches').insert({
       session_id: session.id, group_id: groupId, rod_id: c.rodId || null,
       species: c.species, category: c.category, length_cm: c.length || null, weight_kg: c.weight || null,
-      bait: c.bait, caught_at: caughtAt, lat: c.point.lat, lng: c.point.lng, photo_url,
+      bait: c.bait, caught_at: caughtAt, lat: c.point.lat, lng: c.point.lng, photo_url, bait_photo_url,
     })
     if (error) { alert(error.message); return }
     setDraftCatch(null)
@@ -717,13 +742,31 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                         ))}
                         {(!r.baits || r.baits.length === 0) && !r.bait && <span className="rod-bait">—</span>}
                       </div>
-                      <button className="new-btn" style={{ marginLeft: 'auto' }} onClick={() => setEditingRodId(r.id)}>✏️</button>
+                      <button className="new-btn" onClick={() => setEditingRodId(r.id)}>✏️</button>
                     </div>
                   )
                 ))}
                 {(!activeSession.rods || activeSession.rods.length === 0) && (
                   <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Bez prutů</div>
                 )}
+                <div className="coord-list">
+                  {AREA_TYPES.includes(activeSession.type) ? (
+                    normalizeAreas(activeSession.area).map((pts, i) => {
+                      const c = areaCentroid(pts)
+                      return (
+                        <button key={i} className="coord-chip" type="button" onClick={() => focusOnArea(pts)}>
+                          🎯 Oblast {i + 1}: {c.lat.toFixed(4)}, {c.lng.toFixed(4)}
+                        </button>
+                      )
+                    })
+                  ) : (
+                    (activeSession.rods || []).map((r) => (
+                      <button key={r.id} className="coord-chip" type="button" onClick={() => focusOnPoint(r.lat, r.lng)}>
+                        🎯 {r.name}: {r.lat?.toFixed(4)}, {r.lng?.toFixed(4)}
+                      </button>
+                    ))
+                  )}
+                </div>
               </div>
               <div className="det-block">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -1253,6 +1296,10 @@ function CatchFormPanel({ draft, setDraft, rods, onSave, onClose }) {
             </div>
             <label className="field-label">Nástraha</label>
             <input className="text-input" value={draft.bait} onChange={(e) => set('bait', e.target.value)} placeholder="boilie tuňák 20mm" />
+            <label className="photo-label" style={{ display: 'inline-block', marginTop: 4, marginRight: 8 }}>
+              📷 {draft.baitPhotoFile ? draft.baitPhotoFile.name : 'foto nástrahy'}
+              <input type="file" accept="image/*" hidden onChange={(e) => set('baitPhotoFile', e.target.files[0])} />
+            </label>
             <label className="field-label">Foto úlovku</label>
             <label className="photo-label" style={{ display: 'inline-block', marginTop: 4 }}>
               📷 {draft.photoFile ? draft.photoFile.name : 'vybrat foto'}
