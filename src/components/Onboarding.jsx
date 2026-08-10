@@ -37,7 +37,7 @@ export default function Onboarding({ userId, onDone }) {
   return (
     <div className="center-screen">
       <div className="login-card">
-        <div className="login-eyebrow">ČISTÉ SVĚDOMÍ</div>
+        <div className="login-eyebrow">ČISTÝ SVĚDOMÍ</div>
         <h1 className="login-title">Ještě jeden krok</h1>
 
         <div className="tab-row">

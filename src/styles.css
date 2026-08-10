@@ -61,7 +61,8 @@ header{ background:var(--water-deep); color:var(--white); padding:18px 24px; }
 .head-row{ display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:10px; }
 header h1{ font-family:'Fraunces', serif; font-weight:600; font-size:26px; margin:0; }
 header h1 .accent{ color:var(--amber); }
-.head-actions{ display:flex; gap:8px; }
+.head-actions{ display:flex; gap:8px; align-items:center; }
+.whoami{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:#B9CFCB; margin-right:4px; }
 .head-actions .new-btn{ color:#E7EFEC; border-color:rgba(255,255,255,.3); }
 .invite-banner{
   margin-top:10px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.25);
@@ -83,6 +84,9 @@ header h1 .accent{ color:var(--amber); }
 .filter-chip.active{ background:var(--water-deep); border-color:var(--water-deep); color:var(--white); }
 .filter-chip.active.dravec{ background:var(--water-mid); border-color:var(--water-mid); }
 .filter-chip.active.bila{ background:var(--amber-deep); border-color:var(--amber-deep); }
+.filter-chip.user-chip{ display:inline-flex; align-items:center; gap:5px; }
+.filter-chip.user-chip.active{ color:#fff; }
+.user-dot{ width:7px; height:7px; border-radius:50%; display:inline-block; flex:none; }
 
 .session-item{ padding:13px 18px; border-bottom:1px solid #EFEBDF; cursor:pointer; display:flex; gap:11px; }
 .session-item:hover{ background:#F7F4EA; }

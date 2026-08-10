@@ -14,6 +14,7 @@ const fishSVG = (color) => `
     <circle cx="46" cy="14" r="2.3" fill="#1a1a1a"/>
   </svg>`
 const rodColors = ['#2C6E71', '#B97F35', '#6B7A4F', '#D9A054']
+const USER_PALETTE = ['#2C6E71', '#B97F35', '#6B7A4F', '#8A4B6B', '#3F6B9E', '#9C6B30', '#4B7A2E', '#7A3F5E']
 const SESSION_TYPES = [
   { value: 'kapr', label: 'Kapři (bod)' },
   { value: 'privlac', label: 'Přívlač (oblast)' },
@@ -22,11 +23,14 @@ const SESSION_TYPES = [
   { value: 'jine', label: 'Jiné (bod)' },
 ]
 const AREA_TYPES = ['privlac'] // typy, kde se místo bodu kreslí oblast
+const TYPE_CATEGORY = { kapr: 'bila', privlac: 'dravec', muska: 'dravec', plavana: 'bila', jine: null }
 
 export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [sessions, setSessions] = useState([])
   const [activeId, setActiveId] = useState(null)
   const [activeCategory, setActiveCategory] = useState('all')
+  const [activeUserFilter, setActiveUserFilter] = useState('all')
+  const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [ticketCatch, setTicketCatch] = useState(null)
   const [inviteInfo, setInviteInfo] = useState(null)
@@ -48,7 +52,24 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const markersLayer = useRef(null)
   const draftLayer = useRef(null)
 
-  useEffect(() => { loadSessions() }, [groupId])
+  useEffect(() => { loadSessions(); loadMembers() }, [groupId])
+
+  async function loadMembers() {
+    const { data } = await supabase
+      .from('group_members')
+      .select('user_id, joined_at, profiles(display_name)')
+      .eq('group_id', groupId)
+      .order('joined_at')
+    if (data) setMembers(data.map((m) => ({ id: m.user_id, name: m.profiles?.display_name || '?' })))
+  }
+
+  function userColor(uid) {
+    const idx = members.findIndex((m) => m.id === uid)
+    return idx === -1 ? '#5B5F52' : USER_PALETTE[idx % USER_PALETTE.length]
+  }
+  function userName(uid) {
+    return members.find((m) => m.id === uid)?.name || '?'
+  }
 
   // --- obnovení rozepsaného formuláře, kdyby appka na pozadí spadla/reloadovala se ---
   const restoredRef = useRef(false)
@@ -210,8 +231,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     })
 
     filteredCatches(activeSession).forEach((c) => {
-      const color = c.category === 'dravec' ? '#6B7A4F' : '#B97F35'
-      const html = `<div style="width:30px;height:30px;background:${color};border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.35)">${fishSVG('#fff')}</div>`
+      const fillColor = c.category === 'dravec' ? '#6B7A4F' : '#B97F35'
+      const ringColor = userColor(activeSession.user_id)
+      const html = `<div style="width:30px;height:30px;background:${fillColor};border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid ${ringColor};box-shadow:0 2px 6px rgba(0,0,0,.35)">${fishSVG('#fff')}</div>`
       const icon = L.divIcon({ html, className: '', iconSize: [30, 30], iconAnchor: [15, 15] })
       const marker = L.marker([c.lat ?? activeSession.lat, c.lng ?? activeSession.lng], { icon })
       marker.on('click', () => setTicketCatch(c))
@@ -337,8 +359,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   const visibleSessions = sessions.filter((s) => {
-    if (activeCategory === 'all') return true
-    return filteredCatches(s).length > 0
+    const catOk = activeCategory === 'all' || TYPE_CATEGORY[s.type] === activeCategory || filteredCatches(s).length > 0
+    const userOk = activeUserFilter === 'all' || s.user_id === activeUserFilter
+    return catOk && userOk
   })
 
   const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || areaDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
@@ -347,8 +370,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     <div className="app">
       <header>
         <div className="head-row">
-          <h1>Čisté<span className="accent">svědomí</span></h1>
+          <h1>Čistý<span className="accent">svědomí</span></h1>
           <div className="head-actions">
+            <span className="whoami">{profile?.display_name}</span>
             <button className="new-btn" onClick={createInvite}>+ pozvat parťáka</button>
             <button className="new-btn" onClick={onSignOut}>Odhlásit</button>
           </div>
@@ -378,6 +402,25 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               </button>
             ))}
           </div>
+          {members.length > 1 && (
+            <div className="filter-row">
+              <button
+                className={`filter-chip ${activeUserFilter === 'all' ? 'active' : ''}`}
+                onClick={() => setActiveUserFilter('all')}
+              >Kdo: Vše</button>
+              {members.map((m) => (
+                <button
+                  key={m.id}
+                  className={`filter-chip user-chip ${activeUserFilter === m.id ? 'active' : ''}`}
+                  style={activeUserFilter === m.id ? { background: userColor(m.id), borderColor: userColor(m.id) } : {}}
+                  onClick={() => setActiveUserFilter(m.id)}
+                >
+                  <span className="user-dot" style={{ background: userColor(m.id) }} />
+                  {m.name}{m.id === userId ? ' (já)' : ''}
+                </button>
+              ))}
+            </div>
+          )}
 
           {loading ? (
             <div className="loader-text" style={{ padding: 18 }}>Načítám…</div>
@@ -390,12 +433,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               <div
                 key={s.id}
                 className={`session-item ${s.id === activeId ? 'active' : ''}`}
+                style={{ borderLeft: `3px solid ${userColor(s.user_id)}`, paddingLeft: 15 }}
                 onClick={() => setActiveId(s.id)}
               >
                 <div className="s-icon" dangerouslySetInnerHTML={{ __html: s.type === 'kapr' ? iconCarp : iconSpin }} />
                 <div className="s-body">
                   <div className="s-title">{s.title}</div>
-                  <div className="s-sub">{s.session_date} · {s.time_from}–{s.time_to}</div>
+                  <div className="s-sub">{s.session_date} · {s.time_from}–{s.time_to} · {userName(s.user_id)}</div>
                   <div className="s-tags">
                     <span className="s-tag">{s.type}</span>
                     <span className="s-tag catch">{filteredCatches(s).length} úlovky</span>

@@ -1,4 +1,4 @@
-# Čisté svědomí — appka
+# Čistý svědomí — appka
 
 React appka napojená na Supabase. Postup níže nepotřebuje žádný terminál.
 

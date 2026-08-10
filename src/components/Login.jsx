@@ -23,7 +23,7 @@ export default function Login() {
   return (
     <div className="center-screen">
       <div className="login-card">
-        <div className="login-eyebrow">ČISTÉ SVĚDOMÍ</div>
+        <div className="login-eyebrow">ČISTÝ SVĚDOMÍ</div>
         <h1 className="login-title">Deník pro rybáře</h1>
         {sent ? (
           <p className="login-text">
