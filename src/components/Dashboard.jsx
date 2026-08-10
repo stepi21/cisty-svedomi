@@ -50,6 +50,37 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   useEffect(() => { loadSessions() }, [groupId])
 
+  // --- obnovení rozepsaného formuláře, kdyby appka na pozadí spadla/reloadovala se ---
+  const restoredRef = useRef(false)
+  useEffect(() => {
+    if (restoredRef.current) return
+    restoredRef.current = true
+    try {
+      const savedSession = localStorage.getItem(`draft_session_${groupId}`)
+      if (savedSession) setDraftSession(JSON.parse(savedSession))
+      const savedCatch = localStorage.getItem(`draft_catch_${groupId}`)
+      if (savedCatch) setDraftCatch(JSON.parse(savedCatch))
+    } catch { /* ignore */ }
+  }, [groupId])
+
+  useEffect(() => {
+    if (draftSession) {
+      const stripped = { ...draftSession, rods: draftSession.rods.map((r) => ({ ...r, baits: (r.baits || []).map((b) => ({ name: b.name })) })) }
+      localStorage.setItem(`draft_session_${groupId}`, JSON.stringify(stripped))
+    } else {
+      localStorage.removeItem(`draft_session_${groupId}`)
+    }
+  }, [draftSession, groupId])
+
+  useEffect(() => {
+    if (draftCatch) {
+      const stripped = { ...draftCatch, photoFile: null }
+      localStorage.setItem(`draft_catch_${groupId}`, JSON.stringify(stripped))
+    } else {
+      localStorage.removeItem(`draft_catch_${groupId}`)
+    }
+  }, [draftCatch, groupId])
+
   async function loadSessions() {
     setLoading(true)
     const { data, error } = await supabase
@@ -100,7 +131,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         title: '', date: '', timeFrom: '', timeTo: '',
         temp: '', pressure: '', wind: '', desc: '',
         point, area: null,
-        rods: [{ name: 'Prut 1', bait: '', lat: point.lat, lng: point.lng, baitPhotoFile: null }],
+        rods: [{ name: 'Prut 1', lat: point.lat, lng: point.lng, baits: [{ name: '', photoFile: null }] }],
       })
       return
     }
@@ -112,7 +143,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
     if (target === 'catch-point') {
       setPlacementTarget(null)
-      setDraftCatch({ point, species: '', category: 'dravec', length: '', weight: '', bait: '', rodId: '', time: '' })
+      setDraftCatch({ point, species: '', category: 'dravec', length: '', weight: '', bait: '', rodId: '', time: '', photoFile: null })
       return
     }
 
@@ -171,7 +202,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       }).addTo(markersLayer.current)
     }
 
-    ;(activeSession.rods || []).forEach((r, i) => {
+    ;(activeCategory === 'all' ? (activeSession.rods || []) : []).forEach((r, i) => {
       const color = rodColors[i % rodColors.length]
       L.circleMarker([r.lat ?? activeSession.lat, r.lng ?? activeSession.lng], {
         radius: 8, color, weight: 2, fillColor: color, fillOpacity: 0.5,
@@ -234,7 +265,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       title: '', date: '', timeFrom: '', timeTo: '',
       temp: '', pressure: '', wind: '', desc: '',
       point: centroid, area: points,
-      rods: [{ name: 'Prut 1', bait: '', lat: centroid.lat, lng: centroid.lng, baitPhotoFile: null }],
+      rods: [{ name: 'Prut 1', lat: centroid.lat, lng: centroid.lng, baits: [{ name: '', photoFile: null }] }],
     })
   }
 
@@ -244,7 +275,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function chooseCatchOnRod(rod) {
     setCatchChoosing(false)
-    setDraftCatch({ point: { lat: rod.lat, lng: rod.lng }, species: '', category: 'dravec', length: '', weight: '', bait: rod.bait || '', rodId: rod.id, time: '' })
+    setDraftCatch({ point: { lat: rod.lat, lng: rod.lng }, species: '', category: 'dravec', length: '', weight: '', bait: rod.bait || '', rodId: rod.id, time: '', photoFile: null })
   }
 
   function chooseCatchOnMap() {
@@ -266,13 +297,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (sErr) { alert(sErr.message); return }
 
     for (const r of s.rods.filter((r) => r.name)) {
-      let bait_photo_url = null
-      if (r.baitPhotoFile) {
-        bait_photo_url = await uploadPhoto(r.baitPhotoFile, `baits/${session.id}`)
+      const baitsPayload = []
+      for (const b of (r.baits || [])) {
+        if (!b.name && !b.photoFile) continue
+        let photo_url = null
+        if (b.photoFile) photo_url = await uploadPhoto(b.photoFile, `baits/${session.id}`)
+        baitsPayload.push({ name: b.name, photo_url })
       }
       await supabase.from('rods').insert({
-        session_id: session.id, group_id: groupId, name: r.name, bait: r.bait,
-        lat: r.lat, lng: r.lng, bait_photo_url,
+        session_id: session.id, group_id: groupId, name: r.name,
+        bait: baitsPayload.map((b) => b.name).filter(Boolean).join(', ') || null,
+        lat: r.lat, lng: r.lng, baits: baitsPayload,
       })
     }
 
@@ -287,10 +322,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const caughtAt = c.time && session
       ? new Date(`${session.session_date}T${c.time}:00`).toISOString()
       : null
+    let photo_url = null
+    if (c.photoFile) {
+      photo_url = await uploadPhoto(c.photoFile, `catches/${session.id}`)
+    }
     const { error } = await supabase.from('catches').insert({
       session_id: session.id, group_id: groupId, rod_id: c.rodId || null,
       species: c.species, category: c.category, length_cm: c.length || null, weight_kg: c.weight || null,
-      bait: c.bait, caught_at: caughtAt, lat: c.point.lat, lng: c.point.lng,
+      bait: c.bait, caught_at: caughtAt, lat: c.point.lat, lng: c.point.lng, photo_url,
     })
     if (error) { alert(error.message); return }
     setDraftCatch(null)
@@ -452,8 +491,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                     <div className="rod-row" key={r.id}>
                       <div className="rod-dot" style={{ background: rodColors[i % rodColors.length] }} />
                       <div className="rod-name">{r.name}</div>
-                      <div className="rod-bait">{r.bait}</div>
-                      {r.bait_photo_url && <img src={r.bait_photo_url} alt="nástraha" className="bait-thumb" />}
+                      <div className="rod-baits">
+                        {(r.baits && r.baits.length > 0 ? r.baits : (r.bait ? [{ name: r.bait, photo_url: r.bait_photo_url }] : [])).map((b, bi) => (
+                          <span className="bait-chip" key={bi}>
+                            {b.name}
+                            {b.photo_url && <img src={b.photo_url} alt="nástraha" className="bait-thumb" />}
+                          </span>
+                        ))}
+                        {(!r.baits || r.baits.length === 0) && !r.bait && <span className="rod-bait">—</span>}
+                      </div>
                       <button className="new-btn" style={{ marginLeft: 'auto' }} onClick={() => setEditingRodId(r.id)}>✏️</button>
                     </div>
                   )
@@ -516,18 +562,34 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
 function RodEditRow({ rod, color, onArmPosition, onDone, onCancel }) {
   const [name, setName] = useState(rod.name)
-  const [bait, setBait] = useState(rod.bait || '')
-  const [photoFile, setPhotoFile] = useState(null)
+  const initialBaits = (rod.baits && rod.baits.length > 0)
+    ? rod.baits.map((b) => ({ name: b.name, photo_url: b.photo_url, photoFile: null }))
+    : (rod.bait ? [{ name: rod.bait, photo_url: rod.bait_photo_url, photoFile: null }] : [{ name: '', photo_url: null, photoFile: null }])
+  const [baits, setBaits] = useState(initialBaits)
   const [busy, setBusy] = useState(false)
+
+  function updateBait(i, field, value) {
+    setBaits((prev) => { const next = [...prev]; next[i] = { ...next[i], [field]: value }; return next })
+  }
+  function addBait() { setBaits((prev) => [...prev, { name: '', photo_url: null, photoFile: null }]) }
+  function removeBait(i) { setBaits((prev) => prev.filter((_, idx) => idx !== i)) }
 
   async function handleSave() {
     setBusy(true)
-    let bait_photo_url = rod.bait_photo_url
-    if (photoFile) {
-      const url = await uploadPhoto(photoFile, `baits/${rod.session_id}`)
-      if (url) bait_photo_url = url
+    const baitsPayload = []
+    for (const b of baits) {
+      if (!b.name && !b.photo_url && !b.photoFile) continue
+      let photo_url = b.photo_url
+      if (b.photoFile) {
+        const url = await uploadPhoto(b.photoFile, `baits/${rod.session_id}`)
+        if (url) photo_url = url
+      }
+      baitsPayload.push({ name: b.name, photo_url })
     }
-    const { error } = await supabase.from('rods').update({ name, bait, bait_photo_url }).eq('id', rod.id)
+    const { error } = await supabase.from('rods').update({
+      name, baits: baitsPayload,
+      bait: baitsPayload.map((b) => b.name).filter(Boolean).join(', ') || null,
+    }).eq('id', rod.id)
     setBusy(false)
     if (error) { alert(error.message); return }
     onDone()
@@ -535,16 +597,21 @@ function RodEditRow({ rod, color, onArmPosition, onDone, onCancel }) {
 
   return (
     <div className="rod-edit-block">
-      <div className="input-row">
-        <input className="text-input" value={name} onChange={(e) => setName(e.target.value)} />
-        <input className="text-input" value={bait} onChange={(e) => setBait(e.target.value)} placeholder="nástraha" style={{ gridColumn: 'span 2' }} />
-      </div>
-      <div className="rod-edit-row">
+      <input className="text-input" value={name} onChange={(e) => setName(e.target.value)} style={{ marginBottom: 8 }} />
+      {baits.map((b, i) => (
+        <div key={i} className="bait-edit-row">
+          <input className="text-input" value={b.name} onChange={(e) => updateBait(i, 'name', e.target.value)} placeholder="nástraha" />
+          <label className="photo-label">
+            📷 {b.photoFile ? b.photoFile.name : (b.photo_url ? 'změnit' : 'foto')}
+            <input type="file" accept="image/*" hidden onChange={(e) => updateBait(i, 'photoFile', e.target.files[0])} />
+          </label>
+          {b.photo_url && !b.photoFile && <img src={b.photo_url} alt="" className="bait-thumb" />}
+          {baits.length > 1 && <button type="button" className="ticket-close" style={{ position: 'static', color: 'var(--ink-soft)' }} onClick={() => removeBait(i)}>✕</button>}
+        </div>
+      ))}
+      <button type="button" className="new-btn" onClick={addBait} style={{ marginTop: 4 }}>+ další nástraha</button>
+      <div className="rod-edit-row" style={{ marginTop: 8 }}>
         <button type="button" className="new-btn" onClick={onArmPosition}>📍 změnit pozici na mapě</button>
-        <label className="photo-label">
-          📷 {photoFile ? photoFile.name : (rod.bait_photo_url ? 'změnit foto' : 'foto nástrahy')}
-          <input type="file" accept="image/*" hidden onChange={(e) => setPhotoFile(e.target.files[0])} />
-        </label>
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <button className="new-btn" onClick={onCancel}>Zrušit</button>
@@ -569,8 +636,31 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose }) {
   function addRod() {
     setDraft((d) => ({
       ...d,
-      rods: [...d.rods, { name: `Prut ${d.rods.length + 1}`, bait: '', lat: d.point.lat, lng: d.point.lng, baitPhotoFile: null }],
+      rods: [...d.rods, { name: `Prut ${d.rods.length + 1}`, lat: d.point.lat, lng: d.point.lng, baits: [{ name: '', photoFile: null }] }],
     }))
+  }
+  function updateBait(rodIndex, baitIndex, field, value) {
+    setDraft((d) => {
+      const rods = [...d.rods]
+      const baits = [...rods[rodIndex].baits]
+      baits[baitIndex] = { ...baits[baitIndex], [field]: value }
+      rods[rodIndex] = { ...rods[rodIndex], baits }
+      return { ...d, rods }
+    })
+  }
+  function addBait(rodIndex) {
+    setDraft((d) => {
+      const rods = [...d.rods]
+      rods[rodIndex] = { ...rods[rodIndex], baits: [...rods[rodIndex].baits, { name: '', photoFile: null }] }
+      return { ...d, rods }
+    })
+  }
+  function removeBait(rodIndex, baitIndex) {
+    setDraft((d) => {
+      const rods = [...d.rods]
+      rods[rodIndex] = { ...rods[rodIndex], baits: rods[rodIndex].baits.filter((_, i) => i !== baitIndex) }
+      return { ...d, rods }
+    })
   }
 
   async function handleFetchWeather() {
@@ -648,16 +738,20 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose }) {
             <label className="field-label">Pruty</label>
             {draft.rods.map((r, i) => (
               <div key={i} className="rod-edit-block">
-                <div className="input-row">
-                  <input className="text-input" value={r.name} onChange={(e) => setRod(i, 'name', e.target.value)} placeholder="Prut 1" />
-                  <input className="text-input" value={r.bait} onChange={(e) => setRod(i, 'bait', e.target.value)} placeholder="nástraha" style={{ gridColumn: 'span 2' }} />
-                </div>
-                <div className="rod-edit-row">
+                <input className="text-input" value={r.name} onChange={(e) => setRod(i, 'name', e.target.value)} placeholder="Prut 1" style={{ marginBottom: 8 }} />
+                {r.baits.map((b, bi) => (
+                  <div key={bi} className="bait-edit-row">
+                    <input className="text-input" value={b.name} onChange={(e) => updateBait(i, bi, 'name', e.target.value)} placeholder="nástraha" />
+                    <label className="photo-label">
+                      📷 {b.photoFile ? b.photoFile.name : 'foto'}
+                      <input type="file" accept="image/*" hidden onChange={(e) => updateBait(i, bi, 'photoFile', e.target.files[0])} />
+                    </label>
+                    {r.baits.length > 1 && <button type="button" className="ticket-close" style={{ position: 'static', color: 'var(--ink-soft)' }} onClick={() => removeBait(i, bi)}>✕</button>}
+                  </div>
+                ))}
+                <button type="button" className="new-btn" onClick={() => addBait(i)} style={{ marginTop: 4 }}>+ další nástraha</button>
+                <div className="rod-edit-row" style={{ marginTop: 8 }}>
                   <button type="button" className="new-btn" onClick={() => onArmRod(i)}>📍 pozice na mapě: {r.lat.toFixed(4)}, {r.lng.toFixed(4)}</button>
-                  <label className="photo-label">
-                    📷 {r.baitPhotoFile ? r.baitPhotoFile.name : 'foto nástrahy'}
-                    <input type="file" accept="image/*" hidden onChange={(e) => setRod(i, 'baitPhotoFile', e.target.files[0])} />
-                  </label>
                 </div>
               </div>
             ))}
@@ -717,6 +811,12 @@ function CatchFormPanel({ draft, setDraft, rods, onSave, onClose }) {
             </div>
             <label className="field-label">Nástraha</label>
             <input className="text-input" value={draft.bait} onChange={(e) => set('bait', e.target.value)} placeholder="boilie tuňák 20mm" />
+            <label className="field-label">Foto úlovku</label>
+            <label className="photo-label" style={{ display: 'inline-block', marginTop: 4 }}>
+              📷 {draft.photoFile ? draft.photoFile.name : 'vybrat foto'}
+              <input type="file" accept="image/*" hidden onChange={(e) => set('photoFile', e.target.files[0])} />
+            </label>
+            <br />
             {rods.length > 0 && (
               <>
                 <label className="field-label">Prut</label>
