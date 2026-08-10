@@ -9,12 +9,20 @@ const fishSVG = (color) => `
     <circle cx="46" cy="14" r="2.3" fill="#1a1a1a"/>
   </svg>`
 
+function toLocalTimeInput(isoString) {
+  const d = new Date(isoString)
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${hh}:${mm}`
+}
+
 export default function CatchTicket({ catchData: c, session, onClose, onUpdated }) {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({
     species: c.species, category: c.category,
     length_cm: c.length_cm ?? '', weight_kg: c.weight_kg ?? '', bait: c.bait ?? '',
+    time: c.caught_at ? toLocalTimeInput(c.caught_at) : '',
     photoFile: null,
   })
   const color = c.category === 'dravec' ? '#6B7A4F' : '#B97F35'
@@ -27,10 +35,14 @@ export default function CatchTicket({ catchData: c, session, onClose, onUpdated 
       const url = await uploadPhoto(form.photoFile, `catches/${c.session_id}`)
       if (url) photo_url = url
     }
+    const sessionDate = session?.session_date || (c.caught_at ? c.caught_at.slice(0, 10) : null)
+    const caught_at = form.time && sessionDate
+      ? new Date(`${sessionDate}T${form.time}:00`).toISOString()
+      : c.caught_at
     const { error } = await supabase.from('catches').update({
       species: form.species, category: form.category,
       length_cm: form.length_cm || null, weight_kg: form.weight_kg || null,
-      bait: form.bait, photo_url,
+      bait: form.bait, photo_url, caught_at,
     }).eq('id', c.id)
     setBusy(false)
     if (error) { alert(error.message); return }
@@ -82,6 +94,10 @@ export default function CatchTicket({ catchData: c, session, onClose, onUpdated 
                 <div>
                   <label className="field-label">Váha (kg)</label>
                   <input className="text-input" type="number" step="0.1" value={form.weight_kg} onChange={(e) => setForm({ ...form, weight_kg: e.target.value })} />
+                </div>
+                <div>
+                  <label className="field-label">Čas</label>
+                  <input className="text-input" type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
                 </div>
               </div>
               <label className="field-label">Nástraha</label>

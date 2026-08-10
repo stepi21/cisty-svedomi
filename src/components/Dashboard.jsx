@@ -284,7 +284,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   async function saveCatch() {
     const c = draftCatch
     const session = activeSession
-    const caughtAt = c.time && session ? `${session.session_date}T${c.time}:00` : null
+    const caughtAt = c.time && session
+      ? new Date(`${session.session_date}T${c.time}:00`).toISOString()
+      : null
     const { error } = await supabase.from('catches').insert({
       session_id: session.id, group_id: groupId, rod_id: c.rodId || null,
       species: c.species, category: c.category, length_cm: c.length || null, weight_kg: c.weight || null,
