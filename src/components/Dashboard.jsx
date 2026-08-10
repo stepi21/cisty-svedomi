@@ -3,6 +3,7 @@ import L from 'leaflet'
 import { supabase } from '../supabaseClient'
 import CatchTicket from './CatchTicket.jsx'
 import { fetchWeather } from '../lib/weather.js'
+import { uploadPhoto } from '../lib/storage.js'
 
 const iconCarp = `<svg viewBox="0 0 24 24" fill="none"><path d="M3 12c0-4 5-7 10-7s8 3 8 7-3 7-8 7-10-3-10-7Z" stroke="#2C6E71" stroke-width="1.6"/><circle cx="16" cy="10.5" r="1" fill="#2C6E71"/></svg>`
 const iconSpin = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 20 L18 6" stroke="#6B7A4F" stroke-width="1.8"/><circle cx="4" cy="20" r="2" stroke="#6B7A4F" stroke-width="1.6"/><path d="M18 6 l3 -1 -1 3" stroke="#6B7A4F" stroke-width="1.6"/></svg>`
@@ -36,6 +37,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [placementTarget, setPlacementTarget] = useState(null)   // 'session-point' | 'area-point' | 'rod-<i>' | 'catch-point'
   const [draftSession, setDraftSession] = useState(null)         // otevřený formulář nové výpravy
   const [draftCatch, setDraftCatch] = useState(null)             // otevřený formulář nového úlovku
+  const [catchChoosing, setCatchChoosing] = useState(false)      // mini panel "na jaké pozici?"
+  const [editingRodId, setEditingRodId] = useState(null)         // id prutu, co se právě edituje inline
 
   const placementTargetRef = useRef(null)
   useEffect(() => { placementTargetRef.current = placementTarget }, [placementTarget])
@@ -122,6 +125,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         return { ...prev, rods }
       })
       setPlacementTarget(null)
+      return
+    }
+
+    if (target.startsWith('edit-rod-')) {
+      const rodId = target.slice('edit-rod-'.length)
+      setPlacementTarget(null)
+      supabase.from('rods').update({ lat: point.lat, lng: point.lng }).eq('id', rodId).then(({ error }) => {
+        if (error) alert(error.message)
+        else loadSessions()
+      })
       return
     }
   }
@@ -226,6 +239,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   function startAddCatch() {
+    setCatchChoosing(true)
+  }
+
+  function chooseCatchOnRod(rod) {
+    setCatchChoosing(false)
+    setDraftCatch({ point: { lat: rod.lat, lng: rod.lng }, species: '', category: 'dravec', length: '', weight: '', bait: rod.bait || '', rodId: rod.id, time: '' })
+  }
+
+  function chooseCatchOnMap() {
+    setCatchChoosing(false)
     setPlacementTarget('catch-point')
   }
 
@@ -272,21 +295,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     await loadSessions()
   }
 
-  async function uploadPhoto(file, folder) {
-    const ext = file.name.split('.').pop()
-    const path = `${folder}/${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('photos').upload(path, file)
-    if (error) { alert('Nahrání fotky selhalo: ' + error.message); return null }
-    const { data } = supabase.storage.from('photos').getPublicUrl(path)
-    return data.publicUrl
-  }
-
   const visibleSessions = sessions.filter((s) => {
     if (activeCategory === 'all') return true
     return filteredCatches(s).length > 0
   })
 
-  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || areaDraft || (placementTarget && placementTarget.startsWith('rod-'))
+  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || areaDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
 
   return (
     <div className="app">
@@ -364,6 +378,19 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             </div>
           )}
 
+          {catchChoosing && activeSession && (
+            <div className="type-picker">
+              <div className="type-picker-title">Kde jsi rybu chytil?</div>
+              {(activeSession.rods || []).map((r) => (
+                <button key={r.id} className="type-btn" onClick={() => chooseCatchOnRod(r)}>
+                  Na pozici: {r.name}{r.bait ? ` (${r.bait})` : ''}
+                </button>
+              ))}
+              <button className="type-btn" onClick={chooseCatchOnMap}>📍 Kliknout na jinou pozici mapy</button>
+              <button className="type-cancel" onClick={() => setCatchChoosing(false)}>Zrušit</button>
+            </div>
+          )}
+
           {placementTarget === 'session-point' && (
             <div className="place-hint">
               Klikni na mapu, kde jsi chytal.
@@ -389,7 +416,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             </div>
           )}
 
-          {placementTarget && placementTarget.startsWith('rod-') && (
+          {placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')) && (
             <div className="place-hint">
               Klikni na mapu pro pozici prutu.
               <button className="ticket-close" onClick={() => setPlacementTarget(null)}>✕</button>
@@ -410,12 +437,24 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               <div className="det-block">
                 <h3>Pruty a nástrahy</h3>
                 {(activeSession.rods || []).map((r, i) => (
-                  <div className="rod-row" key={r.id}>
-                    <div className="rod-dot" style={{ background: rodColors[i % rodColors.length] }} />
-                    <div className="rod-name">{r.name}</div>
-                    <div className="rod-bait">{r.bait}</div>
-                    {r.bait_photo_url && <img src={r.bait_photo_url} alt="nástraha" className="bait-thumb" />}
-                  </div>
+                  editingRodId === r.id ? (
+                    <RodEditRow
+                      key={r.id}
+                      rod={r}
+                      color={rodColors[i % rodColors.length]}
+                      onArmPosition={() => setPlacementTarget(`edit-rod-${r.id}`)}
+                      onDone={() => { setEditingRodId(null); loadSessions() }}
+                      onCancel={() => setEditingRodId(null)}
+                    />
+                  ) : (
+                    <div className="rod-row" key={r.id}>
+                      <div className="rod-dot" style={{ background: rodColors[i % rodColors.length] }} />
+                      <div className="rod-name">{r.name}</div>
+                      <div className="rod-bait">{r.bait}</div>
+                      {r.bait_photo_url && <img src={r.bait_photo_url} alt="nástraha" className="bait-thumb" />}
+                      <button className="new-btn" style={{ marginLeft: 'auto' }} onClick={() => setEditingRodId(r.id)}>✏️</button>
+                    </div>
+                  )
                 ))}
                 {(!activeSession.rods || activeSession.rods.length === 0) && (
                   <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Bez prutů</div>
@@ -467,8 +506,48 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       )}
 
       {ticketCatch && (
-        <CatchTicket catchData={ticketCatch} session={activeSession} onClose={() => setTicketCatch(null)} />
+        <CatchTicket catchData={ticketCatch} session={activeSession} onClose={() => setTicketCatch(null)} onUpdated={loadSessions} />
       )}
+    </div>
+  )
+}
+
+function RodEditRow({ rod, color, onArmPosition, onDone, onCancel }) {
+  const [name, setName] = useState(rod.name)
+  const [bait, setBait] = useState(rod.bait || '')
+  const [photoFile, setPhotoFile] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  async function handleSave() {
+    setBusy(true)
+    let bait_photo_url = rod.bait_photo_url
+    if (photoFile) {
+      const url = await uploadPhoto(photoFile, `baits/${rod.session_id}`)
+      if (url) bait_photo_url = url
+    }
+    const { error } = await supabase.from('rods').update({ name, bait, bait_photo_url }).eq('id', rod.id)
+    setBusy(false)
+    if (error) { alert(error.message); return }
+    onDone()
+  }
+
+  return (
+    <div className="rod-edit-block">
+      <div className="input-row">
+        <input className="text-input" value={name} onChange={(e) => setName(e.target.value)} />
+        <input className="text-input" value={bait} onChange={(e) => setBait(e.target.value)} placeholder="nástraha" style={{ gridColumn: 'span 2' }} />
+      </div>
+      <div className="rod-edit-row">
+        <button type="button" className="new-btn" onClick={onArmPosition}>📍 změnit pozici na mapě</button>
+        <label className="photo-label">
+          📷 {photoFile ? photoFile.name : (rod.bait_photo_url ? 'změnit foto' : 'foto nástrahy')}
+          <input type="file" accept="image/*" hidden onChange={(e) => setPhotoFile(e.target.files[0])} />
+        </label>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <button className="new-btn" onClick={onCancel}>Zrušit</button>
+        <button className="btn-primary" style={{ margin: 0 }} onClick={handleSave} disabled={busy}>{busy ? 'Ukládám…' : 'Uložit'}</button>
+      </div>
     </div>
   )
 }
