@@ -31,6 +31,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [activeCategory, setActiveCategory] = useState('all')
   const [activeUserFilter, setActiveUserFilter] = useState('all')
   const [members, setMembers] = useState([])
+  const [viewMode, setViewMode] = useState('aggregate') // 'aggregate' | 'detail'
+  const [myProfile, setMyProfile] = useState(profile)
+  const [showSettings, setShowSettings] = useState(false)
   const [loading, setLoading] = useState(true)
   const [ticketCatch, setTicketCatch] = useState(null)
   const [inviteInfo, setInviteInfo] = useState(null)
@@ -57,14 +60,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   async function loadMembers() {
     const { data } = await supabase
       .from('group_members')
-      .select('user_id, joined_at, profiles(display_name)')
+      .select('user_id, joined_at, profiles(display_name, color)')
       .eq('group_id', groupId)
       .order('joined_at')
-    if (data) setMembers(data.map((m) => ({ id: m.user_id, name: m.profiles?.display_name || '?' })))
+    if (data) setMembers(data.map((m) => ({ id: m.user_id, name: m.profiles?.display_name || '?', color: m.profiles?.color || null })))
   }
 
   function userColor(uid) {
-    const idx = members.findIndex((m) => m.id === uid)
+    const m = members.find((mm) => mm.id === uid)
+    if (m?.color) return m.color
+    const idx = members.findIndex((mm) => mm.id === uid)
     return idx === -1 ? '#5B5F52' : USER_PALETTE[idx % USER_PALETTE.length]
   }
   function userName(uid) {
@@ -208,38 +213,71 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     }
   }, [areaDraft])
 
-  // --- render markerů pro aktivní výpravu ---
+  function sessionForCatch(c) {
+    return sessions.find((s) => s.id === c.session_id)
+  }
+
+  // --- render markerů: agregovaný pohled (podle filtrů, přes všechny výpravy) nebo detail jedné výpravy ---
   useEffect(() => {
     if (!mapInstance.current || !markersLayer.current) return
     markersLayer.current.clearLayers()
-    if (!activeSession) return
-
     const map = mapInstance.current
-    map.setView([activeSession.lat, activeSession.lng], 14)
 
-    if (activeSession.area && activeSession.area.length > 2) {
-      L.polygon(activeSession.area.map((p) => [p.lat, p.lng]), {
-        color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.12,
-      }).addTo(markersLayer.current)
+    if (viewMode === 'detail' && activeSession) {
+      map.setView([activeSession.lat, activeSession.lng], 14)
+
+      if (activeSession.area && activeSession.area.length > 2) {
+        L.polygon(activeSession.area.map((p) => [p.lat, p.lng]), {
+          color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.12,
+        }).addTo(markersLayer.current)
+      }
+
+      ;(activeCategory === 'all' ? (activeSession.rods || []) : []).forEach((r, i) => {
+        const color = rodColors[i % rodColors.length]
+        L.circleMarker([r.lat ?? activeSession.lat, r.lng ?? activeSession.lng], {
+          radius: 8, color, weight: 2, fillColor: color, fillOpacity: 0.5,
+        }).bindPopup(`<b>${r.name}</b>`).addTo(markersLayer.current)
+      })
+
+      filteredCatches(activeSession).forEach((c) => {
+        const fillColor = c.category === 'dravec' ? '#6B7A4F' : '#B97F35'
+        const ringColor = userColor(activeSession.user_id)
+        const html = `<div style="width:30px;height:30px;background:${fillColor};border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid ${ringColor};box-shadow:0 2px 6px rgba(0,0,0,.35)">${fishSVG('#fff')}</div>`
+        const icon = L.divIcon({ html, className: '', iconSize: [30, 30], iconAnchor: [15, 15] })
+        const marker = L.marker([c.lat ?? activeSession.lat, c.lng ?? activeSession.lng], { icon })
+        marker.on('click', () => setTicketCatch(c))
+        marker.addTo(markersLayer.current)
+      })
+      return
     }
 
-    ;(activeCategory === 'all' ? (activeSession.rods || []) : []).forEach((r, i) => {
-      const color = rodColors[i % rodColors.length]
-      L.circleMarker([r.lat ?? activeSession.lat, r.lng ?? activeSession.lng], {
-        radius: 8, color, weight: 2, fillColor: color, fillOpacity: 0.5,
-      }).bindPopup(`<b>${r.name}</b><br>${r.bait || ''}`).addTo(markersLayer.current)
+    // --- agregovaný pohled ---
+    const matches = []
+    sessions.forEach((s) => {
+      if (activeUserFilter !== 'all' && s.user_id !== activeUserFilter) return
+      ;(s.catches || []).forEach((c) => {
+        if (activeCategory !== 'all' && c.category !== activeCategory) return
+        matches.push({ c, s })
+      })
     })
 
-    filteredCatches(activeSession).forEach((c) => {
+    matches.forEach(({ c, s }) => {
       const fillColor = c.category === 'dravec' ? '#6B7A4F' : '#B97F35'
-      const ringColor = userColor(activeSession.user_id)
-      const html = `<div style="width:30px;height:30px;background:${fillColor};border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid ${ringColor};box-shadow:0 2px 6px rgba(0,0,0,.35)">${fishSVG('#fff')}</div>`
-      const icon = L.divIcon({ html, className: '', iconSize: [30, 30], iconAnchor: [15, 15] })
-      const marker = L.marker([c.lat ?? activeSession.lat, c.lng ?? activeSession.lng], { icon })
+      const ringColor = userColor(s.user_id)
+      const html = `<div style="width:26px;height:26px;background:${fillColor};border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid ${ringColor};box-shadow:0 2px 6px rgba(0,0,0,.35)">${fishSVG('#fff')}</div>`
+      const icon = L.divIcon({ html, className: '', iconSize: [26, 26], iconAnchor: [13, 13] })
+      const marker = L.marker([c.lat ?? s.lat, c.lng ?? s.lng], { icon })
       marker.on('click', () => setTicketCatch(c))
       marker.addTo(markersLayer.current)
     })
-  }, [activeSession, activeCategory])
+
+    if (matches.length > 0) {
+      const bounds = L.latLngBounds(matches.map(({ c, s }) => [c.lat ?? s.lat, c.lng ?? s.lng]))
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 })
+    } else {
+      map.setView([49.8, 15.5], 8)
+    }
+  }, [activeSession, activeCategory, activeUserFilter, viewMode, sessions])
 
   async function createInvite() {
     const { data, error } = await supabase
@@ -336,6 +374,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setDraftSession(null)
     await loadSessions()
     setActiveId(session.id)
+    setViewMode('detail')
   }
 
   async function saveCatch() {
@@ -372,7 +411,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         <div className="head-row">
           <h1>Čistý<span className="accent">svědomí</span></h1>
           <div className="head-actions">
-            <span className="whoami">{profile?.display_name}</span>
+            <span className="whoami">{myProfile?.display_name}</span>
+            <button className="new-btn" onClick={() => setShowSettings(true)} title="Nastavení">⚙️</button>
             <button className="new-btn" onClick={createInvite}>+ pozvat parťáka</button>
             <button className="new-btn" onClick={onSignOut}>Odhlásit</button>
           </div>
@@ -396,7 +436,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               <button
                 key={cat}
                 className={`filter-chip ${activeCategory === cat ? `active ${cat}` : ''}`}
-                onClick={() => setActiveCategory(cat)}
+                onClick={() => { setActiveCategory(cat); setViewMode('aggregate') }}
               >
                 {cat === 'all' ? 'Vše' : cat === 'dravec' ? 'Dravci' : 'Bílá ryba'}
               </button>
@@ -406,14 +446,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             <div className="filter-row">
               <button
                 className={`filter-chip ${activeUserFilter === 'all' ? 'active' : ''}`}
-                onClick={() => setActiveUserFilter('all')}
+                onClick={() => { setActiveUserFilter('all'); setViewMode('aggregate') }}
               >Kdo: Vše</button>
               {members.map((m) => (
                 <button
                   key={m.id}
                   className={`filter-chip user-chip ${activeUserFilter === m.id ? 'active' : ''}`}
                   style={activeUserFilter === m.id ? { background: userColor(m.id), borderColor: userColor(m.id) } : {}}
-                  onClick={() => setActiveUserFilter(m.id)}
+                  onClick={() => { setActiveUserFilter(m.id); setViewMode('aggregate') }}
                 >
                   <span className="user-dot" style={{ background: userColor(m.id) }} />
                   {m.name}{m.id === userId ? ' (já)' : ''}
@@ -432,9 +472,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             visibleSessions.map((s) => (
               <div
                 key={s.id}
-                className={`session-item ${s.id === activeId ? 'active' : ''}`}
+                className={`session-item ${viewMode === 'detail' && s.id === activeId ? 'active' : ''}`}
                 style={{ borderLeft: `3px solid ${userColor(s.user_id)}`, paddingLeft: 15 }}
-                onClick={() => setActiveId(s.id)}
+                onClick={() => { setActiveId(s.id); setViewMode('detail') }}
               >
                 <div className="s-icon" dangerouslySetInnerHTML={{ __html: s.type === 'kapr' ? iconCarp : iconSpin }} />
                 <div className="s-body">
@@ -508,7 +548,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             </div>
           )}
 
-          {activeSession && !draftSession && (
+          {activeSession && viewMode === 'detail' && !draftSession && (
             <div className="detail-strip">
               <div className="det-block">
                 <h3>Podmínky</h3>
@@ -597,14 +637,71 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         />
       )}
 
+      {showSettings && (
+        <SettingsModal
+          userId={userId}
+          profile={myProfile}
+          onClose={() => setShowSettings(false)}
+          onSaved={(updated) => { setMyProfile(updated); setShowSettings(false); loadMembers() }}
+        />
+      )}
+
       {ticketCatch && (
-        <CatchTicket catchData={ticketCatch} session={activeSession} onClose={() => setTicketCatch(null)} onUpdated={loadSessions} />
+        <CatchTicket catchData={ticketCatch} session={sessionForCatch(ticketCatch)} onClose={() => setTicketCatch(null)} onUpdated={loadSessions} />
       )}
     </div>
   )
 }
 
-function RodEditRow({ rod, color, onArmPosition, onDone, onCancel }) {
+function SettingsModal({ userId, profile, onClose, onSaved }) {
+  const [name, setName] = useState(profile?.display_name || '')
+  const [color, setColor] = useState(profile?.color || USER_PALETTE[0])
+  const [busy, setBusy] = useState(false)
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setBusy(true)
+    const { data, error } = await supabase.from('profiles')
+      .update({ display_name: name, color })
+      .eq('id', userId)
+      .select()
+      .single()
+    setBusy(false)
+    if (error) { alert(error.message); return }
+    onSaved(data)
+  }
+
+  return (
+    <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="ticket" style={{ maxWidth: 360 }}>
+        <div className="ticket-top">
+          <button className="ticket-close" onClick={onClose}>✕</button>
+          <div className="eyebrow">Nastavení</div>
+          <h2>Tvůj profil</h2>
+        </div>
+        <div className="perforation"></div>
+        <div className="ticket-body">
+          <form onSubmit={handleSave}>
+            <label className="field-label">Jméno, pod kterým budeš uveden</label>
+            <input className="text-input" required value={name} onChange={(e) => setName(e.target.value)} />
+            <label className="field-label" style={{ marginTop: 14 }}>Tvoje barva (úlovky, mapa, seznam výprav)</label>
+            <div className="color-swatches">
+              {USER_PALETTE.map((c) => (
+                <button
+                  key={c} type="button"
+                  className={`color-swatch ${color === c ? 'selected' : ''}`}
+                  style={{ background: c }}
+                  onClick={() => setColor(c)}
+                />
+              ))}
+            </div>
+            <button className="btn-primary" type="submit" disabled={busy} style={{ marginTop: 16 }}>{busy ? 'Ukládám…' : 'Uložit'}</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}
   const [name, setName] = useState(rod.name)
   const initialBaits = (rod.baits && rod.baits.length > 0)
     ? rod.baits.map((b) => ({ name: b.name, photo_url: b.photo_url, photoFile: null }))

@@ -87,6 +87,9 @@ header h1 .accent{ color:var(--amber); }
 .filter-chip.user-chip{ display:inline-flex; align-items:center; gap:5px; }
 .filter-chip.user-chip.active{ color:#fff; }
 .user-dot{ width:7px; height:7px; border-radius:50%; display:inline-block; flex:none; }
+.color-swatches{ display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+.color-swatch{ width:30px; height:30px; border-radius:50%; border:2px solid transparent; cursor:pointer; }
+.color-swatch.selected{ border-color:var(--ink); box-shadow:0 0 0 2px var(--white) inset; }
 
 .session-item{ padding:13px 18px; border-bottom:1px solid #EFEBDF; cursor:pointer; display:flex; gap:11px; }
 .session-item:hover{ background:#F7F4EA; }
