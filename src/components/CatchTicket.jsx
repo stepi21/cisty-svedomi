@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { uploadPhoto } from '../lib/storage.js'
+import { moonPhaseName } from '../lib/weather.js'
 
 const fishSVG = (color) => `
   <svg viewBox="0 0 64 34" xmlns="http://www.w3.org/2000/svg">
@@ -75,6 +76,15 @@ export default function CatchTicket({ catchData: c, session, onClose, onUpdated 
               <div className="ticket-line"><span className="lab">Čas úlovku</span><span className="val">{c.caught_at ? new Date(c.caught_at).toLocaleTimeString('cs-CZ') : '—'}</span></div>
               <div className="ticket-line"><span className="lab">Lokace</span><span className="val">{c.lat?.toFixed(4)}, {c.lng?.toFixed(4)}</span></div>
               {session && <div className="ticket-line"><span className="lab">Výprava</span><span className="val" style={{ fontFamily: 'inherit', fontWeight: 600 }}>{session.title}</span></div>}
+              {session && (
+                <div className="conditions-strip">
+                  <span className="cond-chip">📅 {session.session_date}</span>
+                  <span className="cond-chip">🌡 {session.weather_temp_c ?? '—'}°C</span>
+                  <span className="cond-chip">📊 {session.weather_pressure_hpa ?? '—'} hPa</span>
+                  <span className="cond-chip">💨 {session.weather_wind || '—'}</span>
+                  <span className="cond-chip">🌙 {moonPhaseName(session.session_date)}</span>
+                </div>
+              )}
               <button className="new-btn" style={{ marginTop: 12 }} onClick={() => setEditing(true)}>✏️ Upravit</button>
             </>
           ) : (

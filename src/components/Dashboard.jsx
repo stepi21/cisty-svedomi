@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, Fragment } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import { supabase } from '../supabaseClient'
 import CatchTicket from './CatchTicket.jsx'
@@ -444,8 +444,60 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function monthLabel(dateStr) {
     const d = new Date(dateStr)
-    const label = d.toLocaleDateString('cs-CZ', { month: 'long', year: 'numeric' })
+    const label = d.toLocaleDateString('cs-CZ', { month: 'long' })
     return label.charAt(0).toUpperCase() + label.slice(1)
+  }
+
+  function buildGroups(list) {
+    const years = []
+    let curYear = null, curMonth = null
+    list.forEach((s) => {
+      const d = new Date(s.session_date)
+      const y = d.getFullYear()
+      const monthKey = `${y}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      if (!curYear || curYear.year !== y) {
+        curYear = { year: y, key: `year:${y}`, months: [] }
+        years.push(curYear)
+        curMonth = null
+      }
+      if (!curMonth || curMonth.key !== `month:${monthKey}`) {
+        curMonth = { key: `month:${monthKey}`, label: monthLabel(s.session_date), sessions: [] }
+        curYear.months.push(curMonth)
+      }
+      curMonth.sessions.push(s)
+    })
+    return years
+  }
+
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set())
+  const collapseInitRef = useRef(false)
+  useEffect(() => {
+    if (collapseInitRef.current || sessions.length === 0) return
+    collapseInitRef.current = true
+    const groups = buildGroups(sessions)
+    const allKeys = new Set()
+    groups.forEach((y) => { allKeys.add(y.key); y.months.forEach((m) => allKeys.add(m.key)) })
+    // nejnovější rok a měsíc necháme rozbalené, zbytek sbalíme
+    if (groups.length) {
+      allKeys.delete(groups[0].key)
+      if (groups[0].months.length) allKeys.delete(groups[0].months[0].key)
+    }
+    setCollapsedGroups(allKeys)
+  }, [sessions])
+
+  function toggleGroup(key) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      return next
+    })
+  }
+  function expandAll() { setCollapsedGroups(new Set()) }
+  function collapseAll() {
+    const groups = buildGroups(visibleSessions)
+    const allKeys = new Set()
+    groups.forEach((y) => { allKeys.add(y.key); y.months.forEach((m) => allKeys.add(m.key)) })
+    setCollapsedGroups(allKeys)
   }
 
   const visibleSessions = sessions.filter((s) => {
@@ -482,6 +534,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           <div className="sb-head">
             <span>Výpravy</span>
             <button className="new-btn" onClick={startNewSession}>+ nová výprava</button>
+          </div>
+          <div className="sb-toolbar">
+            <button className="new-btn" onClick={expandAll}>Rozbalit vše</button>
+            <button className="new-btn" onClick={collapseAll}>Sbalit vše</button>
           </div>
           <div className="filter-row">
             {['all', 'dravec', 'bila'].map((cat) => (
@@ -521,28 +577,42 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               Žádná výprava. Zkus přidat první přes "+ nová výprava".
             </div>
           ) : (
-            visibleSessions.map((s, idx) => {
-              const group = monthLabel(s.session_date)
-              const prevGroup = idx > 0 ? monthLabel(visibleSessions[idx - 1].session_date) : null
+            buildGroups(visibleSessions).map((yearGroup) => {
+              const yearCollapsed = collapsedGroups.has(yearGroup.key)
               return (
-                <Fragment key={s.id}>
-                  {group !== prevGroup && <div className="month-header">{group}</div>}
-                  <div
-                    className={`session-item ${viewMode === 'detail' && s.id === activeId ? 'active' : ''}`}
-                    style={{ borderLeft: `3px solid ${userColor(s.user_id)}`, paddingLeft: 15 }}
-                    onClick={() => { setActiveId(s.id); setViewMode('detail') }}
-                  >
-                    <div className="s-icon" dangerouslySetInnerHTML={{ __html: s.type === 'kapr' ? iconCarp : iconSpin }} />
-                    <div className="s-body">
-                      <div className="s-title">{s.title}</div>
-                      <div className="s-sub">{s.session_date} · {s.time_from}–{s.time_to} · {userName(s.user_id)}</div>
-                      <div className="s-tags">
-                        <span className="s-tag">{s.type}</span>
-                        <span className="s-tag catch">{filteredCatches(s).length} úlovky</span>
-                      </div>
-                    </div>
+                <div key={yearGroup.key}>
+                  <div className="year-header" onClick={() => toggleGroup(yearGroup.key)}>
+                    <span className="chevron">{yearCollapsed ? '▸' : '▾'}</span> {yearGroup.year}
                   </div>
-                </Fragment>
+                  {!yearCollapsed && yearGroup.months.map((m) => {
+                    const monthCollapsed = collapsedGroups.has(m.key)
+                    return (
+                      <div key={m.key}>
+                        <div className="month-header clickable" onClick={() => toggleGroup(m.key)}>
+                          <span className="chevron">{monthCollapsed ? '▸' : '▾'}</span> {m.label} <span className="month-count">({m.sessions.length})</span>
+                        </div>
+                        {!monthCollapsed && m.sessions.map((s) => (
+                          <div
+                            key={s.id}
+                            className={`session-item ${viewMode === 'detail' && s.id === activeId ? 'active' : ''}`}
+                            style={{ borderLeft: `3px solid ${userColor(s.user_id)}`, paddingLeft: 15 }}
+                            onClick={() => { setActiveId(s.id); setViewMode('detail') }}
+                          >
+                            <div className="s-icon" dangerouslySetInnerHTML={{ __html: s.type === 'kapr' ? iconCarp : iconSpin }} />
+                            <div className="s-body">
+                              <div className="s-title">{s.title}</div>
+                              <div className="s-sub">{s.session_date} · {s.time_from}–{s.time_to} · {userName(s.user_id)}</div>
+                              <div className="s-tags">
+                                <span className="s-tag">{s.type}</span>
+                                <span className="s-tag catch">{filteredCatches(s).length} úlovky</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </div>
               )
             })
           )}
