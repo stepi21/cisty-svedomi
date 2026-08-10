@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import { supabase } from '../supabaseClient'
 import CatchTicket from './CatchTicket.jsx'
+import { fetchWeather } from '../lib/weather.js'
 
 const iconCarp = `<svg viewBox="0 0 24 24" fill="none"><path d="M3 12c0-4 5-7 10-7s8 3 8 7-3 7-8 7-10-3-10-7Z" stroke="#2C6E71" stroke-width="1.6"/><circle cx="16" cy="10.5" r="1" fill="#2C6E71"/></svg>`
 const iconSpin = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 20 L18 6" stroke="#6B7A4F" stroke-width="1.8"/><circle cx="4" cy="20" r="2" stroke="#6B7A4F" stroke-width="1.6"/><path d="M18 6 l3 -1 -1 3" stroke="#6B7A4F" stroke-width="1.6"/></svg>`
@@ -12,22 +13,37 @@ const fishSVG = (color) => `
     <circle cx="46" cy="14" r="2.3" fill="#1a1a1a"/>
   </svg>`
 const rodColors = ['#2C6E71', '#B97F35', '#6B7A4F', '#D9A054']
+const SESSION_TYPES = [
+  { value: 'kapr', label: 'Kapři (bod)' },
+  { value: 'privlac', label: 'Přívlač (oblast)' },
+  { value: 'muska', label: 'Muška (bod)' },
+  { value: 'plavana', label: 'Plavaná (bod)' },
+  { value: 'jine', label: 'Jiné (bod)' },
+]
+const AREA_TYPES = ['privlac'] // typy, kde se místo bodu kreslí oblast
 
 export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [sessions, setSessions] = useState([])
   const [activeId, setActiveId] = useState(null)
   const [activeCategory, setActiveCategory] = useState('all')
   const [loading, setLoading] = useState(true)
-  const [showSessionForm, setShowSessionForm] = useState(false)
-  const [showCatchForm, setShowCatchForm] = useState(false)
-  const [pendingCoords, setPendingCoords] = useState(null)
-  const [clickMode, setClickMode] = useState(null) // 'session' | 'catch' | null
   const [ticketCatch, setTicketCatch] = useState(null)
   const [inviteInfo, setInviteInfo] = useState(null)
+
+  // --- flow state pro vytváření nové výpravy ---
+  const [pickingType, setPickingType] = useState(false)         // ukazuje mini panel "jaký typ?"
+  const [areaDraft, setAreaDraft] = useState(null)               // {points:[]} během kreslení oblasti
+  const [placementTarget, setPlacementTarget] = useState(null)   // 'session-point' | 'area-point' | 'rod-<i>' | 'catch-point'
+  const [draftSession, setDraftSession] = useState(null)         // otevřený formulář nové výpravy
+  const [draftCatch, setDraftCatch] = useState(null)             // otevřený formulář nového úlovku
+
+  const placementTargetRef = useRef(null)
+  useEffect(() => { placementTargetRef.current = placementTarget }, [placementTarget])
 
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
   const markersLayer = useRef(null)
+  const draftLayer = useRef(null)
 
   useEffect(() => { loadSessions() }, [groupId])
 
@@ -53,7 +69,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return session.catches.filter((c) => c.category === activeCategory)
   }
 
-  // --- init map once ---
+  // --- init map jednou ---
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return
     const map = L.map(mapRef.current).setView([49.8, 15.5], 8)
@@ -62,21 +78,72 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       maxZoom: 19,
     }).addTo(map)
     markersLayer.current = L.layerGroup().addTo(map)
-    map.on('click', (e) => {
-      setPendingCoords((prev) => {
-        if (!clickModeRef.current) return prev
-        return { lat: e.latlng.lat, lng: e.latlng.lng }
-      })
-    })
+    draftLayer.current = L.layerGroup().addTo(map)
+
+    map.on('click', (e) => handleMapClick(e.latlng))
     mapInstance.current = map
     return () => { map.remove(); mapInstance.current = null }
   }, [])
 
-  // keep a ref of clickMode so the map click handler (registered once) can read latest value
-  const clickModeRef = useRef(null)
-  useEffect(() => { clickModeRef.current = clickMode }, [clickMode])
+  function handleMapClick(latlng) {
+    const target = placementTargetRef.current
+    if (!target) return
+    const point = { lat: latlng.lat, lng: latlng.lng }
 
-  // --- render markers whenever active session / filter changes ---
+    if (target === 'session-point') {
+      setPlacementTarget(null)
+      setDraftSession({
+        type: pendingTypeRef.current,
+        title: '', date: '', timeFrom: '', timeTo: '',
+        temp: '', pressure: '', wind: '', desc: '',
+        point, area: null,
+        rods: [{ name: 'Prut 1', bait: '', lat: point.lat, lng: point.lng, baitPhotoFile: null }],
+      })
+      return
+    }
+
+    if (target === 'area-point') {
+      setAreaDraft((prev) => ({ points: [...(prev?.points || []), point] }))
+      return
+    }
+
+    if (target === 'catch-point') {
+      setPlacementTarget(null)
+      setDraftCatch({ point, species: '', category: 'dravec', length: '', weight: '', bait: '', rodId: '', time: '' })
+      return
+    }
+
+    if (target.startsWith('rod-')) {
+      const idx = Number(target.split('-')[1])
+      setDraftSession((prev) => {
+        if (!prev) return prev
+        const rods = [...prev.rods]
+        rods[idx] = { ...rods[idx], lat: point.lat, lng: point.lng }
+        return { ...prev, rods }
+      })
+      setPlacementTarget(null)
+      return
+    }
+  }
+
+  const pendingTypeRef = useRef('kapr')
+
+  // --- kreslení preview polygonu při tvorbě oblasti ---
+  useEffect(() => {
+    if (!draftLayer.current) return
+    draftLayer.current.clearLayers()
+    if (areaDraft && areaDraft.points.length) {
+      const latlngs = areaDraft.points.map((p) => [p.lat, p.lng])
+      if (latlngs.length === 1) {
+        L.circleMarker(latlngs[0], { radius: 6, color: '#6B7A4F' }).addTo(draftLayer.current)
+      } else {
+        L.polyline(latlngs, { color: '#6B7A4F', weight: 3, dashArray: '6 6' }).addTo(draftLayer.current)
+        latlngs.forEach((ll) => L.circleMarker(ll, { radius: 5, color: '#6B7A4F', fillOpacity: 1 }).addTo(draftLayer.current))
+      }
+    }
+  }, [areaDraft])
+
+  // --- render markerů pro aktivní výpravu ---
   useEffect(() => {
     if (!mapInstance.current || !markersLayer.current) return
     markersLayer.current.clearLayers()
@@ -84,6 +151,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
     const map = mapInstance.current
     map.setView([activeSession.lat, activeSession.lng], 14)
+
+    if (activeSession.area && activeSession.area.length > 2) {
+      L.polygon(activeSession.area.map((p) => [p.lat, p.lng]), {
+        color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.12,
+      }).addTo(markersLayer.current)
+    }
 
     ;(activeSession.rods || []).forEach((r, i) => {
       const color = rodColors[i % rodColors.length]
@@ -100,13 +173,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       marker.on('click', () => setTicketCatch(c))
       marker.addTo(markersLayer.current)
     })
-
-    if (pendingCoords && (clickMode === 'session' || clickMode === 'catch')) {
-      L.marker([pendingCoords.lat, pendingCoords.lng], {
-        opacity: 0.85,
-      }).bindPopup('Nová pozice').addTo(markersLayer.current).openPopup()
-    }
-  }, [activeSession, activeCategory, pendingCoords, clickMode])
+  }, [activeSession, activeCategory])
 
   async function createInvite() {
     const { data, error } = await supabase
@@ -117,22 +184,109 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (!error) setInviteInfo(data)
   }
 
-  function startAddSession() {
-    setClickMode('session')
-    setPendingCoords(null)
-    setShowSessionForm(true)
+  // --- začátek tvorby nové výpravy ---
+  function startNewSession() { setPickingType(true) }
+
+  function chooseType(type) {
+    setPickingType(false)
+    pendingTypeRef.current = type
+    if (AREA_TYPES.includes(type)) {
+      setAreaDraft({ points: [] })
+      setPlacementTarget('area-point')
+    } else {
+      setPlacementTarget('session-point')
+    }
+  }
+
+  function undoAreaPoint() {
+    setAreaDraft((prev) => ({ points: prev.points.slice(0, -1) }))
+  }
+
+  function cancelAreaOrPoint() {
+    setAreaDraft(null)
+    setPlacementTarget(null)
+  }
+
+  function finishArea() {
+    const points = areaDraft.points
+    if (points.length < 3) return
+    const centroid = {
+      lat: points.reduce((s, p) => s + p.lat, 0) / points.length,
+      lng: points.reduce((s, p) => s + p.lng, 0) / points.length,
+    }
+    setAreaDraft(null)
+    setPlacementTarget(null)
+    setDraftSession({
+      type: pendingTypeRef.current,
+      title: '', date: '', timeFrom: '', timeTo: '',
+      temp: '', pressure: '', wind: '', desc: '',
+      point: centroid, area: points,
+      rods: [{ name: 'Prut 1', bait: '', lat: centroid.lat, lng: centroid.lng, baitPhotoFile: null }],
+    })
   }
 
   function startAddCatch() {
-    setClickMode('catch')
-    setPendingCoords({ lat: activeSession.lat, lng: activeSession.lng })
-    setShowCatchForm(true)
+    setPlacementTarget('catch-point')
+  }
+
+  async function saveSession() {
+    const s = draftSession
+    const { data: session, error: sErr } = await supabase
+      .from('sessions')
+      .insert({
+        group_id: groupId, user_id: userId, type: s.type, title: s.title,
+        session_date: s.date, time_from: s.timeFrom || null, time_to: s.timeTo || null,
+        lat: s.point.lat, lng: s.point.lng, area: s.area,
+        weather_temp_c: s.temp || null, weather_pressure_hpa: s.pressure || null,
+        weather_wind: s.wind || null, weather_desc: s.desc || null,
+      }).select().single()
+    if (sErr) { alert(sErr.message); return }
+
+    for (const r of s.rods.filter((r) => r.name)) {
+      let bait_photo_url = null
+      if (r.baitPhotoFile) {
+        bait_photo_url = await uploadPhoto(r.baitPhotoFile, `baits/${session.id}`)
+      }
+      await supabase.from('rods').insert({
+        session_id: session.id, group_id: groupId, name: r.name, bait: r.bait,
+        lat: r.lat, lng: r.lng, bait_photo_url,
+      })
+    }
+
+    setDraftSession(null)
+    await loadSessions()
+    setActiveId(session.id)
+  }
+
+  async function saveCatch() {
+    const c = draftCatch
+    const session = activeSession
+    const caughtAt = c.time && session ? `${session.session_date}T${c.time}:00` : null
+    const { error } = await supabase.from('catches').insert({
+      session_id: session.id, group_id: groupId, rod_id: c.rodId || null,
+      species: c.species, category: c.category, length_cm: c.length || null, weight_kg: c.weight || null,
+      bait: c.bait, caught_at: caughtAt, lat: c.point.lat, lng: c.point.lng,
+    })
+    if (error) { alert(error.message); return }
+    setDraftCatch(null)
+    await loadSessions()
+  }
+
+  async function uploadPhoto(file, folder) {
+    const ext = file.name.split('.').pop()
+    const path = `${folder}/${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from('photos').upload(path, file)
+    if (error) { alert('Nahrání fotky selhalo: ' + error.message); return null }
+    const { data } = supabase.storage.from('photos').getPublicUrl(path)
+    return data.publicUrl
   }
 
   const visibleSessions = sessions.filter((s) => {
     if (activeCategory === 'all') return true
     return filteredCatches(s).length > 0
   })
+
+  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || areaDraft || (placementTarget && placementTarget.startsWith('rod-'))
 
   return (
     <div className="app">
@@ -156,7 +310,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         <aside className="sidebar">
           <div className="sb-head">
             <span>Výpravy</span>
-            <button className="new-btn" onClick={startAddSession}>+ nová výprava</button>
+            <button className="new-btn" onClick={startNewSession}>+ nová výprava</button>
           </div>
           <div className="filter-row">
             {['all', 'dravec', 'bila'].map((cat) => (
@@ -198,8 +352,51 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         </aside>
 
         <main>
-          <div ref={mapRef} id="map" />
-          {activeSession && (
+          <div ref={mapRef} id="map" style={{ cursor: isPlacingSomething ? 'crosshair' : '' }} />
+
+          {pickingType && (
+            <div className="type-picker">
+              <div className="type-picker-title">Jaký typ výpravy?</div>
+              {SESSION_TYPES.map((t) => (
+                <button key={t.value} className="type-btn" onClick={() => chooseType(t.value)}>{t.label}</button>
+              ))}
+              <button className="type-cancel" onClick={() => setPickingType(false)}>Zrušit</button>
+            </div>
+          )}
+
+          {placementTarget === 'session-point' && (
+            <div className="place-hint">
+              Klikni na mapu, kde jsi chytal.
+              <button className="ticket-close" onClick={cancelAreaOrPoint}>✕</button>
+            </div>
+          )}
+
+          {placementTarget === 'catch-point' && (
+            <div className="place-hint">
+              Klikni na mapu, kde jsi rybu chytil.
+              <button className="ticket-close" onClick={() => setPlacementTarget(null)}>✕</button>
+            </div>
+          )}
+
+          {areaDraft && (
+            <div className="place-hint area-hint">
+              Klikej podél trasy/oblasti, kde jsi chytal ({areaDraft.points.length} bodů, potřeba aspoň 3).
+              <div className="area-controls">
+                <button className="new-btn" onClick={undoAreaPoint} disabled={!areaDraft.points.length}>Zpět o bod</button>
+                <button className="btn-primary" style={{ margin: 0 }} onClick={finishArea} disabled={areaDraft.points.length < 3}>Dokončit oblast</button>
+                <button className="new-btn" onClick={cancelAreaOrPoint}>Zrušit</button>
+              </div>
+            </div>
+          )}
+
+          {placementTarget && placementTarget.startsWith('rod-') && (
+            <div className="place-hint">
+              Klikni na mapu pro pozici prutu.
+              <button className="ticket-close" onClick={() => setPlacementTarget(null)}>✕</button>
+            </div>
+          )}
+
+          {activeSession && !draftSession && (
             <div className="detail-strip">
               <div className="det-block">
                 <h3>Podmínky</h3>
@@ -217,6 +414,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                     <div className="rod-dot" style={{ background: rodColors[i % rodColors.length] }} />
                     <div className="rod-name">{r.name}</div>
                     <div className="rod-bait">{r.bait}</div>
+                    {r.bait_photo_url && <img src={r.bait_photo_url} alt="nástraha" className="bait-thumb" />}
                   </div>
                 ))}
                 {(!activeSession.rods || activeSession.rods.length === 0) && (
@@ -248,23 +446,23 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         </main>
       </div>
 
-      {showSessionForm && (
-        <SessionFormModal
-          groupId={groupId}
-          userId={userId}
-          pendingCoords={pendingCoords}
-          onClose={() => { setShowSessionForm(false); setClickMode(null); setPendingCoords(null) }}
-          onCreated={(id) => { setShowSessionForm(false); setClickMode(null); setPendingCoords(null); loadSessions(); setActiveId(id) }}
+      {draftSession && (
+        <SessionFormPanel
+          draft={draftSession}
+          setDraft={setDraftSession}
+          onArmRod={(i) => setPlacementTarget(`rod-${i}`)}
+          onSave={saveSession}
+          onClose={() => setDraftSession(null)}
         />
       )}
 
-      {showCatchForm && activeSession && (
-        <CatchFormModal
-          session={activeSession}
-          groupId={groupId}
-          pendingCoords={pendingCoords}
-          onClose={() => { setShowCatchForm(false); setClickMode(null) }}
-          onCreated={() => { setShowCatchForm(false); setClickMode(null); loadSessions() }}
+      {draftCatch && activeSession && (
+        <CatchFormPanel
+          draft={draftCatch}
+          setDraft={setDraftCatch}
+          rods={activeSession.rods || []}
+          onSave={saveCatch}
+          onClose={() => setDraftCatch(null)}
         />
       )}
 
@@ -275,54 +473,47 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   )
 }
 
-function SessionFormModal({ groupId, userId, pendingCoords, onClose, onCreated }) {
-  const [type, setType] = useState('kapr')
-  const [title, setTitle] = useState('')
-  const [date, setDate] = useState('')
-  const [timeFrom, setTimeFrom] = useState('')
-  const [timeTo, setTimeTo] = useState('')
-  const [temp, setTemp] = useState('')
-  const [pressure, setPressure] = useState('')
-  const [wind, setWind] = useState('')
-  const [desc, setDesc] = useState('')
-  const [rods, setRods] = useState([{ name: 'Prut 1', bait: '' }])
+function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose }) {
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState(null)
+  const [weatherBusy, setWeatherBusy] = useState(false)
+  const [weatherError, setWeatherError] = useState(null)
 
-  function addRod() { setRods([...rods, { name: `Prut ${rods.length + 1}`, bait: '' }]) }
-  function updateRod(i, field, value) {
-    const next = [...rods]; next[i][field] = value; setRods(next)
+  function set(field, value) { setDraft((d) => ({ ...d, [field]: value })) }
+  function setRod(i, field, value) {
+    setDraft((d) => {
+      const rods = [...d.rods]; rods[i] = { ...rods[i], [field]: value }
+      return { ...d, rods }
+    })
+  }
+  function addRod() {
+    setDraft((d) => ({
+      ...d,
+      rods: [...d.rods, { name: `Prut ${d.rods.length + 1}`, bait: '', lat: d.point.lat, lng: d.point.lng, baitPhotoFile: null }],
+    }))
+  }
+
+  async function handleFetchWeather() {
+    if (!draft.date) { setWeatherError('Nejdřív vyplň datum.'); return }
+    setWeatherBusy(true); setWeatherError(null)
+    try {
+      const w = await fetchWeather(draft.point.lat, draft.point.lng, draft.date, draft.timeFrom)
+      setDraft((d) => ({ ...d, temp: w.temp, pressure: w.pressure, wind: w.wind, desc: w.desc }))
+    } catch (e) {
+      setWeatherError(e.message)
+    }
+    setWeatherBusy(false)
   }
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!pendingCoords) { setError('Klikni nejdřív na mapu, ať víme, kde jsi chytal.'); return }
     setBusy(true)
-    setError(null)
-    const { data: session, error: sErr } = await supabase
-      .from('sessions')
-      .insert({
-        group_id: groupId, user_id: userId, type, title,
-        session_date: date, time_from: timeFrom || null, time_to: timeTo || null,
-        lat: pendingCoords.lat, lng: pendingCoords.lng,
-        weather_temp_c: temp || null, weather_pressure_hpa: pressure || null,
-        weather_wind: wind || null, weather_desc: desc || null,
-      }).select().single()
-    if (sErr) { setBusy(false); setError(sErr.message); return }
-
-    const rodRows = rods.filter((r) => r.name).map((r, i) => ({
-      session_id: session.id, group_id: groupId, name: r.name, bait: r.bait,
-      lat: pendingCoords.lat + i * 0.0003, lng: pendingCoords.lng + i * 0.0002,
-    }))
-    if (rodRows.length) await supabase.from('rods').insert(rodRows)
-
+    await onSave()
     setBusy(false)
-    onCreated(session.id)
   }
 
   return (
-    <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="ticket" style={{ maxWidth: 460 }}>
+    <div className="side-panel">
+      <div className="ticket" style={{ maxWidth: 400 }}>
         <div className="ticket-top">
           <button className="ticket-close" onClick={onClose}>✕</button>
           <div className="eyebrow">Nová výprava</div>
@@ -332,59 +523,65 @@ function SessionFormModal({ groupId, userId, pendingCoords, onClose, onCreated }
         <div className="ticket-body">
           <form onSubmit={handleSubmit}>
             <p className="hint-text">
-              {pendingCoords ? `Pozice: ${pendingCoords.lat.toFixed(4)}, ${pendingCoords.lng.toFixed(4)}` : 'Klikni na mapu pod tímto oknem, ať nastavíme pozici.'}
+              {draft.area ? `Oblast: ${draft.area.length} bodů` : `Pozice: ${draft.point.lat.toFixed(4)}, ${draft.point.lng.toFixed(4)}`}
             </p>
-            <label className="field-label">Typ</label>
-            <select className="text-input" value={type} onChange={(e) => setType(e.target.value)}>
-              <option value="kapr">Kapři</option>
-              <option value="privlac">Přívlač</option>
-              <option value="muska">Muška</option>
-              <option value="plavana">Plavaná</option>
-              <option value="jine">Jiné</option>
-            </select>
             <label className="field-label">Název výpravy</label>
-            <input className="text-input" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="např. Orlík — zátoka pod hrází" />
+            <input className="text-input" required value={draft.title} onChange={(e) => set('title', e.target.value)} placeholder="např. Orlík — zátoka pod hrází" />
             <div className="input-row">
               <div>
                 <label className="field-label">Datum</label>
-                <input className="text-input" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
+                <input className="text-input" type="date" required value={draft.date} onChange={(e) => set('date', e.target.value)} />
               </div>
               <div>
                 <label className="field-label">Od</label>
-                <input className="text-input" type="time" value={timeFrom} onChange={(e) => setTimeFrom(e.target.value)} />
+                <input className="text-input" type="time" value={draft.timeFrom} onChange={(e) => set('timeFrom', e.target.value)} />
               </div>
               <div>
                 <label className="field-label">Do</label>
-                <input className="text-input" type="time" value={timeTo} onChange={(e) => setTimeTo(e.target.value)} />
+                <input className="text-input" type="time" value={draft.timeTo} onChange={(e) => set('timeTo', e.target.value)} />
               </div>
             </div>
-            <div className="input-row">
+
+            <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy} style={{ marginTop: 10 }}>
+              {weatherBusy ? 'Zjišťuji počasí…' : '🌤 Doplnit počasí automaticky'}
+            </button>
+            {weatherError && <p className="error-text">{weatherError}</p>}
+
+            <div className="input-row" style={{ marginTop: 10 }}>
               <div>
                 <label className="field-label">Teplota °C</label>
-                <input className="text-input" type="number" value={temp} onChange={(e) => setTemp(e.target.value)} />
+                <input className="text-input" type="number" value={draft.temp} onChange={(e) => set('temp', e.target.value)} />
               </div>
               <div>
                 <label className="field-label">Tlak hPa</label>
-                <input className="text-input" type="number" value={pressure} onChange={(e) => setPressure(e.target.value)} />
+                <input className="text-input" type="number" value={draft.pressure} onChange={(e) => set('pressure', e.target.value)} />
               </div>
               <div>
                 <label className="field-label">Vítr</label>
-                <input className="text-input" value={wind} onChange={(e) => setWind(e.target.value)} placeholder="3 m/s SV" />
+                <input className="text-input" value={draft.wind} onChange={(e) => set('wind', e.target.value)} placeholder="3 m/s SV" />
               </div>
             </div>
             <label className="field-label">Popis počasí</label>
-            <input className="text-input" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="jasno, ráno mlha" />
+            <input className="text-input" value={draft.desc} onChange={(e) => set('desc', e.target.value)} placeholder="jasno, ráno mlha" />
 
             <label className="field-label">Pruty</label>
-            {rods.map((r, i) => (
-              <div className="input-row" key={i}>
-                <input className="text-input" value={r.name} onChange={(e) => updateRod(i, 'name', e.target.value)} placeholder="Prut 1" />
-                <input className="text-input" value={r.bait} onChange={(e) => updateRod(i, 'bait', e.target.value)} placeholder="nástraha" style={{ gridColumn: 'span 2' }} />
+            {draft.rods.map((r, i) => (
+              <div key={i} className="rod-edit-block">
+                <div className="input-row">
+                  <input className="text-input" value={r.name} onChange={(e) => setRod(i, 'name', e.target.value)} placeholder="Prut 1" />
+                  <input className="text-input" value={r.bait} onChange={(e) => setRod(i, 'bait', e.target.value)} placeholder="nástraha" style={{ gridColumn: 'span 2' }} />
+                </div>
+                <div className="rod-edit-row">
+                  <button type="button" className="new-btn" onClick={() => onArmRod(i)}>📍 pozice na mapě: {r.lat.toFixed(4)}, {r.lng.toFixed(4)}</button>
+                  <label className="photo-label">
+                    📷 {r.baitPhotoFile ? r.baitPhotoFile.name : 'foto nástrahy'}
+                    <input type="file" accept="image/*" hidden onChange={(e) => setRod(i, 'baitPhotoFile', e.target.files[0])} />
+                  </label>
+                </div>
               </div>
             ))}
             <button type="button" className="new-btn" onClick={addRod} style={{ marginBottom: 12 }}>+ další prut</button>
 
-            {error && <p className="error-text">{error}</p>}
             <button className="btn-primary" type="submit" disabled={busy}>{busy ? 'Ukládám…' : 'Uložit výpravu'}</button>
           </form>
         </div>
@@ -393,36 +590,20 @@ function SessionFormModal({ groupId, userId, pendingCoords, onClose, onCreated }
   )
 }
 
-function CatchFormModal({ session, groupId, pendingCoords, onClose, onCreated }) {
-  const [species, setSpecies] = useState('')
-  const [category, setCategory] = useState('dravec')
-  const [length, setLength] = useState('')
-  const [weight, setWeight] = useState('')
-  const [bait, setBait] = useState('')
-  const [rodId, setRodId] = useState('')
-  const [time, setTime] = useState('')
+function CatchFormPanel({ draft, setDraft, rods, onSave, onClose }) {
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState(null)
+  function set(field, value) { setDraft((d) => ({ ...d, [field]: value })) }
 
   async function handleSubmit(e) {
     e.preventDefault()
     setBusy(true)
-    setError(null)
-    const caughtAt = time ? `${session.session_date}T${time}:00` : null
-    const { error } = await supabase.from('catches').insert({
-      session_id: session.id, group_id: groupId, rod_id: rodId || null,
-      species, category, length_cm: length || null, weight_kg: weight || null,
-      bait, caught_at: caughtAt,
-      lat: pendingCoords?.lat ?? session.lat, lng: pendingCoords?.lng ?? session.lng,
-    })
+    await onSave()
     setBusy(false)
-    if (error) { setError(error.message); return }
-    onCreated()
   }
 
   return (
-    <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="ticket" style={{ maxWidth: 420 }}>
+    <div className="side-panel">
+      <div className="ticket" style={{ maxWidth: 380 }}>
         <div className="ticket-top">
           <button className="ticket-close" onClick={onClose}>✕</button>
           <div className="eyebrow">Nový úlovek</div>
@@ -431,40 +612,39 @@ function CatchFormModal({ session, groupId, pendingCoords, onClose, onCreated })
         <div className="perforation"></div>
         <div className="ticket-body">
           <form onSubmit={handleSubmit}>
-            <p className="hint-text">Klidně klikni na mapu pro přesnější pozici úlovku (jinak se použije pozice výpravy).</p>
+            <p className="hint-text">Pozice: {draft.point.lat.toFixed(4)}, {draft.point.lng.toFixed(4)}</p>
             <label className="field-label">Druh ryby</label>
-            <input className="text-input" required value={species} onChange={(e) => setSpecies(e.target.value)} placeholder="Kapr obecný" />
+            <input className="text-input" required value={draft.species} onChange={(e) => set('species', e.target.value)} placeholder="Kapr obecný" />
             <label className="field-label">Kategorie</label>
-            <select className="text-input" value={category} onChange={(e) => setCategory(e.target.value)}>
+            <select className="text-input" value={draft.category} onChange={(e) => set('category', e.target.value)}>
               <option value="dravec">Dravec</option>
               <option value="bila">Bílá ryba</option>
             </select>
             <div className="input-row">
               <div>
                 <label className="field-label">Délka (cm)</label>
-                <input className="text-input" type="number" value={length} onChange={(e) => setLength(e.target.value)} />
+                <input className="text-input" type="number" value={draft.length} onChange={(e) => set('length', e.target.value)} />
               </div>
               <div>
                 <label className="field-label">Váha (kg)</label>
-                <input className="text-input" type="number" step="0.1" value={weight} onChange={(e) => setWeight(e.target.value)} />
+                <input className="text-input" type="number" step="0.1" value={draft.weight} onChange={(e) => set('weight', e.target.value)} />
               </div>
               <div>
                 <label className="field-label">Čas</label>
-                <input className="text-input" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+                <input className="text-input" type="time" value={draft.time} onChange={(e) => set('time', e.target.value)} />
               </div>
             </div>
             <label className="field-label">Nástraha</label>
-            <input className="text-input" value={bait} onChange={(e) => setBait(e.target.value)} placeholder="boilie tuňák 20mm" />
-            {session.rods && session.rods.length > 0 && (
+            <input className="text-input" value={draft.bait} onChange={(e) => set('bait', e.target.value)} placeholder="boilie tuňák 20mm" />
+            {rods.length > 0 && (
               <>
                 <label className="field-label">Prut</label>
-                <select className="text-input" value={rodId} onChange={(e) => setRodId(e.target.value)}>
+                <select className="text-input" value={draft.rodId} onChange={(e) => set('rodId', e.target.value)}>
                   <option value="">— nevybráno —</option>
-                  {session.rods.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  {rods.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
               </>
             )}
-            {error && <p className="error-text">{error}</p>}
             <button className="btn-primary" type="submit" disabled={busy}>{busy ? 'Ukládám…' : 'Uložit úlovek'}</button>
           </form>
         </div>
