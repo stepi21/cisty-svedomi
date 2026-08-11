@@ -3,6 +3,7 @@ import L from 'leaflet'
 import { supabase } from '../supabaseClient'
 import CatchTicket from './CatchTicket.jsx'
 import HelpModal from './HelpModal.jsx'
+import GalleryModal from './GalleryModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
 import { uploadPhoto } from '../lib/storage.js'
 
@@ -41,6 +42,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [showStats, setShowStats] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
   const [showRecords, setShowRecords] = useState(false)
+  const [showGallery, setShowGallery] = useState(false)
   const [loading, setLoading] = useState(true)
   const [ticketCatch, setTicketCatch] = useState(null)
   const pendingTicketCatchIdRef = useRef(null)
@@ -421,6 +423,61 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     await loadSessions()
   }
 
+  function goToMyLocation() {
+    if (!navigator.geolocation) { alert('Tento prohlížeč neumí zjistit pozici.'); return }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { mapInstance.current?.setView([pos.coords.latitude, pos.coords.longitude], 16) },
+      () => alert('Nepodařilo se zjistit pozici. Zkontroluj, že appka má povolení k lokaci.'),
+      { enableHighAccuracy: true, timeout: 8000 }
+    )
+  }
+
+  function duplicateSession(s) {
+    const rods = (s.rods || []).map((r) => ({
+      name: r.name, lat: r.lat, lng: r.lng,
+      baits: (r.baits && r.baits.length
+        ? r.baits
+        : (r.bait ? [{ name: r.bait, photo_url: r.bait_photo_url }] : [{ name: '' }])
+      ).map((b) => ({ name: b.name, photo_url: b.photo_url || null, photoFile: null })),
+    }))
+    setDraftSession({
+      type: s.type, title: s.title, date: '', timeFrom: '', timeTo: '',
+      revir: s.revir || '', target_species: s.target_species || '',
+      temp: '', pressure: '', wind: '', desc: '',
+      point: { lat: s.lat, lng: s.lng }, area: s.area || null,
+      rods: rods.length ? rods : [{ name: 'Prut 1', lat: s.lat, lng: s.lng, baits: [{ name: '', photoFile: null }] }],
+    })
+  }
+
+  function exportData() {
+    const payload = sessions.map((s) => ({
+      typ: s.type, nazev: s.title, revir: s.revir, cil: s.target_species,
+      datum: s.session_date, cas_od: s.time_from, cas_do: s.time_to,
+      autor: userName(s.user_id),
+      pocasi: { teplota_c: s.weather_temp_c, tlak_hpa: s.weather_pressure_hpa, vitr: s.weather_wind, popis: s.weather_desc },
+      pozice: { lat: s.lat, lng: s.lng },
+      oblast: s.area || null,
+      pruty: (s.rods || []).map((r) => ({
+        nazev: r.name, pozice: { lat: r.lat, lng: r.lng },
+        nastrahy: (r.baits || []).map((b) => ({ nazev: b.name, foto: b.photo_url })),
+      })),
+      ulovky: (s.catches || []).map((c) => ({
+        druh: c.species, kategorie: c.category, delka_cm: c.length_cm, vaha_kg: c.weight_kg,
+        nastraha: c.bait, cas: c.caught_at, revir: c.revir,
+        pozice: { lat: c.lat, lng: c.lng }, foto: c.photo_url, foto_nastrahy: c.bait_photo_url,
+      })),
+    }))
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `cisty-svedomi-export-${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   async function createInvite() {
     const { data, error } = await supabase
       .from('group_invites')
@@ -763,8 +820,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           <h1>Čistý<span className="accent">svědomí</span></h1>
           <div className="head-actions">
             <span className="whoami">{myProfile?.display_name}</span>
+            <button className="new-btn" onClick={() => setShowGallery(true)} title="Galerie">🖼</button>
             <button className="new-btn" onClick={() => setShowRecords(true)} title="Rekordy">🏆</button>
             <button className="new-btn" onClick={() => setShowHelp(true)} title="Návod">❓</button>
+            <button className="new-btn" onClick={exportData} title="Export dat">⬇️</button>
             <button className="new-btn" onClick={() => setShowStats(true)} title="Statistiky">📊</button>
             <button className="new-btn" onClick={() => setShowSettings(true)} title="Nastavení">⚙️</button>
             <button className="new-btn" onClick={createInvite}>+ pozvat parťáka</button>
@@ -871,6 +930,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
         <main>
           <div ref={mapRef} id="map" style={{ cursor: isPlacingSomething ? 'crosshair' : '' }} />
+          <button className="my-location-btn" onClick={goToMyLocation} title="Moje pozice">📍 Moje pozice</button>
 
           {pickingType && (
             <div className="type-picker">
@@ -948,9 +1008,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           {activeSession && viewMode === 'detail' && !draftSession && (
             <div className="detail-strip">
               <div className="det-block">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
                   <h3>Podmínky</h3>
-                  {canEdit && <button className="new-btn" onClick={() => startEditSession(activeSession)}>✏️ Upravit výpravu</button>}
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="new-btn" onClick={() => duplicateSession(activeSession)}>📋 Nová jako tahle</button>
+                    {canEdit && <button className="new-btn" onClick={() => startEditSession(activeSession)}>✏️ Upravit výpravu</button>}
+                  </div>
                 </div>
                 <div className="weather-row">
                   <div className="w-item"><div className="num">{activeSession.weather_temp_c ?? '—'}°C</div><div className="lab">teplota</div></div>
@@ -1072,6 +1135,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
       {showRecords && (
         <RecordsModal sessions={sessions} userName={userName} userColor={userColor} onClose={() => setShowRecords(false)} onOpenCatch={(c) => { setTicketCatch(c); setShowRecords(false) }} />
+      )}
+
+      {showGallery && (
+        <GalleryModal sessions={sessions} onClose={() => setShowGallery(false)} onOpenCatch={(c) => { setTicketCatch(c); setShowGallery(false) }} />
       )}
 
       {showStats && (
@@ -1232,6 +1299,24 @@ function StatsModal({ sessions, members, userColor, onClose }) {
   })
   const targetRows = Object.values(targetStats)
 
+  // --- vzorce: fáze měsíce a tlak vs úlovky ---
+  const byMoonPhase = {}
+  const byPressureBucket = {}
+  const pressureOrder = ['<1000 hPa', '1000–1010 hPa', '1010–1020 hPa', '1020+ hPa']
+  sessions.forEach((s) => {
+    const catchCount = (s.catches || []).length
+    if (catchCount === 0) return
+    const phase = moonPhaseName(s.session_date)
+    if (phase) byMoonPhase[phase] = (byMoonPhase[phase] || 0) + catchCount
+    const p = s.weather_pressure_hpa
+    if (p != null && p !== '') {
+      const bucket = p < 1000 ? '<1000 hPa' : p < 1010 ? '1000–1010 hPa' : p < 1020 ? '1010–1020 hPa' : '1020+ hPa'
+      byPressureBucket[bucket] = (byPressureBucket[bucket] || 0) + catchCount
+    }
+  })
+  const moonRows = Object.entries(byMoonPhase).sort((a, b) => b[1] - a[1])
+  const pressureRows = pressureOrder.filter((k) => byPressureBucket[k]).map((k) => [k, byPressureBucket[k]])
+
   return (
     <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="ticket" style={{ maxWidth: 480 }}>
@@ -1289,6 +1374,33 @@ function StatsModal({ sessions, members, userColor, onClose }) {
               </div>
             )}
           </div>
+
+          {(moonRows.length > 0 || pressureRows.length > 0) && (
+            <div className="stats-row" style={{ borderBottom: 'none' }}>
+              <div className="stats-row-head"><strong>📈 Kdy se daří</strong></div>
+              {moonRows.length > 0 && (
+                <>
+                  <div className="stats-total" style={{ marginTop: 8 }}>Podle fáze měsíce</div>
+                  <div className="stats-species" style={{ marginTop: 4 }}>
+                    {moonRows.map(([phase, n]) => (
+                      <span className="bait-chip" key={phase}>🌙 {phase} — {n}×</span>
+                    ))}
+                  </div>
+                </>
+              )}
+              {pressureRows.length > 0 && (
+                <>
+                  <div className="stats-total" style={{ marginTop: 10 }}>Podle tlaku</div>
+                  <div className="stats-species" style={{ marginTop: 4 }}>
+                    {pressureRows.map(([bucket, n]) => (
+                      <span className="bait-chip" key={bucket}>📊 {bucket} — {n}×</span>
+                    ))}
+                  </div>
+                </>
+              )}
+              <p className="help-note" style={{ marginTop: 10 }}>Počítáno jen z toho, co máte zapsané — čím víc výprav, tím spolehlivější vzorec.</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
