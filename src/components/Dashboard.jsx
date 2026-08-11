@@ -30,6 +30,8 @@ const TYPE_CATEGORY = { kapr: 'bila', privlac: 'dravec', muska: 'dravec', plavan
 export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [sessions, setSessions] = useState([])
   const [activeId, setActiveId] = useState(null)
+  const activeIdRef = useRef(null)
+  useEffect(() => { activeIdRef.current = activeId }, [activeId])
   const [activeCategory, setActiveCategory] = useState('all')
   const [activeUserFilter, setActiveUserFilter] = useState('all')
   const [members, setMembers] = useState([])
@@ -40,11 +42,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [showHelp, setShowHelp] = useState(false)
   const [loading, setLoading] = useState(true)
   const [ticketCatch, setTicketCatch] = useState(null)
+  const pendingTicketCatchIdRef = useRef(null)
   const [inviteInfo, setInviteInfo] = useState(null)
 
   // --- flow state pro vytváření nové výpravy ---
   const [pickingType, setPickingType] = useState(false)         // ukazuje mini panel "jaký typ?"
-  const [areaDraft, setAreaDraft] = useState(null)               // {points:[]} během kreslení oblasti
+  const [areaDraft, setAreaDraft] = useState(null)               // {areas:[], current:[]} během kreslení oblasti
+  const [rodPointsDraft, setRodPointsDraft] = useState(null)     // [{lat,lng}, ...] během sbírání pozic prutů (bodové typy)
   const [placementTarget, setPlacementTarget] = useState(null)   // 'session-point' | 'area-point' | 'rod-<i>' | 'catch-point'
   const [draftSession, setDraftSession] = useState(null)         // otevřený formulář nové výpravy
   const [draftCatch, setDraftCatch] = useState(null)             // otevřený formulář nového úlovku
@@ -81,7 +85,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return members.find((m) => m.id === uid)?.name || '?'
   }
 
-  // --- obnovení rozepsaného formuláře, kdyby appka na pozadí spadla/reloadovala se ---
+  // --- obnovení rozepsaného formuláře i toho, kde jsi byl (filtry, otevřená výprava/úlovek) ---
   const restoredRef = useRef(false)
   useEffect(() => {
     if (restoredRef.current) return
@@ -91,8 +95,23 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       if (savedSession) setDraftSession(JSON.parse(savedSession))
       const savedCatch = localStorage.getItem(`draft_catch_${groupId}`)
       if (savedCatch) setDraftCatch(JSON.parse(savedCatch))
+      const savedNav = localStorage.getItem(`nav_state_${groupId}`)
+      if (savedNav) {
+        const nav = JSON.parse(savedNav)
+        if (nav.activeCategory) setActiveCategory(nav.activeCategory)
+        if (nav.activeUserFilter) setActiveUserFilter(nav.activeUserFilter)
+        if (nav.activeId) setActiveId(nav.activeId)
+        if (nav.viewMode) setViewMode(nav.viewMode)
+        if (nav.ticketCatchId) pendingTicketCatchIdRef.current = nav.ticketCatchId
+      }
     } catch { /* ignore */ }
   }, [groupId])
+
+  useEffect(() => {
+    localStorage.setItem(`nav_state_${groupId}`, JSON.stringify({
+      activeCategory, activeUserFilter, activeId, viewMode, ticketCatchId: ticketCatch?.id || null,
+    }))
+  }, [activeCategory, activeUserFilter, activeId, viewMode, ticketCatch, groupId])
 
   useEffect(() => {
     if (draftSession) {
@@ -121,7 +140,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       .order('session_date', { ascending: false })
     if (!error) {
       setSessions(data)
-      if (data.length && !activeId) setActiveId(data[0].id)
+      if (data.length && !activeIdRef.current) setActiveId(data[0].id)
+      if (pendingTicketCatchIdRef.current) {
+        const targetId = pendingTicketCatchIdRef.current
+        for (const s of data) {
+          const found = (s.catches || []).find((c) => c.id === targetId)
+          if (found) { setTicketCatch(found); break }
+        }
+        pendingTicketCatchIdRef.current = null
+      }
     }
     setLoading(false)
   }
@@ -161,14 +188,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const point = { lat: latlng.lat, lng: latlng.lng }
 
     if (target === 'session-point') {
-      setPlacementTarget(null)
-      setDraftSession({
-        type: pendingTypeRef.current,
-        title: '', date: '', timeFrom: '', timeTo: '', revir: '', target_species: '',
-        temp: '', pressure: '', wind: '', desc: '',
-        point, area: null,
-        rods: [{ name: 'Prut 1', lat: point.lat, lng: point.lng, baits: [{ name: '', photoFile: null }] }],
-      })
+      setRodPointsDraft((prev) => [...(prev || []), point])
       return
     }
 
@@ -257,6 +277,18 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       }
     }
   }, [areaDraft])
+
+  // --- kreslení náhledu pozic prutů při zakládání bodové výpravy ---
+  useEffect(() => {
+    if (!draftLayer.current) return
+    draftLayer.current.clearLayers()
+    if (!rodPointsDraft) return
+    rodPointsDraft.forEach((p, i) => {
+      const color = rodColors[i % rodColors.length]
+      L.circleMarker([p.lat, p.lng], { radius: 8, color, weight: 2, fillColor: color, fillOpacity: 0.6 })
+        .bindPopup(`Prut ${i + 1}`).addTo(draftLayer.current)
+    })
+  }, [rodPointsDraft])
 
   function sessionForCatch(c) {
     return sessions.find((s) => s.id === c.session_id)
@@ -400,6 +432,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       setAreaDraft({ areas: [], current: [] })
       setPlacementTarget('area-point')
     } else {
+      setRodPointsDraft([])
       setPlacementTarget('session-point')
     }
   }
@@ -410,7 +443,27 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function cancelAreaOrPoint() {
     setAreaDraft(null)
+    setRodPointsDraft(null)
     setPlacementTarget(null)
+  }
+
+  function undoRodPoint() {
+    setRodPointsDraft((prev) => (prev || []).slice(0, -1))
+  }
+
+  function finishRodPoints() {
+    if (!rodPointsDraft || rodPointsDraft.length === 0) return
+    const first = rodPointsDraft[0]
+    const rods = rodPointsDraft.map((p, i) => ({ name: `Prut ${i + 1}`, lat: p.lat, lng: p.lng, baits: [{ name: '', photoFile: null }] }))
+    setPlacementTarget(null)
+    setRodPointsDraft(null)
+    setDraftSession({
+      type: pendingTypeRef.current,
+      title: '', date: '', timeFrom: '', timeTo: '', revir: '', target_species: '',
+      temp: '', pressure: '', wind: '', desc: '',
+      point: first, area: null,
+      rods,
+    })
   }
 
   function finishCurrentArea() {
@@ -681,7 +734,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return catOk && userOk
   })
 
-  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || areaDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
+  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || areaDraft || rodPointsDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
 
   return (
     <div className="app">
@@ -833,10 +886,21 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             </div>
           )}
 
-          {(placementTarget === 'session-point' || placementTarget === 'relocate-session-point') && (
+          {placementTarget === 'relocate-session-point' && (
             <div className="place-hint">
-              {placementTarget === 'relocate-session-point' ? 'Klikni na mapu, kam přesunout výpravu.' : 'Klikni na mapu, kde jsi chytal.'}
-              <button className="ticket-close" onClick={() => { setPlacementTarget(null); cancelAreaOrPoint() }}>✕</button>
+              Klikni na mapu, kam přesunout výpravu.
+              <button className="ticket-close" onClick={() => setPlacementTarget(null)}>✕</button>
+            </div>
+          )}
+
+          {rodPointsDraft && (
+            <div className="place-hint area-hint">
+              Klikni na mapu, kam jsi nahodil Prut {rodPointsDraft.length + 1}{rodPointsDraft.length > 0 ? ` (zatím nastaveno: ${rodPointsDraft.length})` : ''}.
+              <div className="area-controls">
+                <button className="new-btn" onClick={undoRodPoint} disabled={!rodPointsDraft.length}>Zpět o prut</button>
+                <button className="btn-primary" style={{ margin: 0 }} onClick={finishRodPoints} disabled={!rodPointsDraft.length}>Hotovo, pokračovat</button>
+                <button className="new-btn" onClick={cancelAreaOrPoint}>Zrušit</button>
+              </div>
             </div>
           )}
 
