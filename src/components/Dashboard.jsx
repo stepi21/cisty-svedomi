@@ -529,6 +529,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setCollapsedGroups(allKeys)
   }
 
+  async function deleteSession() {
+    if (!window.confirm('Opravdu smazat celou výpravu včetně všech úlovků a prutů? Nedá se to vrátit zpět.')) return
+    const { error } = await supabase.from('sessions').delete().eq('id', editingSession.id)
+    if (error) { alert(error.message); return }
+    setEditingSession(null)
+    if (activeId === editingSession.id) { setActiveId(null); setViewMode('aggregate') }
+    await loadSessions()
+  }
+
   const visibleSessions = sessions.filter((s) => {
     const catOk = activeCategory === 'all' || TYPE_CATEGORY[s.type] === activeCategory || filteredCatches(s).length > 0
     const userOk = activeUserFilter === 'all' || s.user_id === activeUserFilter
@@ -827,6 +836,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           setDraft={setEditingSession}
           onSave={saveEditSession}
           onClose={() => setEditingSession(null)}
+          onDelete={deleteSession}
         />
       )}
 
@@ -921,7 +931,7 @@ function StatsModal({ sessions, members, userColor, onClose }) {
   )
 }
 
-function SessionEditModal({ draft, setDraft, onSave, onClose }) {
+function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete }) {
   const [busy, setBusy] = useState(false)
   const [weatherBusy, setWeatherBusy] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
@@ -999,7 +1009,10 @@ function SessionEditModal({ draft, setDraft, onSave, onClose }) {
             <label className="field-label">Popis počasí</label>
             <input className="text-input" value={draft.desc} onChange={(e) => set('desc', e.target.value)} />
 
-            <button className="btn-primary" type="submit" disabled={busy}>{busy ? 'Ukládám…' : 'Uložit změny'}</button>
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <button className="btn-primary" style={{ margin: 0, flex: 1 }} type="submit" disabled={busy}>{busy ? 'Ukládám…' : 'Uložit změny'}</button>
+              <button type="button" className="new-btn danger-btn" onClick={onDelete}>🗑 Smazat výpravu</button>
+            </div>
           </form>
         </div>
       </div>
