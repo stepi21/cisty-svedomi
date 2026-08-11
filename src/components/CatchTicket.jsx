@@ -19,16 +19,27 @@ function toLocalTimeInput(isoString) {
   return `${hh}:${mm}`
 }
 
-export default function CatchTicket({ catchData: c, session, catcherName, canEdit = false, onClose, onUpdated, onDeleted }) {
+export default function CatchTicket({ catchData: c, session, catcherName, canEdit = false, baitPhotoMap = {}, onClose, onUpdated, onDeleted }) {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({
     species: c.species, category: c.category, revir: c.revir || '',
     length_cm: c.length_cm ?? '', weight_kg: c.weight_kg ?? '', bait: c.bait ?? '',
     time: c.caught_at ? toLocalTimeInput(c.caught_at) : '',
-    photoFile: null, baitPhotoFile: null,
+    photoFile: null, baitPhotoFile: null, bait_photo_url: c.bait_photo_url || null,
   })
   const color = CATEGORY_COLOR[c.category]
+
+  function handleBaitChange(value) {
+    setForm((f) => {
+      const next = { ...f, bait: value }
+      if (!f.baitPhotoFile) {
+        const match = baitPhotoMap[value.trim().toLowerCase()]
+        if (match) next.bait_photo_url = match
+      }
+      return next
+    })
+  }
 
   async function handleSave(e) {
     e.preventDefault()
@@ -38,7 +49,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
       const url = await uploadPhoto(form.photoFile, `catches/${c.session_id}`)
       if (url) photo_url = url
     }
-    let bait_photo_url = c.bait_photo_url
+    let bait_photo_url = form.bait_photo_url || null
     if (form.baitPhotoFile) {
       const url = await uploadPhoto(form.baitPhotoFile, `catches/${c.session_id}`)
       if (url) bait_photo_url = url
@@ -139,11 +150,12 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                 </div>
               </div>
               <label className="field-label">Nástraha</label>
-              <input className="text-input" value={form.bait} onChange={(e) => setForm({ ...form, bait: e.target.value })} list="known-baits" />
+              <input className="text-input" value={form.bait} onChange={(e) => handleBaitChange(e.target.value)} list="known-baits" />
               <label className="photo-label" style={{ display: 'inline-block', marginTop: 4 }}>
-                📷 {form.baitPhotoFile ? form.baitPhotoFile.name : (c.bait_photo_url ? 'změnit foto nástrahy' : 'foto nástrahy')}
+                📷 {form.baitPhotoFile ? form.baitPhotoFile.name : (form.bait_photo_url ? 'nalezeno / uloženo' : 'foto nástrahy')}
                 <input type="file" accept="image/*" hidden onChange={(e) => setForm({ ...form, baitPhotoFile: e.target.files[0] })} />
               </label>
+              {form.bait_photo_url && !form.baitPhotoFile && <img src={form.bait_photo_url} alt="" className="bait-thumb" />}
               <br />
               <label className="field-label">Foto úlovku</label>
               <label className="photo-label" style={{ display: 'inline-block', marginTop: 4 }}>

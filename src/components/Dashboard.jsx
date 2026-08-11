@@ -402,7 +402,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function chooseCatchOnRod(rod) {
     setCatchChoosing(false)
-    setDraftCatch({ point: { lat: rod.lat, lng: rod.lng }, species: '', category: TYPE_CATEGORY[activeSession?.type] || 'dravec', length: '', weight: '', bait: rod.bait || '', rodId: rod.id, time: '', photoFile: null, baitPhotoFile: null, revir: activeSession?.revir || '' })
+    const knownPhoto = rod.bait ? baitPhotoLookup()[rod.bait.trim().toLowerCase()] : null
+    setDraftCatch({ point: { lat: rod.lat, lng: rod.lng }, species: '', category: TYPE_CATEGORY[activeSession?.type] || 'dravec', length: '', weight: '', bait: rod.bait || '', rodId: rod.id, time: '', photoFile: null, baitPhotoFile: null, bait_photo_url: knownPhoto || null, revir: activeSession?.revir || '' })
   }
 
   function chooseCatchOnMap() {
@@ -426,8 +427,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     for (const r of s.rods.filter((r) => r.name)) {
       const baitsPayload = []
       for (const b of (r.baits || [])) {
-        if (!b.name && !b.photoFile) continue
-        let photo_url = null
+        if (!b.name && !b.photoFile && !b.photo_url) continue
+        let photo_url = b.photo_url || null
         if (b.photoFile) photo_url = await uploadPhoto(b.photoFile, `baits/${session.id}`)
         baitsPayload.push({ name: b.name, photo_url })
       }
@@ -454,7 +455,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (c.photoFile) {
       photo_url = await uploadPhoto(c.photoFile, `catches/${session.id}`)
     }
-    let bait_photo_url = null
+    let bait_photo_url = c.bait_photo_url || null
     if (c.baitPhotoFile) {
       bait_photo_url = await uploadPhoto(c.baitPhotoFile, `catches/${session.id}`)
     }
@@ -597,6 +598,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       })
     })
     return Array.from(set).sort()
+  }
+
+  function baitPhotoLookup() {
+    const map = {}
+    sessions.forEach((s) => {
+      ;(s.rods || []).forEach((r) => {
+        ;(r.baits || []).forEach((b) => { if (b.name && b.photo_url) map[b.name.trim().toLowerCase()] = b.photo_url })
+      })
+      ;(s.catches || []).forEach((c) => { if (c.bait && c.bait_photo_url) map[c.bait.trim().toLowerCase()] = c.bait_photo_url })
+    })
+    return map
   }
 
   const visibleSessions = sessions.filter((s) => {
@@ -809,6 +821,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                       key={r.id}
                       rod={r}
                       color={rodColors[i % rodColors.length]}
+                      baitPhotoMap={baitPhotoLookup()}
                       onArmPosition={() => setPlacementTarget(`edit-rod-${r.id}`)}
                       onDone={() => { setEditingRodId(null); loadSessions() }}
                       onCancel={() => setEditingRodId(null)}
@@ -884,6 +897,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onArmRod={(i) => setPlacementTarget(`rod-${i}`)}
           onSave={saveSession}
           onClose={() => setDraftSession(null)}
+          baitPhotoMap={baitPhotoLookup()}
         />
       )}
 
@@ -894,6 +908,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           rods={activeSession.rods || []}
           onSave={saveCatch}
           onClose={() => setDraftCatch(null)}
+          baitPhotoMap={baitPhotoLookup()}
         />
       )}
 
@@ -929,6 +944,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           session={sessionForCatch(ticketCatch)}
           catcherName={sessionForCatch(ticketCatch) ? userName(sessionForCatch(ticketCatch).user_id) : null}
           canEdit={sessionForCatch(ticketCatch)?.user_id === userId}
+          baitPhotoMap={baitPhotoLookup()}
           onClose={() => setTicketCatch(null)}
           onUpdated={loadSessions}
           onDeleted={() => { setTicketCatch(null); loadSessions() }}
@@ -1148,7 +1164,7 @@ function SettingsModal({ userId, profile, onClose, onSaved }) {
   )
 }
 
-function RodEditRow({ rod, color, onArmPosition, onDone, onCancel }) {
+function RodEditRow({ rod, color, baitPhotoMap = {}, onArmPosition, onDone, onCancel }) {
   const [name, setName] = useState(rod.name)
   const initialBaits = (rod.baits && rod.baits.length > 0)
     ? rod.baits.map((b) => ({ name: b.name, photo_url: b.photo_url, photoFile: null }))
@@ -1157,7 +1173,16 @@ function RodEditRow({ rod, color, onArmPosition, onDone, onCancel }) {
   const [busy, setBusy] = useState(false)
 
   function updateBait(i, field, value) {
-    setBaits((prev) => { const next = [...prev]; next[i] = { ...next[i], [field]: value }; return next })
+    setBaits((prev) => {
+      const next = [...prev]
+      let entry = { ...next[i], [field]: value }
+      if (field === 'name' && !entry.photoFile) {
+        const match = baitPhotoMap[value.trim().toLowerCase()]
+        if (match) entry.photo_url = match
+      }
+      next[i] = entry
+      return next
+    })
   }
   function addBait() { setBaits((prev) => [...prev, { name: '', photo_url: null, photoFile: null }]) }
   function removeBait(i) { setBaits((prev) => prev.filter((_, idx) => idx !== i)) }
@@ -1209,7 +1234,7 @@ function RodEditRow({ rod, color, onArmPosition, onDone, onCancel }) {
   )
 }
 
-function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose }) {
+function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhotoMap = {} }) {
   const [busy, setBusy] = useState(false)
   const [weatherBusy, setWeatherBusy] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
@@ -1231,7 +1256,12 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose }) {
     setDraft((d) => {
       const rods = [...d.rods]
       const baits = [...rods[rodIndex].baits]
-      baits[baitIndex] = { ...baits[baitIndex], [field]: value }
+      let entry = { ...baits[baitIndex], [field]: value }
+      if (field === 'name' && !entry.photoFile) {
+        const match = baitPhotoMap[value.trim().toLowerCase()]
+        if (match) entry.photo_url = match
+      }
+      baits[baitIndex] = entry
       rods[rodIndex] = { ...rods[rodIndex], baits }
       return { ...d, rods }
     })
@@ -1334,9 +1364,10 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose }) {
                   <div key={bi} className="bait-edit-row">
                     <input className="text-input" value={b.name} onChange={(e) => updateBait(i, bi, 'name', e.target.value)} placeholder="nástraha" list="known-baits" />
                     <label className="photo-label">
-                      📷 {b.photoFile ? b.photoFile.name : 'foto'}
+                      📷 {b.photoFile ? b.photoFile.name : (b.photo_url ? 'nalezeno z historie' : 'foto')}
                       <input type="file" accept="image/*" hidden onChange={(e) => updateBait(i, bi, 'photoFile', e.target.files[0])} />
                     </label>
+                    {b.photo_url && !b.photoFile && <img src={b.photo_url} alt="" className="bait-thumb" />}
                     {r.baits.length > 1 && <button type="button" className="ticket-close" style={{ position: 'static', color: 'var(--ink-soft)' }} onClick={() => removeBait(i, bi)}>✕</button>}
                   </div>
                 ))}
@@ -1356,9 +1387,20 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose }) {
   )
 }
 
-function CatchFormPanel({ draft, setDraft, rods, onSave, onClose }) {
+function CatchFormPanel({ draft, setDraft, rods, onSave, onClose, baitPhotoMap = {} }) {
   const [busy, setBusy] = useState(false)
   function set(field, value) { setDraft((d) => ({ ...d, [field]: value })) }
+
+  function handleBaitChange(value) {
+    setDraft((d) => {
+      const next = { ...d, bait: value }
+      if (!d.baitPhotoFile) {
+        const match = baitPhotoMap[value.trim().toLowerCase()]
+        if (match) next.bait_photo_url = match
+      }
+      return next
+    })
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -1403,11 +1445,12 @@ function CatchFormPanel({ draft, setDraft, rods, onSave, onClose }) {
               </div>
             </div>
             <label className="field-label">Nástraha</label>
-            <input className="text-input" value={draft.bait} onChange={(e) => set('bait', e.target.value)} placeholder="boilie tuňák 20mm" list="known-baits" />
+            <input className="text-input" value={draft.bait} onChange={(e) => handleBaitChange(e.target.value)} placeholder="boilie tuňák 20mm" list="known-baits" />
             <label className="photo-label" style={{ display: 'inline-block', marginTop: 4, marginRight: 8 }}>
-              📷 {draft.baitPhotoFile ? draft.baitPhotoFile.name : 'foto nástrahy'}
+              📷 {draft.baitPhotoFile ? draft.baitPhotoFile.name : (draft.bait_photo_url ? 'nalezeno z historie' : 'foto nástrahy')}
               <input type="file" accept="image/*" hidden onChange={(e) => set('baitPhotoFile', e.target.files[0])} />
             </label>
+            {draft.bait_photo_url && !draft.baitPhotoFile && <img src={draft.bait_photo_url} alt="" className="bait-thumb" />}
             <label className="field-label">Foto úlovku</label>
             <label className="photo-label" style={{ display: 'inline-block', marginTop: 4 }}>
               📷 {draft.photoFile ? draft.photoFile.name : 'vybrat foto'}
