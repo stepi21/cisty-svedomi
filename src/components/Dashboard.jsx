@@ -40,6 +40,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [showSettings, setShowSettings] = useState(false)
   const [showStats, setShowStats] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
+  const [showRecords, setShowRecords] = useState(false)
   const [loading, setLoading] = useState(true)
   const [ticketCatch, setTicketCatch] = useState(null)
   const pendingTicketCatchIdRef = useRef(null)
@@ -755,6 +756,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           <h1>Čistý<span className="accent">svědomí</span></h1>
           <div className="head-actions">
             <span className="whoami">{myProfile?.display_name}</span>
+            <button className="new-btn" onClick={() => setShowRecords(true)} title="Rekordy">🏆</button>
             <button className="new-btn" onClick={() => setShowHelp(true)} title="Návod">❓</button>
             <button className="new-btn" onClick={() => setShowStats(true)} title="Statistiky">📊</button>
             <button className="new-btn" onClick={() => setShowSettings(true)} title="Nastavení">⚙️</button>
@@ -1061,6 +1063,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
 
+      {showRecords && (
+        <RecordsModal sessions={sessions} userName={userName} userColor={userColor} onClose={() => setShowRecords(false)} onOpenCatch={(c) => { setTicketCatch(c); setShowRecords(false) }} />
+      )}
+
       {showStats && (
         <StatsModal sessions={sessions} members={members} userColor={userColor} onClose={() => setShowStats(false)} />
       )}
@@ -1100,6 +1106,60 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onDeleted={() => { setTicketCatch(null); loadSessions() }}
         />
       )}
+    </div>
+  )
+}
+
+function RecordsModal({ sessions, userName, userColor, onClose, onOpenCatch }) {
+  const bySpecies = {}
+  sessions.forEach((s) => {
+    ;(s.catches || []).forEach((c) => {
+      if (!c.species || c.length_cm == null || c.length_cm === '') return
+      const key = c.species.trim().toLowerCase()
+      const len = Number(c.length_cm)
+      if (!bySpecies[key] || len > Number(bySpecies[key].catchData.length_cm)) {
+        bySpecies[key] = {
+          label: c.species.trim(),
+          catchData: c,
+          session: s,
+        }
+      }
+    })
+  })
+  const records = Object.values(bySpecies).sort((a, b) => Number(b.catchData.length_cm) - Number(a.catchData.length_cm))
+
+  return (
+    <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="ticket" style={{ maxWidth: 480 }}>
+        <div className="ticket-top">
+          <button className="ticket-close" onClick={onClose}>✕</button>
+          <div className="eyebrow">Rekordy</div>
+          <h2>🏆 Rekordy party</h2>
+        </div>
+        <div className="perforation"></div>
+        <div className="ticket-body">
+          {records.length === 0 && (
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Zatím žádný úlovek s uvedenou délkou.</p>
+          )}
+          {records.map((r) => {
+            const c = r.catchData
+            const revir = c.revir || r.session.revir
+            return (
+              <div key={r.label} className="record-row" onClick={() => onOpenCatch(c)}>
+                <div className="record-head">
+                  <strong>{r.label}</strong>
+                  <span className="record-length">{c.length_cm} cm</span>
+                </div>
+                <div className="record-sub">
+                  <span className="user-dot" style={{ background: userColor(r.session.user_id) }} />
+                  {userName(r.session.user_id)} · {c.caught_at ? c.caught_at.slice(0, 10) : r.session.session_date}
+                  {revir ? ` · ${revir}` : ''}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }
