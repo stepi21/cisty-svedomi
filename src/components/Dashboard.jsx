@@ -131,6 +131,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const activeSessionRef = useRef(null)
   useEffect(() => { activeSessionRef.current = activeSession }, [activeSession])
   const relocateSessionIdRef = useRef(null)
+  const relocateCatchIdRef = useRef(null)
 
   function filteredCatches(session) {
     if (!session) return []
@@ -185,6 +186,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       setPlacementTarget(null)
       const sid = relocateSessionIdRef.current
       supabase.from('sessions').update({ lat: point.lat, lng: point.lng }).eq('id', sid).then(({ error }) => {
+        if (error) alert(error.message)
+        loadSessions()
+      })
+      return
+    }
+
+    if (target === 'relocate-catch') {
+      setPlacementTarget(null)
+      const cid = relocateCatchIdRef.current
+      supabase.from('catches').update({ lat: point.lat, lng: point.lng }).eq('id', cid).then(({ error }) => {
         if (error) alert(error.message)
         loadSessions()
       })
@@ -580,6 +591,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setCollapsedGroups(allKeys)
   }
 
+  function startRelocateCatch(catchId) {
+    relocateCatchIdRef.current = catchId
+    setTicketCatch(null)
+    setPlacementTarget('relocate-catch')
+  }
+
   async function handleRelocateSession() {
     const s = editingSession
     await saveEditSession()
@@ -620,15 +637,23 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     await loadSessions()
   }
 
-  function allKnownBaits() {
+  function allKnownBaits(category) {
     const set = new Set()
     sessions.forEach((s) => {
+      if (category && TYPE_CATEGORY[s.type] !== category) return
       ;(s.rods || []).forEach((r) => {
         ;(r.baits || []).forEach((b) => { if (b.name) set.add(b.name.trim()) })
         if (r.bait) r.bait.split(',').forEach((n) => { const t = n.trim(); if (t) set.add(t) })
       })
     })
     return Array.from(set).sort()
+  }
+
+  function baitListId(type) {
+    const cat = TYPE_CATEGORY[type]
+    if (cat === 'dravec') return 'known-baits-dravec'
+    if (cat === 'bila') return 'known-baits-bila'
+    return 'known-baits-all'
   }
 
   function allKnownSpecies() {
@@ -656,12 +681,18 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return catOk && userOk
   })
 
-  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || areaDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
+  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || areaDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
 
   return (
     <div className="app">
-      <datalist id="known-baits">
-        {allKnownBaits().map((b) => <option key={b} value={b} />)}
+      <datalist id="known-baits-dravec">
+        {allKnownBaits('dravec').map((b) => <option key={b} value={b} />)}
+      </datalist>
+      <datalist id="known-baits-bila">
+        {allKnownBaits('bila').map((b) => <option key={b} value={b} />)}
+      </datalist>
+      <datalist id="known-baits-all">
+        {allKnownBaits(null).map((b) => <option key={b} value={b} />)}
       </datalist>
       <datalist id="known-species">
         {allKnownSpecies().map((s) => <option key={s} value={s} />)}
@@ -809,9 +840,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             </div>
           )}
 
-          {placementTarget === 'catch-point' && (
+          {(placementTarget === 'catch-point' || placementTarget === 'relocate-catch') && (
             <div className="place-hint">
-              Klikni na mapu, kde jsi rybu chytil.
+              {placementTarget === 'relocate-catch' ? 'Klikni na mapu, kam přesunout úlovek.' : 'Klikni na mapu, kde jsi rybu chytil.'}
               <button className="ticket-close" onClick={() => setPlacementTarget(null)}>✕</button>
             </div>
           )}
@@ -865,6 +896,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                       rod={r}
                       color={rodColors[i % rodColors.length]}
                       baitPhotoMap={baitPhotoLookup()}
+                      baitListId={baitListId(activeSession.type)}
                       onBackfillBaitPhoto={backfillBaitPhoto}
                       onArmPosition={() => setPlacementTarget(`edit-rod-${r.id}`)}
                       onDone={() => { setEditingRodId(null); loadSessions() }}
@@ -947,6 +979,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onSave={saveSession}
           onClose={() => setDraftSession(null)}
           baitPhotoMap={baitPhotoLookup()}
+          baitListId={baitListId(draftSession.type)}
         />
       )}
 
@@ -958,6 +991,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onSave={saveCatch}
           onClose={() => setDraftCatch(null)}
           baitPhotoMap={baitPhotoLookup()}
+          baitListId={baitListId(activeSession.type)}
         />
       )}
 
@@ -994,7 +1028,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           catcherName={sessionForCatch(ticketCatch) ? userName(sessionForCatch(ticketCatch).user_id) : null}
           canEdit={sessionForCatch(ticketCatch)?.user_id === userId}
           baitPhotoMap={baitPhotoLookup()}
+          baitListId={baitListId(sessionForCatch(ticketCatch)?.type)}
           onBackfillBaitPhoto={backfillBaitPhoto}
+          onRelocate={() => startRelocateCatch(ticketCatch.id)}
           onClose={() => setTicketCatch(null)}
           onUpdated={loadSessions}
           onDeleted={() => { setTicketCatch(null); loadSessions() }}
@@ -1154,7 +1190,7 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
             {AREA_TYPES.includes(draft.type) && (
               <>
                 <label className="field-label">Cíl (nepovinné)</label>
-                <input className="text-input" value={draft.target_species || ''} onChange={(e) => set('target_species', e.target.value)} placeholder="Obecně dravci, nebo konkrétní druh" list="known-species" />
+                <input className="text-input" value={draft.target_species || ''} onChange={(e) => set('target_species', e.target.value)} placeholder="Obecně dravci, nebo konkrétní druh" list="known-species" autoComplete="off" />
               </>
             )}
             <div className="input-row">
@@ -1259,7 +1295,7 @@ function SettingsModal({ userId, profile, onClose, onSaved }) {
   )
 }
 
-function RodEditRow({ rod, color, baitPhotoMap = {}, onBackfillBaitPhoto, onArmPosition, onDone, onCancel }) {
+function RodEditRow({ rod, color, baitPhotoMap = {}, baitListId = 'known-baits-all', onBackfillBaitPhoto, onArmPosition, onDone, onCancel }) {
   const [name, setName] = useState(rod.name)
   const initialBaits = (rod.baits && rod.baits.length > 0)
     ? rod.baits.map((b) => ({ name: b.name, photo_url: b.photo_url, photoFile: null }))
@@ -1311,7 +1347,7 @@ function RodEditRow({ rod, color, baitPhotoMap = {}, onBackfillBaitPhoto, onArmP
       <input className="text-input" value={name} onChange={(e) => setName(e.target.value)} style={{ marginBottom: 8 }} />
       {baits.map((b, i) => (
         <div key={i} className="bait-edit-row">
-          <input className="text-input" value={b.name} onChange={(e) => updateBait(i, 'name', e.target.value)} placeholder="nástraha" list="known-baits" />
+          <input className="text-input" value={b.name} onChange={(e) => updateBait(i, 'name', e.target.value)} placeholder="nástraha" list={baitListId} autoComplete="off" />
           <label className="photo-label">
             📷 {b.photoFile ? b.photoFile.name : (b.photo_url ? 'změnit' : 'foto')}
             <input type="file" accept="image/*" hidden onChange={(e) => updateBait(i, 'photoFile', e.target.files[0])} />
@@ -1332,7 +1368,7 @@ function RodEditRow({ rod, color, baitPhotoMap = {}, onBackfillBaitPhoto, onArmP
   )
 }
 
-function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhotoMap = {} }) {
+function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhotoMap = {}, baitListId = 'known-baits-all' }) {
   const [busy, setBusy] = useState(false)
   const [weatherBusy, setWeatherBusy] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
@@ -1419,7 +1455,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
             {AREA_TYPES.includes(draft.type) && (
               <>
                 <label className="field-label">Cíl (nepovinné)</label>
-                <input className="text-input" value={draft.target_species || ''} onChange={(e) => set('target_species', e.target.value)} placeholder="Obecně dravci, nebo konkrétní druh" list="known-species" />
+                <input className="text-input" value={draft.target_species || ''} onChange={(e) => set('target_species', e.target.value)} placeholder="Obecně dravci, nebo konkrétní druh" list="known-species" autoComplete="off" />
               </>
             )}
             <div className="input-row">
@@ -1466,7 +1502,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
                 <input className="text-input" value={r.name} onChange={(e) => setRod(i, 'name', e.target.value)} placeholder="Prut 1" style={{ marginBottom: 8 }} />
                 {r.baits.map((b, bi) => (
                   <div key={bi} className="bait-edit-row">
-                    <input className="text-input" value={b.name} onChange={(e) => updateBait(i, bi, 'name', e.target.value)} placeholder="nástraha" list="known-baits" />
+                    <input className="text-input" value={b.name} onChange={(e) => updateBait(i, bi, 'name', e.target.value)} placeholder="nástraha" list={baitListId} autoComplete="off" />
                     <label className="photo-label">
                       📷 {b.photoFile ? b.photoFile.name : (b.photo_url ? 'nalezeno z historie' : 'foto')}
                       <input type="file" accept="image/*" hidden onChange={(e) => updateBait(i, bi, 'photoFile', e.target.files[0])} />
@@ -1491,7 +1527,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
   )
 }
 
-function CatchFormPanel({ draft, setDraft, rods, onSave, onClose, baitPhotoMap = {} }) {
+function CatchFormPanel({ draft, setDraft, rods, onSave, onClose, baitPhotoMap = {}, baitListId = 'known-baits-all' }) {
   const [busy, setBusy] = useState(false)
   function set(field, value) { setDraft((d) => ({ ...d, [field]: value })) }
 
@@ -1549,7 +1585,7 @@ function CatchFormPanel({ draft, setDraft, rods, onSave, onClose, baitPhotoMap =
               </div>
             </div>
             <label className="field-label">Nástraha</label>
-            <input className="text-input" value={draft.bait} onChange={(e) => handleBaitChange(e.target.value)} placeholder="boilie tuňák 20mm" list="known-baits" />
+            <input className="text-input" value={draft.bait} onChange={(e) => handleBaitChange(e.target.value)} placeholder="boilie tuňák 20mm" list={baitListId} autoComplete="off" />
             <label className="photo-label" style={{ display: 'inline-block', marginTop: 4, marginRight: 8 }}>
               📷 {draft.baitPhotoFile ? draft.baitPhotoFile.name : (draft.bait_photo_url ? 'nalezeno z historie' : 'foto nástrahy')}
               <input type="file" accept="image/*" hidden onChange={(e) => set('baitPhotoFile', e.target.files[0])} />

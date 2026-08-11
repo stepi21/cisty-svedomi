@@ -19,7 +19,7 @@ function toLocalTimeInput(isoString) {
   return `${hh}:${mm}`
 }
 
-export default function CatchTicket({ catchData: c, session, catcherName, canEdit = false, baitPhotoMap = {}, onBackfillBaitPhoto, onClose, onUpdated, onDeleted }) {
+export default function CatchTicket({ catchData: c, session, catcherName, canEdit = false, baitPhotoMap = {}, baitListId = 'known-baits-all', onBackfillBaitPhoto, onRelocate, onClose, onUpdated, onDeleted }) {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({
@@ -153,7 +153,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                 </div>
               </div>
               <label className="field-label">Nástraha</label>
-              <input className="text-input" value={form.bait} onChange={(e) => handleBaitChange(e.target.value)} list="known-baits" />
+              <input className="text-input" value={form.bait} onChange={(e) => handleBaitChange(e.target.value)} list={baitListId} autoComplete="off" />
               <label className="photo-label" style={{ display: 'inline-block', marginTop: 4 }}>
                 📷 {form.baitPhotoFile ? form.baitPhotoFile.name : (form.bait_photo_url ? 'nalezeno / uloženo' : 'foto nástrahy')}
                 <input type="file" accept="image/*" hidden onChange={(e) => setForm({ ...form, baitPhotoFile: e.target.files[0] })} />
@@ -165,6 +165,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                 📷 {form.photoFile ? form.photoFile.name : (c.photo_url ? 'změnit foto' : 'vybrat foto')}
                 <input type="file" accept="image/*" hidden onChange={(e) => setForm({ ...form, photoFile: e.target.files[0] })} />
               </label>
+              <button type="button" className="new-btn" onClick={onRelocate} style={{ marginTop: 4 }}>📍 Změnit pozici úlovku na mapě</button>
               <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
                 <button className="new-btn" type="button" onClick={() => setEditing(false)}>Zrušit</button>
                 <button className="btn-primary" style={{ margin: 0 }} type="submit" disabled={busy}>{busy ? 'Ukládám…' : 'Uložit změny'}</button>
