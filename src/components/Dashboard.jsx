@@ -343,6 +343,33 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     }
   }, [activeSession, activeCategory, activeUserFilter, viewMode, sessions])
 
+  async function backfillBaitPhoto(baitName, photoUrl) {
+    const key = (baitName || '').trim().toLowerCase()
+    if (!key || !photoUrl) return
+    for (const s of sessions) {
+      for (const r of (s.rods || [])) {
+        const baits = r.baits || []
+        let changed = false
+        const newBaits = baits.map((b) => {
+          if (b.name && b.name.trim().toLowerCase() === key && !b.photo_url) {
+            changed = true
+            return { ...b, photo_url: photoUrl }
+          }
+          return b
+        })
+        if (changed) {
+          await supabase.from('rods').update({ baits: newBaits }).eq('id', r.id)
+        }
+      }
+      for (const c of (s.catches || [])) {
+        if (c.bait && c.bait.trim().toLowerCase() === key && !c.bait_photo_url) {
+          await supabase.from('catches').update({ bait_photo_url: photoUrl }).eq('id', c.id)
+        }
+      }
+    }
+    await loadSessions()
+  }
+
   async function createInvite() {
     const { data, error } = await supabase
       .from('group_invites')
@@ -429,7 +456,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       for (const b of (r.baits || [])) {
         if (!b.name && !b.photoFile && !b.photo_url) continue
         let photo_url = b.photo_url || null
-        if (b.photoFile) photo_url = await uploadPhoto(b.photoFile, `baits/${session.id}`)
+        if (b.photoFile) {
+          photo_url = await uploadPhoto(b.photoFile, `baits/${session.id}`)
+          if (photo_url) backfillBaitPhoto(b.name, photo_url)
+        }
         baitsPayload.push({ name: b.name, photo_url })
       }
       await supabase.from('rods').insert({
@@ -458,6 +488,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     let bait_photo_url = c.bait_photo_url || null
     if (c.baitPhotoFile) {
       bait_photo_url = await uploadPhoto(c.baitPhotoFile, `catches/${session.id}`)
+      if (bait_photo_url) backfillBaitPhoto(c.bait, bait_photo_url)
     }
     const { error } = await supabase.from('catches').insert({
       session_id: session.id, group_id: groupId, rod_id: c.rodId || null,
@@ -834,6 +865,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                       rod={r}
                       color={rodColors[i % rodColors.length]}
                       baitPhotoMap={baitPhotoLookup()}
+                      onBackfillBaitPhoto={backfillBaitPhoto}
                       onArmPosition={() => setPlacementTarget(`edit-rod-${r.id}`)}
                       onDone={() => { setEditingRodId(null); loadSessions() }}
                       onCancel={() => setEditingRodId(null)}
@@ -962,6 +994,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           catcherName={sessionForCatch(ticketCatch) ? userName(sessionForCatch(ticketCatch).user_id) : null}
           canEdit={sessionForCatch(ticketCatch)?.user_id === userId}
           baitPhotoMap={baitPhotoLookup()}
+          onBackfillBaitPhoto={backfillBaitPhoto}
           onClose={() => setTicketCatch(null)}
           onUpdated={loadSessions}
           onDeleted={() => { setTicketCatch(null); loadSessions() }}
@@ -1226,7 +1259,7 @@ function SettingsModal({ userId, profile, onClose, onSaved }) {
   )
 }
 
-function RodEditRow({ rod, color, baitPhotoMap = {}, onArmPosition, onDone, onCancel }) {
+function RodEditRow({ rod, color, baitPhotoMap = {}, onBackfillBaitPhoto, onArmPosition, onDone, onCancel }) {
   const [name, setName] = useState(rod.name)
   const initialBaits = (rod.baits && rod.baits.length > 0)
     ? rod.baits.map((b) => ({ name: b.name, photo_url: b.photo_url, photoFile: null }))
@@ -1257,7 +1290,10 @@ function RodEditRow({ rod, color, baitPhotoMap = {}, onArmPosition, onDone, onCa
       let photo_url = b.photo_url
       if (b.photoFile) {
         const url = await uploadPhoto(b.photoFile, `baits/${rod.session_id}`)
-        if (url) photo_url = url
+        if (url) {
+          photo_url = url
+          onBackfillBaitPhoto?.(b.name, url)
+        }
       }
       baitsPayload.push({ name: b.name, photo_url })
     }

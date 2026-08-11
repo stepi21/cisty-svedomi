@@ -19,7 +19,7 @@ function toLocalTimeInput(isoString) {
   return `${hh}:${mm}`
 }
 
-export default function CatchTicket({ catchData: c, session, catcherName, canEdit = false, baitPhotoMap = {}, onClose, onUpdated, onDeleted }) {
+export default function CatchTicket({ catchData: c, session, catcherName, canEdit = false, baitPhotoMap = {}, onBackfillBaitPhoto, onClose, onUpdated, onDeleted }) {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({
@@ -52,7 +52,10 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
     let bait_photo_url = form.bait_photo_url || null
     if (form.baitPhotoFile) {
       const url = await uploadPhoto(form.baitPhotoFile, `catches/${c.session_id}`)
-      if (url) bait_photo_url = url
+      if (url) {
+        bait_photo_url = url
+        onBackfillBaitPhoto?.(form.bait, url)
+      }
     }
     const sessionDate = session?.session_date || (c.caught_at ? c.caught_at.slice(0, 10) : null)
     const caught_at = form.time && sessionDate
