@@ -995,15 +995,23 @@ function StatsModal({ sessions, members, userColor, onClose }) {
   }
 
   const targetStats = {}
+  const targetStatsByUser = {}
   sessions.forEach((s) => {
     const t = (s.target_species || '').trim()
     if (!t) return
     const key = t.toLowerCase()
-    if (!targetStats[key]) targetStats[key] = { label: t, attempts: 0, successes: 0 }
-    targetStats[key].attempts += 1
     const isGeneral = key.includes('obecně')
     const success = (s.catches || []).some((c) => isGeneral ? c.category === 'dravec' : c.species?.trim().toLowerCase() === key)
+
+    if (!targetStats[key]) targetStats[key] = { label: t, attempts: 0, successes: 0 }
+    targetStats[key].attempts += 1
     if (success) targetStats[key].successes += 1
+
+    const uid = s.user_id
+    if (!targetStatsByUser[uid]) targetStatsByUser[uid] = {}
+    if (!targetStatsByUser[uid][key]) targetStatsByUser[uid][key] = { label: t, attempts: 0, successes: 0 }
+    targetStatsByUser[uid][key].attempts += 1
+    if (success) targetStatsByUser[uid][key].successes += 1
   })
   const targetRows = Object.values(targetStats)
 
@@ -1033,6 +1041,15 @@ function StatsModal({ sessions, members, userColor, onClose }) {
                   ))}
                 </div>
                 <div className="stats-total">Celkem úlovků: {speciesTotal(u.species)}</div>
+                {targetStatsByUser[m.id] && (
+                  <div className="stats-species" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4, marginTop: 6 }}>
+                    {Object.values(targetStatsByUser[m.id]).map((t) => (
+                      <span key={t.label} className="bait-chip" style={{ width: '100%' }}>
+                        🎯 {t.label}: {t.successes} z {t.attempts} ({Math.round((t.successes / t.attempts) * 100)}%)
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             )
           })}
