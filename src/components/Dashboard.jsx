@@ -1054,19 +1054,6 @@ function StatsModal({ sessions, members, userColor, onClose }) {
             )
           })}
 
-          {targetRows.length > 0 && (
-            <div className="stats-row">
-              <div className="stats-row-head"><strong>🎯 Úspěšnost podle cíle</strong></div>
-              <div className="stats-species" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
-                {targetRows.map((t) => (
-                  <span key={t.label} className="bait-chip" style={{ width: '100%' }}>
-                    {t.label}: {t.successes} z {t.attempts} výprav ({Math.round((t.successes / t.attempts) * 100)}%)
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
           <div className="stats-row stats-total-row">
             <div className="stats-row-head"><strong>Celkem (celá parta)</strong><span className="stats-visits">{totalVisits} výprav</span></div>
             <div className="stats-species">
@@ -1075,6 +1062,15 @@ function StatsModal({ sessions, members, userColor, onClose }) {
               ))}
             </div>
             <div className="stats-total">Celkem úlovků: {totalCatches}</div>
+            {targetRows.length > 0 && (
+              <div className="stats-species" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4, marginTop: 6 }}>
+                {targetRows.map((t) => (
+                  <span key={t.label} className="bait-chip" style={{ width: '100%' }}>
+                    🎯 {t.label}: {t.successes} z {t.attempts} ({Math.round((t.successes / t.attempts) * 100)}%)
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
