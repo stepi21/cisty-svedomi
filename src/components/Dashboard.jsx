@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import { supabase } from '../supabaseClient'
 import CatchTicket from './CatchTicket.jsx'
+import HelpModal from './HelpModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
 import { uploadPhoto } from '../lib/storage.js'
 
@@ -36,6 +37,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [myProfile, setMyProfile] = useState(profile)
   const [showSettings, setShowSettings] = useState(false)
   const [showStats, setShowStats] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
   const [loading, setLoading] = useState(true)
   const [ticketCatch, setTicketCatch] = useState(null)
   const [inviteInfo, setInviteInfo] = useState(null)
@@ -553,6 +555,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           <h1>Čistý<span className="accent">svědomí</span></h1>
           <div className="head-actions">
             <span className="whoami">{myProfile?.display_name}</span>
+            <button className="new-btn" onClick={() => setShowHelp(true)} title="Návod">❓</button>
             <button className="new-btn" onClick={() => setShowStats(true)} title="Statistiky">📊</button>
             <button className="new-btn" onClick={() => setShowSettings(true)} title="Nastavení">⚙️</button>
             <button className="new-btn" onClick={createInvite}>+ pozvat parťáka</button>
@@ -825,6 +828,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onClose={() => setDraftCatch(null)}
         />
       )}
+
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
 
       {showStats && (
         <StatsModal sessions={sessions} members={members} userColor={userColor} onClose={() => setShowStats(false)} />
