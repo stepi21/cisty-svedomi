@@ -129,6 +129,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const activeSession = sessions.find((s) => s.id === activeId) || null
   const activeSessionRef = useRef(null)
   useEffect(() => { activeSessionRef.current = activeSession }, [activeSession])
+  const relocateSessionIdRef = useRef(null)
 
   function filteredCatches(session) {
     if (!session) return []
@@ -171,6 +172,21 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
     if (target === 'area-point') {
       setAreaDraft((prev) => ({ areas: prev?.areas || [], current: [...(prev?.current || []), point] }))
+      return
+    }
+
+    if (target === 'relocate-area-point') {
+      setAreaDraft((prev) => ({ areas: prev?.areas || [], current: [...(prev?.current || []), point] }))
+      return
+    }
+
+    if (target === 'relocate-session-point') {
+      setPlacementTarget(null)
+      const sid = relocateSessionIdRef.current
+      supabase.from('sessions').update({ lat: point.lat, lng: point.lng }).eq('id', sid).then(({ error }) => {
+        if (error) alert(error.message)
+        loadSessions()
+      })
       return
     }
 
@@ -453,7 +469,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function startEditSession(s) {
     setEditingSession({
-      id: s.id, title: s.title, date: s.session_date, revir: s.revir || '',
+      id: s.id, type: s.type, title: s.title, date: s.session_date, revir: s.revir || '',
       timeFrom: s.time_from || '', timeTo: s.time_to || '',
       temp: s.weather_temp_c ?? '', pressure: s.weather_pressure_hpa ?? '',
       wind: s.weather_wind || '', desc: s.weather_desc || '',
@@ -531,6 +547,37 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setCollapsedGroups(allKeys)
   }
 
+  async function handleRelocateSession() {
+    const s = editingSession
+    await saveEditSession()
+    relocateSessionIdRef.current = s.id
+    if (AREA_TYPES.includes(s.type)) {
+      pendingTypeRef.current = s.type
+      setAreaDraft({ areas: [], current: [] })
+      setPlacementTarget('relocate-area-point')
+    } else {
+      setPlacementTarget('relocate-session-point')
+    }
+  }
+
+  function proceedRelocateArea() {
+    const areas = areaDraft.current.length >= 3 ? [...areaDraft.areas, areaDraft.current] : areaDraft.areas
+    if (areas.length === 0) return
+    const overallCentroid = areaCentroid(areas.flat())
+    const firstAreaCentroid = areaCentroid(areas[0])
+    const sid = relocateSessionIdRef.current
+    setAreaDraft(null)
+    setPlacementTarget(null)
+    ;(async () => {
+      await supabase.from('sessions').update({ area: areas, lat: overallCentroid.lat, lng: overallCentroid.lng }).eq('id', sid)
+      const { data: rods } = await supabase.from('rods').select('id').eq('session_id', sid).order('created_at').limit(1)
+      if (rods && rods[0]) {
+        await supabase.from('rods').update({ lat: firstAreaCentroid.lat, lng: firstAreaCentroid.lng }).eq('id', rods[0].id)
+      }
+      await loadSessions()
+    })()
+  }
+
   async function deleteSession() {
     if (!window.confirm('Opravdu smazat celou výpravu včetně všech úlovků a prutů? Nedá se to vrátit zpět.')) return
     const { error } = await supabase.from('sessions').delete().eq('id', editingSession.id)
@@ -546,7 +593,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return catOk && userOk
   })
 
-  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || areaDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
+  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || areaDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
 
   return (
     <div className="app">
@@ -685,10 +732,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             </div>
           )}
 
-          {placementTarget === 'session-point' && (
+          {(placementTarget === 'session-point' || placementTarget === 'relocate-session-point') && (
             <div className="place-hint">
-              Klikni na mapu, kde jsi chytal.
-              <button className="ticket-close" onClick={cancelAreaOrPoint}>✕</button>
+              {placementTarget === 'relocate-session-point' ? 'Klikni na mapu, kam přesunout výpravu.' : 'Klikni na mapu, kde jsi chytal.'}
+              <button className="ticket-close" onClick={() => { setPlacementTarget(null); cancelAreaOrPoint() }}>✕</button>
             </div>
           )}
 
@@ -705,7 +752,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               <div className="area-controls">
                 <button className="new-btn" onClick={undoAreaPoint} disabled={!areaDraft.current.length}>Zpět o bod</button>
                 <button className="new-btn" onClick={finishCurrentArea} disabled={areaDraft.current.length < 3}>+ Další oblast</button>
-                <button className="btn-primary" style={{ margin: 0 }} onClick={proceedToForm} disabled={areaDraft.areas.length === 0 && areaDraft.current.length < 3}>Hotovo, pokračovat</button>
+                <button
+                  className="btn-primary" style={{ margin: 0 }}
+                  onClick={placementTarget === 'relocate-area-point' ? proceedRelocateArea : proceedToForm}
+                  disabled={areaDraft.areas.length === 0 && areaDraft.current.length < 3}
+                >
+                  {placementTarget === 'relocate-area-point' ? 'Uložit novou oblast' : 'Hotovo, pokračovat'}
+                </button>
                 <button className="new-btn" onClick={cancelAreaOrPoint}>Zrušit</button>
               </div>
             </div>
@@ -842,6 +895,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onSave={saveEditSession}
           onClose={() => setEditingSession(null)}
           onDelete={deleteSession}
+          onRelocate={handleRelocateSession}
         />
       )}
 
@@ -936,7 +990,7 @@ function StatsModal({ sessions, members, userColor, onClose }) {
   )
 }
 
-function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete }) {
+function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onRelocate }) {
   const [busy, setBusy] = useState(false)
   const [weatherBusy, setWeatherBusy] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
@@ -991,6 +1045,9 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete }) {
               </div>
             </div>
             <p className="hint-text">🌙 {moonPhaseName(draft.date)}</p>
+            <button type="button" className="new-btn" onClick={onRelocate} style={{ marginBottom: 10 }}>
+              🗺 {AREA_TYPES.includes(draft.type) ? 'Překreslit oblast na mapě' : 'Změnit bod nahození na mapě'}
+            </button>
 
             <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy}>
               {weatherBusy ? 'Zjišťuji počasí…' : '🌤 Přepočítat počasí pro nové datum'}
