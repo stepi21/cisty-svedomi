@@ -133,6 +133,7 @@ header h1 .accent{ color:var(--amber); }
 .s-tags{ margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; }
 .s-tag{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; background:#fff; border:1px solid var(--paper-line); padding:1.5px 7px; border-radius:20px; color:var(--ink-soft); }
 .s-tag.catch{ background:var(--amber); border-color:var(--amber-deep); color:#3A2A0F; font-weight:600; }
+.s-tag.target{ background:var(--water-soft); border-color:var(--water-mid); color:var(--water-deep); }
 
 main{ position:relative; display:flex; flex-direction:column; min-height:0; }
 #map{ flex:1; min-height:280px; }

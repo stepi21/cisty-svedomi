@@ -163,7 +163,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       setPlacementTarget(null)
       setDraftSession({
         type: pendingTypeRef.current,
-        title: '', date: '', timeFrom: '', timeTo: '', revir: '',
+        title: '', date: '', timeFrom: '', timeTo: '', revir: '', target_species: '',
         temp: '', pressure: '', wind: '', desc: '',
         point, area: null,
         rods: [{ name: 'Prut 1', lat: point.lat, lng: point.lng, baits: [{ name: '', photoFile: null }] }],
@@ -389,7 +389,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setPlacementTarget(null)
     setDraftSession({
       type: pendingTypeRef.current,
-      title: '', date: '', timeFrom: '', timeTo: '', revir: '',
+      title: '', date: '', timeFrom: '', timeTo: '', revir: '', target_species: '',
       temp: '', pressure: '', wind: '', desc: '',
       point: overallCentroid, area: areas,
       rods: [{ name: 'Prut 1', lat: firstAreaCentroid.lat, lng: firstAreaCentroid.lng, baits: [{ name: '', photoFile: null }] }],
@@ -416,7 +416,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const { data: session, error: sErr } = await supabase
       .from('sessions')
       .insert({
-        group_id: groupId, user_id: userId, type: s.type, title: s.title, revir: s.revir || null,
+        group_id: groupId, user_id: userId, type: s.type, title: s.title, revir: s.revir || null, target_species: s.target_species || null,
         session_date: s.date, time_from: s.timeFrom || null, time_to: s.timeTo || null,
         lat: s.point.lat, lng: s.point.lng, area: s.area,
         weather_temp_c: s.temp || null, weather_pressure_hpa: s.pressure || null,
@@ -471,7 +471,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function startEditSession(s) {
     setEditingSession({
-      id: s.id, type: s.type, title: s.title, date: s.session_date, revir: s.revir || '',
+      id: s.id, type: s.type, title: s.title, date: s.session_date, revir: s.revir || '', target_species: s.target_species || '',
       timeFrom: s.time_from || '', timeTo: s.time_to || '',
       temp: s.weather_temp_c ?? '', pressure: s.weather_pressure_hpa ?? '',
       wind: s.weather_wind || '', desc: s.weather_desc || '',
@@ -482,7 +482,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   async function saveEditSession() {
     const e = editingSession
     const { error } = await supabase.from('sessions').update({
-      title: e.title, session_date: e.date, revir: e.revir || null, time_from: e.timeFrom || null, time_to: e.timeTo || null,
+      title: e.title, session_date: e.date, revir: e.revir || null, target_species: e.target_species || null, time_from: e.timeFrom || null, time_to: e.timeTo || null,
       weather_temp_c: e.temp || null, weather_pressure_hpa: e.pressure || null,
       weather_wind: e.wind || null, weather_desc: e.desc || null,
     }).eq('id', e.id)
@@ -600,6 +600,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return Array.from(set).sort()
   }
 
+  function allKnownSpecies() {
+    const set = new Set(['Obecně dravci'])
+    sessions.forEach((s) => {
+      ;(s.catches || []).forEach((c) => { if (c.species) set.add(c.species.trim()) })
+    })
+    return Array.from(set).sort()
+  }
+
   function baitPhotoLookup() {
     const map = {}
     sessions.forEach((s) => {
@@ -623,6 +631,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     <div className="app">
       <datalist id="known-baits">
         {allKnownBaits().map((b) => <option key={b} value={b} />)}
+      </datalist>
+      <datalist id="known-species">
+        {allKnownSpecies().map((s) => <option key={s} value={s} />)}
       </datalist>
       <header>
         <div className="head-row">
@@ -719,6 +730,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                               <div className="s-sub">{s.session_date} · {s.time_from}–{s.time_to} · {userName(s.user_id)}{s.revir ? ` · ${s.revir}` : ''}</div>
                               <div className="s-tags">
                                 <span className="s-tag">{s.type}</span>
+                                {s.target_species && <span className="s-tag target">🎯 {s.target_species}</span>}
                                 <span className="s-tag catch">{filteredCatches(s).length} úlovky</span>
                               </div>
                             </div>
@@ -871,15 +883,20 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   {canEdit && <button className="new-btn" onClick={startAddCatch}>+ úlovek</button>}
                 </div>
                 <div className="catch-list">
-                  {filteredCatches(activeSession).map((c) => (
-                    <div className="catch-row" key={c.id} onClick={() => setTicketCatch(c)}>
-                      <div className="fish-mini" dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />
-                      <div>
-                        <div className="c-name">{c.species}</div>
-                        <div className="c-sub">{c.length_cm} cm · {c.weight_kg} kg</div>
+                  {filteredCatches(activeSession).map((c) => {
+                    const target = (activeSession.target_species || '').trim().toLowerCase()
+                    const isGeneral = target.includes('obecně')
+                    const matchesTarget = target && (isGeneral ? c.category === 'dravec' : c.species?.trim().toLowerCase() === target)
+                    return (
+                      <div className="catch-row" key={c.id} onClick={() => setTicketCatch(c)}>
+                        <div className="fish-mini" dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />
+                        <div>
+                          <div className="c-name">{c.species} {matchesTarget && <span title="Odpovídá cíli výpravy">🎯</span>}</div>
+                          <div className="c-sub">{c.length_cm} cm · {c.weight_kg} kg</div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                   {filteredCatches(activeSession).length === 0 && (
                     <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Žádný úlovek.</div>
                   )}
@@ -977,6 +994,19 @@ function StatsModal({ sessions, members, userColor, onClose }) {
     return Object.values(speciesObj).reduce((a, b) => a + b, 0)
   }
 
+  const targetStats = {}
+  sessions.forEach((s) => {
+    const t = (s.target_species || '').trim()
+    if (!t) return
+    const key = t.toLowerCase()
+    if (!targetStats[key]) targetStats[key] = { label: t, attempts: 0, successes: 0 }
+    targetStats[key].attempts += 1
+    const isGeneral = key.includes('obecně')
+    const success = (s.catches || []).some((c) => isGeneral ? c.category === 'dravec' : c.species?.trim().toLowerCase() === key)
+    if (success) targetStats[key].successes += 1
+  })
+  const targetRows = Object.values(targetStats)
+
   return (
     <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="ticket" style={{ maxWidth: 480 }}>
@@ -1006,6 +1036,19 @@ function StatsModal({ sessions, members, userColor, onClose }) {
               </div>
             )
           })}
+
+          {targetRows.length > 0 && (
+            <div className="stats-row">
+              <div className="stats-row-head"><strong>🎯 Úspěšnost podle cíle</strong></div>
+              <div className="stats-species" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+                {targetRows.map((t) => (
+                  <span key={t.label} className="bait-chip" style={{ width: '100%' }}>
+                    {t.label}: {t.successes} z {t.attempts} výprav ({Math.round((t.successes / t.attempts) * 100)}%)
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="stats-row stats-total-row">
             <div className="stats-row-head"><strong>Celkem (celá parta)</strong><span className="stats-visits">{totalVisits} výprav</span></div>
@@ -1062,6 +1105,12 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
             <input className="text-input" required value={draft.title} onChange={(e) => set('title', e.target.value)} />
             <label className="field-label">Revír / lokalita</label>
             <input className="text-input" value={draft.revir} onChange={(e) => set('revir', e.target.value)} placeholder="např. Labe 19, Jizera - Kárany" />
+            {AREA_TYPES.includes(draft.type) && (
+              <>
+                <label className="field-label">Cíl (nepovinné)</label>
+                <input className="text-input" value={draft.target_species || ''} onChange={(e) => set('target_species', e.target.value)} placeholder="Obecně dravci, nebo konkrétní druh" list="known-species" />
+              </>
+            )}
             <div className="input-row">
               <div>
                 <label className="field-label">Datum</label>
@@ -1318,6 +1367,12 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
             <input className="text-input" required value={draft.title} onChange={(e) => set('title', e.target.value)} placeholder="např. Orlík — zátoka pod hrází" />
             <label className="field-label">Revír / lokalita</label>
             <input className="text-input" value={draft.revir} onChange={(e) => set('revir', e.target.value)} placeholder="např. Labe 19, Jizera - Kárany" />
+            {AREA_TYPES.includes(draft.type) && (
+              <>
+                <label className="field-label">Cíl (nepovinné)</label>
+                <input className="text-input" value={draft.target_species || ''} onChange={(e) => set('target_species', e.target.value)} placeholder="Obecně dravci, nebo konkrétní druh" list="known-species" />
+              </>
+            )}
             <div className="input-row">
               <div>
                 <label className="field-label">Datum</label>
