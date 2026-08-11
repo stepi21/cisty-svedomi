@@ -588,6 +588,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     await loadSessions()
   }
 
+  function allKnownBaits() {
+    const set = new Set()
+    sessions.forEach((s) => {
+      ;(s.rods || []).forEach((r) => {
+        ;(r.baits || []).forEach((b) => { if (b.name) set.add(b.name.trim()) })
+        if (r.bait) r.bait.split(',').forEach((n) => { const t = n.trim(); if (t) set.add(t) })
+      })
+    })
+    return Array.from(set).sort()
+  }
+
   const visibleSessions = sessions.filter((s) => {
     const catOk = activeCategory === 'all' || TYPE_CATEGORY[s.type] === activeCategory || filteredCatches(s).length > 0
     const userOk = activeUserFilter === 'all' || s.user_id === activeUserFilter
@@ -598,6 +609,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   return (
     <div className="app">
+      <datalist id="known-baits">
+        {allKnownBaits().map((b) => <option key={b} value={b} />)}
+      </datalist>
       <header>
         <div className="head-row">
           <h1>Čistý<span className="accent">svědomí</span></h1>
@@ -1174,7 +1188,7 @@ function RodEditRow({ rod, color, onArmPosition, onDone, onCancel }) {
       <input className="text-input" value={name} onChange={(e) => setName(e.target.value)} style={{ marginBottom: 8 }} />
       {baits.map((b, i) => (
         <div key={i} className="bait-edit-row">
-          <input className="text-input" value={b.name} onChange={(e) => updateBait(i, 'name', e.target.value)} placeholder="nástraha" />
+          <input className="text-input" value={b.name} onChange={(e) => updateBait(i, 'name', e.target.value)} placeholder="nástraha" list="known-baits" />
           <label className="photo-label">
             📷 {b.photoFile ? b.photoFile.name : (b.photo_url ? 'změnit' : 'foto')}
             <input type="file" accept="image/*" hidden onChange={(e) => updateBait(i, 'photoFile', e.target.files[0])} />
@@ -1318,7 +1332,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose }) {
                 <input className="text-input" value={r.name} onChange={(e) => setRod(i, 'name', e.target.value)} placeholder="Prut 1" style={{ marginBottom: 8 }} />
                 {r.baits.map((b, bi) => (
                   <div key={bi} className="bait-edit-row">
-                    <input className="text-input" value={b.name} onChange={(e) => updateBait(i, bi, 'name', e.target.value)} placeholder="nástraha" />
+                    <input className="text-input" value={b.name} onChange={(e) => updateBait(i, bi, 'name', e.target.value)} placeholder="nástraha" list="known-baits" />
                     <label className="photo-label">
                       📷 {b.photoFile ? b.photoFile.name : 'foto'}
                       <input type="file" accept="image/*" hidden onChange={(e) => updateBait(i, bi, 'photoFile', e.target.files[0])} />
@@ -1389,7 +1403,7 @@ function CatchFormPanel({ draft, setDraft, rods, onSave, onClose }) {
               </div>
             </div>
             <label className="field-label">Nástraha</label>
-            <input className="text-input" value={draft.bait} onChange={(e) => set('bait', e.target.value)} placeholder="boilie tuňák 20mm" />
+            <input className="text-input" value={draft.bait} onChange={(e) => set('bait', e.target.value)} placeholder="boilie tuňák 20mm" list="known-baits" />
             <label className="photo-label" style={{ display: 'inline-block', marginTop: 4, marginRight: 8 }}>
               📷 {draft.baitPhotoFile ? draft.baitPhotoFile.name : 'foto nástrahy'}
               <input type="file" accept="image/*" hidden onChange={(e) => set('baitPhotoFile', e.target.files[0])} />

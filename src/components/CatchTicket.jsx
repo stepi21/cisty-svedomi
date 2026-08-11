@@ -139,7 +139,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                 </div>
               </div>
               <label className="field-label">Nástraha</label>
-              <input className="text-input" value={form.bait} onChange={(e) => setForm({ ...form, bait: e.target.value })} />
+              <input className="text-input" value={form.bait} onChange={(e) => setForm({ ...form, bait: e.target.value })} list="known-baits" />
               <label className="photo-label" style={{ display: 'inline-block', marginTop: 4 }}>
                 📷 {form.baitPhotoFile ? form.baitPhotoFile.name : (c.bait_photo_url ? 'změnit foto nástrahy' : 'foto nástrahy')}
                 <input type="file" accept="image/*" hidden onChange={(e) => setForm({ ...form, baitPhotoFile: e.target.files[0] })} />
