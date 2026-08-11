@@ -15,6 +15,7 @@ const fishSVG = (color) => `
   </svg>`
 const rodColors = ['#2C6E71', '#B97F35', '#6B7A4F', '#D9A054']
 const USER_PALETTE = ['#2C6E71', '#B97F35', '#6B7A4F', '#8A4B6B', '#3F6B9E', '#9C6B30', '#4B7A2E', '#7A3F5E']
+const CATEGORY_COLOR = { dravec: '#1F4E5F', bila: '#D9A054' }
 const SESSION_TYPES = [
   { value: 'kapr', label: 'Kapři (bod)' },
   { value: 'privlac', label: 'Přívlač (oblast)' },
@@ -124,6 +125,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   const activeSession = sessions.find((s) => s.id === activeId) || null
+  const activeSessionRef = useRef(null)
+  useEffect(() => { activeSessionRef.current = activeSession }, [activeSession])
 
   function filteredCatches(session) {
     if (!session) return []
@@ -156,7 +159,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       setPlacementTarget(null)
       setDraftSession({
         type: pendingTypeRef.current,
-        title: '', date: '', timeFrom: '', timeTo: '',
+        title: '', date: '', timeFrom: '', timeTo: '', revir: '',
         temp: '', pressure: '', wind: '', desc: '',
         point, area: null,
         rods: [{ name: 'Prut 1', lat: point.lat, lng: point.lng, baits: [{ name: '', photoFile: null }] }],
@@ -171,7 +174,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
     if (target === 'catch-point') {
       setPlacementTarget(null)
-      setDraftCatch({ point, species: '', category: 'dravec', length: '', weight: '', bait: '', rodId: '', time: '', photoFile: null, baitPhotoFile: null })
+      const s = activeSessionRef.current
+      setDraftCatch({ point, species: '', category: TYPE_CATEGORY[s?.type] || 'dravec', length: '', weight: '', bait: '', rodId: '', time: '', photoFile: null, baitPhotoFile: null, revir: s?.revir || '' })
       return
     }
 
@@ -281,10 +285,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       }
 
       filteredCatches(activeSession).forEach((c) => {
-        const fillColor = c.category === 'dravec' ? '#6B7A4F' : '#B97F35'
+        const fillColor = CATEGORY_COLOR[c.category]
         const ringColor = userColor(activeSession.user_id)
-        const html = `<div style="width:30px;height:30px;background:${fillColor};border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid ${ringColor};box-shadow:0 2px 6px rgba(0,0,0,.35)">${fishSVG('#fff')}</div>`
-        const icon = L.divIcon({ html, className: '', iconSize: [30, 30], iconAnchor: [15, 15] })
+        const html = `<div style="width:32px;height:32px;background:${fillColor};border-radius:50%;display:flex;align-items:center;justify-content:center;border:5px solid ${ringColor};box-shadow:0 2px 6px rgba(0,0,0,.35)">${fishSVG('#fff')}</div>`
+        const icon = L.divIcon({ html, className: '', iconSize: [32, 32], iconAnchor: [16, 16] })
         const marker = L.marker([c.lat ?? activeSession.lat, c.lng ?? activeSession.lng], { icon })
         marker.on('click', () => setTicketCatch(c))
         marker.addTo(markersLayer.current)
@@ -303,10 +307,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     })
 
     matches.forEach(({ c, s }) => {
-      const fillColor = c.category === 'dravec' ? '#6B7A4F' : '#B97F35'
+      const fillColor = CATEGORY_COLOR[c.category]
       const ringColor = userColor(s.user_id)
-      const html = `<div style="width:26px;height:26px;background:${fillColor};border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid ${ringColor};box-shadow:0 2px 6px rgba(0,0,0,.35)">${fishSVG('#fff')}</div>`
-      const icon = L.divIcon({ html, className: '', iconSize: [26, 26], iconAnchor: [13, 13] })
+      const html = `<div style="width:28px;height:28px;background:${fillColor};border-radius:50%;display:flex;align-items:center;justify-content:center;border:5px solid ${ringColor};box-shadow:0 2px 6px rgba(0,0,0,.35)">${fishSVG('#fff')}</div>`
+      const icon = L.divIcon({ html, className: '', iconSize: [28, 28], iconAnchor: [14, 14] })
       const marker = L.marker([c.lat ?? s.lat, c.lng ?? s.lng], { icon })
       marker.on('click', () => setTicketCatch(c))
       marker.addTo(markersLayer.current)
@@ -366,7 +370,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setPlacementTarget(null)
     setDraftSession({
       type: pendingTypeRef.current,
-      title: '', date: '', timeFrom: '', timeTo: '',
+      title: '', date: '', timeFrom: '', timeTo: '', revir: '',
       temp: '', pressure: '', wind: '', desc: '',
       point: overallCentroid, area: areas,
       rods: [{ name: 'Prut 1', lat: firstAreaCentroid.lat, lng: firstAreaCentroid.lng, baits: [{ name: '', photoFile: null }] }],
@@ -379,7 +383,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function chooseCatchOnRod(rod) {
     setCatchChoosing(false)
-    setDraftCatch({ point: { lat: rod.lat, lng: rod.lng }, species: '', category: 'dravec', length: '', weight: '', bait: rod.bait || '', rodId: rod.id, time: '', photoFile: null, baitPhotoFile: null })
+    setDraftCatch({ point: { lat: rod.lat, lng: rod.lng }, species: '', category: TYPE_CATEGORY[activeSession?.type] || 'dravec', length: '', weight: '', bait: rod.bait || '', rodId: rod.id, time: '', photoFile: null, baitPhotoFile: null, revir: activeSession?.revir || '' })
   }
 
   function chooseCatchOnMap() {
@@ -392,7 +396,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const { data: session, error: sErr } = await supabase
       .from('sessions')
       .insert({
-        group_id: groupId, user_id: userId, type: s.type, title: s.title,
+        group_id: groupId, user_id: userId, type: s.type, title: s.title, revir: s.revir || null,
         session_date: s.date, time_from: s.timeFrom || null, time_to: s.timeTo || null,
         lat: s.point.lat, lng: s.point.lng, area: s.area,
         weather_temp_c: s.temp || null, weather_pressure_hpa: s.pressure || null,
@@ -438,7 +442,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const { error } = await supabase.from('catches').insert({
       session_id: session.id, group_id: groupId, rod_id: c.rodId || null,
       species: c.species, category: c.category, length_cm: c.length || null, weight_kg: c.weight || null,
-      bait: c.bait, caught_at: caughtAt, lat: c.point.lat, lng: c.point.lng, photo_url, bait_photo_url,
+      bait: c.bait, caught_at: caughtAt, lat: c.point.lat, lng: c.point.lng, photo_url, bait_photo_url, revir: c.revir || null,
     })
     if (error) { alert(error.message); return }
     setDraftCatch(null)
@@ -447,7 +451,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function startEditSession(s) {
     setEditingSession({
-      id: s.id, title: s.title, date: s.session_date,
+      id: s.id, title: s.title, date: s.session_date, revir: s.revir || '',
       timeFrom: s.time_from || '', timeTo: s.time_to || '',
       temp: s.weather_temp_c ?? '', pressure: s.weather_pressure_hpa ?? '',
       wind: s.weather_wind || '', desc: s.weather_desc || '',
@@ -458,7 +462,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   async function saveEditSession() {
     const e = editingSession
     const { error } = await supabase.from('sessions').update({
-      title: e.title, session_date: e.date, time_from: e.timeFrom || null, time_to: e.timeTo || null,
+      title: e.title, session_date: e.date, revir: e.revir || null, time_from: e.timeFrom || null, time_to: e.timeTo || null,
       weather_temp_c: e.temp || null, weather_pressure_hpa: e.pressure || null,
       weather_wind: e.wind || null, weather_desc: e.desc || null,
     }).eq('id', e.id)
@@ -626,7 +630,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                             <div className="s-icon" dangerouslySetInnerHTML={{ __html: s.type === 'kapr' ? iconCarp : iconSpin }} />
                             <div className="s-body">
                               <div className="s-title">{s.title}</div>
-                              <div className="s-sub">{s.session_date} · {s.time_from}–{s.time_to} · {userName(s.user_id)}</div>
+                              <div className="s-sub">{s.session_date} · {s.time_from}–{s.time_to} · {userName(s.user_id)}{s.revir ? ` · ${s.revir}` : ''}</div>
                               <div className="s-tags">
                                 <span className="s-tag">{s.type}</span>
                                 <span className="s-tag catch">{filteredCatches(s).length} úlovky</span>
@@ -776,7 +780,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 <div className="catch-list">
                   {filteredCatches(activeSession).map((c) => (
                     <div className="catch-row" key={c.id} onClick={() => setTicketCatch(c)}>
-                      <div className="fish-mini" dangerouslySetInnerHTML={{ __html: fishSVG(c.category === 'dravec' ? '#6B7A4F' : '#B97F35') }} />
+                      <div className="fish-mini" dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />
                       <div>
                         <div className="c-name">{c.species}</div>
                         <div className="c-sub">{c.length_cm} cm · {c.weight_kg} kg</div>
@@ -836,7 +840,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       )}
 
       {ticketCatch && (
-        <CatchTicket catchData={ticketCatch} session={sessionForCatch(ticketCatch)} onClose={() => setTicketCatch(null)} onUpdated={loadSessions} />
+        <CatchTicket
+          catchData={ticketCatch}
+          session={sessionForCatch(ticketCatch)}
+          catcherName={sessionForCatch(ticketCatch) ? userName(sessionForCatch(ticketCatch).user_id) : null}
+          onClose={() => setTicketCatch(null)}
+          onUpdated={loadSessions}
+          onDeleted={() => { setTicketCatch(null); loadSessions() }}
+        />
       )}
     </div>
   )
@@ -948,6 +959,8 @@ function SessionEditModal({ draft, setDraft, onSave, onClose }) {
           <form onSubmit={handleSubmit}>
             <label className="field-label">Název výpravy</label>
             <input className="text-input" required value={draft.title} onChange={(e) => set('title', e.target.value)} />
+            <label className="field-label">Revír / lokalita</label>
+            <input className="text-input" value={draft.revir} onChange={(e) => set('revir', e.target.value)} placeholder="např. Labe 19, Jizera - Kárany" />
             <div className="input-row">
               <div>
                 <label className="field-label">Datum</label>
@@ -1182,6 +1195,8 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose }) {
             </p>
             <label className="field-label">Název výpravy</label>
             <input className="text-input" required value={draft.title} onChange={(e) => set('title', e.target.value)} placeholder="např. Orlík — zátoka pod hrází" />
+            <label className="field-label">Revír / lokalita</label>
+            <input className="text-input" value={draft.revir} onChange={(e) => set('revir', e.target.value)} placeholder="např. Labe 19, Jizera - Kárany" />
             <div className="input-row">
               <div>
                 <label className="field-label">Datum</label>
@@ -1275,6 +1290,8 @@ function CatchFormPanel({ draft, setDraft, rods, onSave, onClose }) {
             <p className="hint-text">Pozice: {draft.point.lat.toFixed(4)}, {draft.point.lng.toFixed(4)}</p>
             <label className="field-label">Druh ryby</label>
             <input className="text-input" required value={draft.species} onChange={(e) => set('species', e.target.value)} placeholder="Kapr obecný" />
+            <label className="field-label">Revír / lokalita</label>
+            <input className="text-input" value={draft.revir} onChange={(e) => set('revir', e.target.value)} placeholder="např. Labe 19" />
             <label className="field-label">Kategorie</label>
             <select className="text-input" value={draft.category} onChange={(e) => set('category', e.target.value)}>
               <option value="dravec">Dravec</option>

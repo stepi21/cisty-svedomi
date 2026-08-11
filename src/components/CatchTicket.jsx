@@ -3,6 +3,8 @@ import { supabase } from '../supabaseClient'
 import { uploadPhoto } from '../lib/storage.js'
 import { moonPhaseName } from '../lib/weather.js'
 
+const CATEGORY_COLOR = { dravec: '#1F4E5F', bila: '#D9A054' }
+
 const fishSVG = (color) => `
   <svg viewBox="0 0 64 34" xmlns="http://www.w3.org/2000/svg">
     <path d="M4,17 C4,8 18,3 32,3 C46,3 58,9 60,17 C58,25 46,31 32,31 C18,31 4,26 4,17 Z" fill="${color}"/>
@@ -17,16 +19,16 @@ function toLocalTimeInput(isoString) {
   return `${hh}:${mm}`
 }
 
-export default function CatchTicket({ catchData: c, session, onClose, onUpdated }) {
+export default function CatchTicket({ catchData: c, session, catcherName, onClose, onUpdated, onDeleted }) {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({
-    species: c.species, category: c.category,
+    species: c.species, category: c.category, revir: c.revir || '',
     length_cm: c.length_cm ?? '', weight_kg: c.weight_kg ?? '', bait: c.bait ?? '',
     time: c.caught_at ? toLocalTimeInput(c.caught_at) : '',
     photoFile: null, baitPhotoFile: null,
   })
-  const color = c.category === 'dravec' ? '#6B7A4F' : '#B97F35'
+  const color = CATEGORY_COLOR[c.category]
 
   async function handleSave(e) {
     e.preventDefault()
@@ -46,7 +48,7 @@ export default function CatchTicket({ catchData: c, session, onClose, onUpdated 
       ? new Date(`${sessionDate}T${form.time}:00`).toISOString()
       : c.caught_at
     const { error } = await supabase.from('catches').update({
-      species: form.species, category: form.category,
+      species: form.species, category: form.category, revir: form.revir || null,
       length_cm: form.length_cm || null, weight_kg: form.weight_kg || null,
       bait: form.bait, photo_url, bait_photo_url, caught_at,
     }).eq('id', c.id)
@@ -56,6 +58,15 @@ export default function CatchTicket({ catchData: c, session, onClose, onUpdated 
     onUpdated()
   }
 
+  async function handleDelete() {
+    if (!window.confirm('Opravdu smazat tento úlovek? Nedá se to vrátit zpět.')) return
+    setBusy(true)
+    const { error } = await supabase.from('catches').delete().eq('id', c.id)
+    setBusy(false)
+    if (error) { alert(error.message); return }
+    onDeleted()
+  }
+
   return (
     <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="ticket">
@@ -63,6 +74,7 @@ export default function CatchTicket({ catchData: c, session, onClose, onUpdated 
           <button className="ticket-close" onClick={onClose}>✕</button>
           <div className="eyebrow">Úlovkový lístek</div>
           <h2>{c.species}</h2>
+          {catcherName && <div className="catcher-sub">Chytil: {catcherName}</div>}
         </div>
         <div className="perforation"></div>
         <div className="ticket-body">
@@ -77,6 +89,7 @@ export default function CatchTicket({ catchData: c, session, onClose, onUpdated 
                 <div className="stat"><div className="num">{c.length_cm ?? '—'} cm</div><div className="lab">délka</div></div>
                 <div className="stat"><div className="num">{c.weight_kg ?? '—'} kg</div><div className="lab">váha</div></div>
               </div>
+              {c.revir && <div className="ticket-line"><span className="lab">Revír</span><span className="val">{c.revir}</span></div>}
               <div className="ticket-line"><span className="lab">Nástraha</span><span className="val">{c.bait || '—'}</span></div>
               {c.bait_photo_url && (
                 <div className="ticket-illustration" style={{ marginTop: 6 }}>
@@ -95,12 +108,17 @@ export default function CatchTicket({ catchData: c, session, onClose, onUpdated 
                   <span className="cond-chip">🌙 {moonPhaseName(session.session_date)}</span>
                 </div>
               )}
-              <button className="new-btn" style={{ marginTop: 12 }} onClick={() => setEditing(true)}>✏️ Upravit</button>
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <button className="new-btn" onClick={() => setEditing(true)}>✏️ Upravit</button>
+                <button className="new-btn danger-btn" onClick={handleDelete} disabled={busy}>🗑 Smazat</button>
+              </div>
             </>
           ) : (
             <form onSubmit={handleSave}>
               <label className="field-label">Druh ryby</label>
               <input className="text-input" required value={form.species} onChange={(e) => setForm({ ...form, species: e.target.value })} />
+              <label className="field-label">Revír / lokalita</label>
+              <input className="text-input" value={form.revir} onChange={(e) => setForm({ ...form, revir: e.target.value })} placeholder="např. Labe 19" />
               <label className="field-label">Kategorie</label>
               <select className="text-input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
                 <option value="dravec">Dravec</option>
