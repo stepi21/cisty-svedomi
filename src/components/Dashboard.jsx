@@ -160,6 +160,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   useEffect(() => { activeSessionRef.current = activeSession }, [activeSession])
   const relocateSessionIdRef = useRef(null)
   const relocateCatchIdRef = useRef(null)
+  const pendingMapFocusRef = useRef(null)
 
   function filteredCatches(session) {
     if (!session) return []
@@ -326,7 +327,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const map = mapInstance.current
 
     if (viewMode === 'detail' && activeSession) {
-      map.setView([activeSession.lat, activeSession.lng], 14)
+      if (pendingMapFocusRef.current && pendingMapFocusRef.current.sessionId === activeSession.id) {
+        const f = pendingMapFocusRef.current
+        map.setView([f.lat, f.lng], f.zoom || 16)
+        pendingMapFocusRef.current = null
+      } else {
+        map.setView([activeSession.lat, activeSession.lng], 14)
+      }
 
       normalizeAreas(activeSession.area).forEach((pts, ai) => {
         L.polygon(pts.map((p) => [p.lat, p.lng]), {
@@ -1103,8 +1110,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onRelocate={() => startRelocateCatch(ticketCatch.id)}
           onFocusLocation={() => {
             const c = ticketCatch
+            const s = sessionForCatch(c)
             setTicketCatch(null)
-            mapInstance.current?.setView([c.lat, c.lng], 16)
+            if (!s) { mapInstance.current?.setView([c.lat, c.lng], 16); return }
+            if (activeId === s.id && viewMode === 'detail') {
+              mapInstance.current?.setView([c.lat, c.lng], 16)
+            } else {
+              pendingMapFocusRef.current = { sessionId: s.id, lat: c.lat, lng: c.lng, zoom: 16 }
+              setActiveId(s.id)
+              setViewMode('detail')
+            }
           }}
           onOpenSession={() => {
             const s = sessionForCatch(ticketCatch)
