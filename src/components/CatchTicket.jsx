@@ -19,7 +19,7 @@ function toLocalTimeInput(isoString) {
   return `${hh}:${mm}`
 }
 
-export default function CatchTicket({ catchData: c, session, catcherName, canEdit = false, baitPhotoMap = {}, baitListId = 'known-baits-all', onBackfillBaitPhoto, onRelocate, onClose, onUpdated, onDeleted }) {
+export default function CatchTicket({ catchData: c, session, catcherName, canEdit = false, baitPhotoMap = {}, baitListId = 'known-baits-all', onBackfillBaitPhoto, onRelocate, onFocusLocation, onOpenSession, onClose, onUpdated, onDeleted }) {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({
@@ -111,8 +111,16 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                 </div>
               )}
               <div className="ticket-line"><span className="lab">Čas úlovku</span><span className="val">{c.caught_at ? new Date(c.caught_at).toLocaleTimeString('cs-CZ') : '—'}</span></div>
-              <div className="ticket-line"><span className="lab">Lokace</span><span className="val">{c.lat?.toFixed(4)}, {c.lng?.toFixed(4)}</span></div>
-              {session && <div className="ticket-line"><span className="lab">Výprava</span><span className="val" style={{ fontFamily: 'inherit', fontWeight: 600 }}>{session.title}</span></div>}
+              <div className="ticket-line">
+                <span className="lab">Lokace</span>
+                <span className="val link-val" onClick={onFocusLocation}>📍 {c.lat?.toFixed(4)}, {c.lng?.toFixed(4)}</span>
+              </div>
+              {session && (
+                <div className="ticket-line">
+                  <span className="lab">Výprava</span>
+                  <span className="val link-val" style={{ fontFamily: 'inherit', fontWeight: 600 }} onClick={onOpenSession}>{session.title} →</span>
+                </div>
+              )}
               {session && (
                 <div className="conditions-strip">
                   <span className="cond-chip">📅 {session.session_date}</span>

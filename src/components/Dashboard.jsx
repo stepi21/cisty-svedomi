@@ -1101,6 +1101,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           baitListId={baitListId(sessionForCatch(ticketCatch)?.type)}
           onBackfillBaitPhoto={backfillBaitPhoto}
           onRelocate={() => startRelocateCatch(ticketCatch.id)}
+          onFocusLocation={() => {
+            const c = ticketCatch
+            setTicketCatch(null)
+            mapInstance.current?.setView([c.lat, c.lng], 16)
+          }}
+          onOpenSession={() => {
+            const s = sessionForCatch(ticketCatch)
+            if (s) { setTicketCatch(null); setActiveId(s.id); setViewMode('detail') }
+          }}
           onClose={() => setTicketCatch(null)}
           onUpdated={loadSessions}
           onDeleted={() => { setTicketCatch(null); loadSessions() }}

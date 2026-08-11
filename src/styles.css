@@ -204,6 +204,8 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
 .ticket-line:last-child{ border-bottom:none; }
 .ticket-line .lab{ color:var(--ink-soft); }
 .ticket-line .val{ font-weight:600; font-family:'IBM Plex Mono', monospace; font-size:12.5px; }
+.val.link-val{ cursor:pointer; color:var(--water-mid); text-decoration:underline; text-decoration-color:transparent; transition:text-decoration-color .15s; }
+.val.link-val:hover{ text-decoration-color:var(--water-mid); }
 .note{ font-size:11.5px; color:var(--ink-soft); padding:8px 22px 14px; font-family:'IBM Plex Mono', monospace; }
 
 /* ---------- side panel (forms that need the map clickable underneath) ---------- */
