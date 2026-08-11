@@ -19,7 +19,7 @@ function toLocalTimeInput(isoString) {
   return `${hh}:${mm}`
 }
 
-export default function CatchTicket({ catchData: c, session, catcherName, onClose, onUpdated, onDeleted }) {
+export default function CatchTicket({ catchData: c, session, catcherName, canEdit = false, onClose, onUpdated, onDeleted }) {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({
@@ -109,8 +109,8 @@ export default function CatchTicket({ catchData: c, session, catcherName, onClos
                 </div>
               )}
               <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                <button className="new-btn" onClick={() => setEditing(true)}>✏️ Upravit</button>
-                <button className="new-btn danger-btn" onClick={handleDelete} disabled={busy}>🗑 Smazat</button>
+                {canEdit && <button className="new-btn" onClick={() => setEditing(true)}>✏️ Upravit</button>}
+                {canEdit && <button className="new-btn danger-btn" onClick={handleDelete} disabled={busy}>🗑 Smazat</button>}
               </div>
             </>
           ) : (

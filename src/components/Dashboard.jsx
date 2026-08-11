@@ -127,6 +127,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   const activeSession = sessions.find((s) => s.id === activeId) || null
+  const canEdit = activeSession && activeSession.user_id === userId
   const activeSessionRef = useRef(null)
   useEffect(() => { activeSessionRef.current = activeSession }, [activeSession])
   const relocateSessionIdRef = useRef(null)
@@ -776,7 +777,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               <div className="det-block">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                   <h3>Podmínky</h3>
-                  <button className="new-btn" onClick={() => startEditSession(activeSession)}>✏️ Upravit výpravu</button>
+                  {canEdit && <button className="new-btn" onClick={() => startEditSession(activeSession)}>✏️ Upravit výpravu</button>}
                 </div>
                 <div className="weather-row">
                   <div className="w-item"><div className="num">{activeSession.weather_temp_c ?? '—'}°C</div><div className="lab">teplota</div></div>
@@ -789,7 +790,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               <div className="det-block">
                 <h3>Pruty a nástrahy</h3>
                 {(activeSession.rods || []).map((r, i) => (
-                  editingRodId === r.id ? (
+                  editingRodId === r.id && canEdit ? (
                     <RodEditRow
                       key={r.id}
                       rod={r}
@@ -811,7 +812,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                         ))}
                         {(!r.baits || r.baits.length === 0) && !r.bait && <span className="rod-bait">—</span>}
                       </div>
-                      <button className="new-btn" onClick={() => setEditingRodId(r.id)}>✏️</button>
+                      {canEdit && <button className="new-btn" onClick={() => setEditingRodId(r.id)}>✏️</button>}
                     </div>
                   )
                 ))}
@@ -840,7 +841,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               <div className="det-block">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                   <h3>Úlovky</h3>
-                  <button className="new-btn" onClick={startAddCatch}>+ úlovek</button>
+                  {canEdit && <button className="new-btn" onClick={startAddCatch}>+ úlovek</button>}
                 </div>
                 <div className="catch-list">
                   {filteredCatches(activeSession).map((c) => (
@@ -913,6 +914,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           catchData={ticketCatch}
           session={sessionForCatch(ticketCatch)}
           catcherName={sessionForCatch(ticketCatch) ? userName(sessionForCatch(ticketCatch).user_id) : null}
+          canEdit={sessionForCatch(ticketCatch)?.user_id === userId}
           onClose={() => setTicketCatch(null)}
           onUpdated={loadSessions}
           onDeleted={() => { setTicketCatch(null); loadSessions() }}
