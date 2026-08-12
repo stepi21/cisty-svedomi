@@ -43,6 +43,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [showHelp, setShowHelp] = useState(false)
   const [showRecords, setShowRecords] = useState(false)
   const [showGallery, setShowGallery] = useState(false)
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [ticketCatch, setTicketCatch] = useState(null)
   const pendingTicketCatchIdRef = useRef(null)
@@ -801,45 +802,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || areaDraft || rodPointsDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
 
-  return (
-    <div className="app">
-      <datalist id="known-baits-dravec">
-        {allKnownBaits('dravec').map((b) => <option key={b} value={b} />)}
-      </datalist>
-      <datalist id="known-baits-bila">
-        {allKnownBaits('bila').map((b) => <option key={b} value={b} />)}
-      </datalist>
-      <datalist id="known-baits-all">
-        {allKnownBaits(null).map((b) => <option key={b} value={b} />)}
-      </datalist>
-      <datalist id="known-species">
-        {allKnownSpecies().map((s) => <option key={s} value={s} />)}
-      </datalist>
-      <header>
-        <div className="head-row">
-          <h1>Čistý<span className="accent">svědomí</span></h1>
-          <div className="head-actions">
-            <span className="whoami">{myProfile?.display_name}</span>
-            <button className="new-btn" onClick={() => setShowGallery(true)} title="Galerie">🖼</button>
-            <button className="new-btn" onClick={() => setShowRecords(true)} title="Rekordy">🏆</button>
-            <button className="new-btn" onClick={() => setShowHelp(true)} title="Návod">❓</button>
-            <button className="new-btn" onClick={exportData} title="Export dat">⬇️</button>
-            <button className="new-btn" onClick={() => setShowStats(true)} title="Statistiky">📊</button>
-            <button className="new-btn" onClick={() => setShowSettings(true)} title="Nastavení">⚙️</button>
-            <button className="new-btn" onClick={createInvite}>+ pozvat parťáka</button>
-            <button className="new-btn" onClick={onSignOut}>Odhlásit</button>
-          </div>
-        </div>
-        {inviteInfo && (
-          <div className="invite-banner">
-            Kód pro kamaráda: <strong>{inviteInfo.code}</strong> (platný 7 dní) — ať ho zadá po přihlášení do appky na obrazovce "Mám kód pozvánky".
-            <button className="ticket-close" onClick={() => setInviteInfo(null)}>✕</button>
-          </div>
-        )}
-      </header>
-
-      <div className="layout">
-        <aside className="sidebar">
+  function renderSessionList() {
+    return (
+      <>
           <div className="sb-head">
             <span>Výpravy</span>
             <button className="new-btn" onClick={startNewSession}>+ nová výprava</button>
@@ -926,86 +891,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               )
             })
           )}
-        </aside>
+      </>
+    )
+  }
 
-        <main>
-          <div ref={mapRef} id="map" style={{ cursor: isPlacingSomething ? 'crosshair' : '' }} />
-          <button className="my-location-btn" onClick={goToMyLocation} title="Moje pozice">📍 Moje pozice</button>
-
-          {pickingType && (
-            <div className="type-picker">
-              <div className="type-picker-title">Jaký typ výpravy?</div>
-              {SESSION_TYPES.map((t) => (
-                <button key={t.value} className="type-btn" onClick={() => chooseType(t.value)}>{t.label}</button>
-              ))}
-              <button className="type-cancel" onClick={() => setPickingType(false)}>Zrušit</button>
-            </div>
-          )}
-
-          {catchChoosing && activeSession && (
-            <div className="type-picker">
-              <div className="type-picker-title">Kde jsi rybu chytil?</div>
-              {(activeSession.rods || []).map((r) => (
-                <button key={r.id} className="type-btn" onClick={() => chooseCatchOnRod(r)}>
-                  Na pozici: {r.name}{r.bait ? ` (${r.bait})` : ''}
-                </button>
-              ))}
-              <button className="type-btn" onClick={chooseCatchOnMap}>📍 Kliknout na jinou pozici mapy</button>
-              <button className="type-cancel" onClick={() => setCatchChoosing(false)}>Zrušit</button>
-            </div>
-          )}
-
-          {placementTarget === 'relocate-session-point' && (
-            <div className="place-hint">
-              Klikni na mapu, kam přesunout výpravu.
-              <button className="ticket-close" onClick={() => setPlacementTarget(null)}>✕</button>
-            </div>
-          )}
-
-          {rodPointsDraft && (
-            <div className="place-hint area-hint">
-              Klikni na mapu, kam jsi nahodil Prut {rodPointsDraft.length + 1}{rodPointsDraft.length > 0 ? ` (zatím nastaveno: ${rodPointsDraft.length})` : ''}.
-              <div className="area-controls">
-                <button className="new-btn" onClick={undoRodPoint} disabled={!rodPointsDraft.length}>Zpět o prut</button>
-                <button className="btn-primary" style={{ margin: 0 }} onClick={finishRodPoints} disabled={!rodPointsDraft.length}>Hotovo, pokračovat</button>
-                <button className="new-btn" onClick={cancelAreaOrPoint}>Zrušit</button>
-              </div>
-            </div>
-          )}
-
-          {(placementTarget === 'catch-point' || placementTarget === 'relocate-catch') && (
-            <div className="place-hint">
-              {placementTarget === 'relocate-catch' ? 'Klikni na mapu, kam přesunout úlovek.' : 'Klikni na mapu, kde jsi rybu chytil.'}
-              <button className="ticket-close" onClick={() => setPlacementTarget(null)}>✕</button>
-            </div>
-          )}
-
-          {areaDraft && (
-            <div className="place-hint area-hint">
-              Klikej podél trasy/oblasti ({areaDraft.current.length} bodů v aktuální, potřeba aspoň 3){areaDraft.areas.length > 0 ? ` · hotových oblastí: ${areaDraft.areas.length}` : ''}.
-              <div className="area-controls">
-                <button className="new-btn" onClick={undoAreaPoint} disabled={!areaDraft.current.length}>Zpět o bod</button>
-                <button className="new-btn" onClick={finishCurrentArea} disabled={areaDraft.current.length < 3}>+ Další oblast</button>
-                <button
-                  className="btn-primary" style={{ margin: 0 }}
-                  onClick={placementTarget === 'relocate-area-point' ? proceedRelocateArea : proceedToForm}
-                  disabled={areaDraft.areas.length === 0 && areaDraft.current.length < 3}
-                >
-                  {placementTarget === 'relocate-area-point' ? 'Uložit novou oblast' : 'Hotovo, pokračovat'}
-                </button>
-                <button className="new-btn" onClick={cancelAreaOrPoint}>Zrušit</button>
-              </div>
-            </div>
-          )}
-
-          {placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')) && (
-            <div className="place-hint">
-              Klikni na mapu pro pozici prutu.
-              <button className="ticket-close" onClick={() => setPlacementTarget(null)}>✕</button>
-            </div>
-          )}
-
-          {activeSession && viewMode === 'detail' && !draftSession && (
+  function renderDetailStrip() {
+    return (
+          activeSession && viewMode === 'detail' && !draftSession && (
             <div className="detail-strip">
               <div className="det-block">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
@@ -1103,8 +995,148 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 </div>
               </div>
             </div>
+          )
+    )
+  }
+
+  return (
+    <div className="app">
+      <datalist id="known-baits-dravec">
+        {allKnownBaits('dravec').map((b) => <option key={b} value={b} />)}
+      </datalist>
+      <datalist id="known-baits-bila">
+        {allKnownBaits('bila').map((b) => <option key={b} value={b} />)}
+      </datalist>
+      <datalist id="known-baits-all">
+        {allKnownBaits(null).map((b) => <option key={b} value={b} />)}
+      </datalist>
+      <datalist id="known-species">
+        {allKnownSpecies().map((s) => <option key={s} value={s} />)}
+      </datalist>
+      <header>
+        <div className="head-row">
+          <h1>Čistý<span className="accent">svědomí</span></h1>
+          <div className="head-actions">
+            <span className="whoami">{myProfile?.display_name}</span>
+            <button className="new-btn" onClick={() => setShowGallery(true)} title="Galerie">🖼</button>
+            <button className="new-btn" onClick={() => setShowRecords(true)} title="Rekordy">🏆</button>
+            <button className="new-btn" onClick={() => setShowHelp(true)} title="Návod">❓</button>
+            <button className="new-btn" onClick={exportData} title="Export dat">⬇️</button>
+            <button className="new-btn" onClick={() => setShowStats(true)} title="Statistiky">📊</button>
+            <button className="new-btn" onClick={() => setShowSettings(true)} title="Nastavení">⚙️</button>
+            <button className="new-btn" onClick={createInvite}>+ pozvat parťáka</button>
+            <button className="new-btn" onClick={onSignOut}>Odhlásit</button>
+          </div>
+        </div>
+        {inviteInfo && (
+          <div className="invite-banner">
+            Kód pro kamaráda: <strong>{inviteInfo.code}</strong> (platný 7 dní) — ať ho zadá po přihlášení do appky na obrazovce "Mám kód pozvánky".
+            <button className="ticket-close" onClick={() => setInviteInfo(null)}>✕</button>
+          </div>
+        )}
+      </header>
+
+      <div className="layout">
+        <aside className="sidebar">
+          {renderSessionList()}
+        </aside>
+
+        <main>
+          <div ref={mapRef} id="map" style={{ cursor: isPlacingSomething ? 'crosshair' : '' }} />
+          <button className="my-location-btn" onClick={goToMyLocation} title="Moje pozice">📍 Moje pozice</button>
+
+          {pickingType && (
+            <div className="type-picker">
+              <div className="type-picker-title">Jaký typ výpravy?</div>
+              {SESSION_TYPES.map((t) => (
+                <button key={t.value} className="type-btn" onClick={() => chooseType(t.value)}>{t.label}</button>
+              ))}
+              <button className="type-cancel" onClick={() => setPickingType(false)}>Zrušit</button>
+            </div>
           )}
+
+          {catchChoosing && activeSession && (
+            <div className="type-picker">
+              <div className="type-picker-title">Kde jsi rybu chytil?</div>
+              {(activeSession.rods || []).map((r) => (
+                <button key={r.id} className="type-btn" onClick={() => chooseCatchOnRod(r)}>
+                  Na pozici: {r.name}{r.bait ? ` (${r.bait})` : ''}
+                </button>
+              ))}
+              <button className="type-btn" onClick={chooseCatchOnMap}>📍 Kliknout na jinou pozici mapy</button>
+              <button className="type-cancel" onClick={() => setCatchChoosing(false)}>Zrušit</button>
+            </div>
+          )}
+
+          {placementTarget === 'relocate-session-point' && (
+            <div className="place-hint">
+              Klikni na mapu, kam přesunout výpravu.
+              <button className="ticket-close" onClick={() => setPlacementTarget(null)}>✕</button>
+            </div>
+          )}
+
+          {rodPointsDraft && (
+            <div className="place-hint area-hint">
+              Klikni na mapu, kam jsi nahodil Prut {rodPointsDraft.length + 1}{rodPointsDraft.length > 0 ? ` (zatím nastaveno: ${rodPointsDraft.length})` : ''}.
+              <div className="area-controls">
+                <button className="new-btn" onClick={undoRodPoint} disabled={!rodPointsDraft.length}>Zpět o prut</button>
+                <button className="btn-primary" style={{ margin: 0 }} onClick={finishRodPoints} disabled={!rodPointsDraft.length}>Hotovo, pokračovat</button>
+                <button className="new-btn" onClick={cancelAreaOrPoint}>Zrušit</button>
+              </div>
+            </div>
+          )}
+
+          {(placementTarget === 'catch-point' || placementTarget === 'relocate-catch') && (
+            <div className="place-hint">
+              {placementTarget === 'relocate-catch' ? 'Klikni na mapu, kam přesunout úlovek.' : 'Klikni na mapu, kde jsi rybu chytil.'}
+              <button className="ticket-close" onClick={() => setPlacementTarget(null)}>✕</button>
+            </div>
+          )}
+
+          {areaDraft && (
+            <div className="place-hint area-hint">
+              Klikej podél trasy/oblasti ({areaDraft.current.length} bodů v aktuální, potřeba aspoň 3){areaDraft.areas.length > 0 ? ` · hotových oblastí: ${areaDraft.areas.length}` : ''}.
+              <div className="area-controls">
+                <button className="new-btn" onClick={undoAreaPoint} disabled={!areaDraft.current.length}>Zpět o bod</button>
+                <button className="new-btn" onClick={finishCurrentArea} disabled={areaDraft.current.length < 3}>+ Další oblast</button>
+                <button
+                  className="btn-primary" style={{ margin: 0 }}
+                  onClick={placementTarget === 'relocate-area-point' ? proceedRelocateArea : proceedToForm}
+                  disabled={areaDraft.areas.length === 0 && areaDraft.current.length < 3}
+                >
+                  {placementTarget === 'relocate-area-point' ? 'Uložit novou oblast' : 'Hotovo, pokračovat'}
+                </button>
+                <button className="new-btn" onClick={cancelAreaOrPoint}>Zrušit</button>
+              </div>
+            </div>
+          )}
+
+          {placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')) && (
+            <div className="place-hint">
+              Klikni na mapu pro pozici prutu.
+              <button className="ticket-close" onClick={() => setPlacementTarget(null)}>✕</button>
+            </div>
+          )}
+
+          <div className="desktop-detail-wrap">
+            {renderDetailStrip()}
+          </div>
         </main>
+      </div>
+
+      <div className={`mobile-sheet ${mobileSheetOpen ? 'expanded' : ''}`}>
+        <div className="mobile-peek-bar" onClick={() => setMobileSheetOpen((v) => !v)}>
+          <span>{viewMode === 'detail' && activeSession ? activeSession.title : `Výpravy (${visibleSessions.length})`}</span>
+          <span className="peek-chevron">{mobileSheetOpen ? '▾' : '▴'}</span>
+        </div>
+        <div className="mobile-sheet-body">
+          {viewMode === 'detail' && activeSession && !draftSession ? (
+            <>
+              <button className="new-btn" onClick={() => setViewMode('aggregate')} style={{ margin: '0 18px 8px' }}>← Zpět na seznam</button>
+              {renderDetailStrip()}
+            </>
+          ) : renderSessionList()}
+        </div>
       </div>
 
       {draftSession && (
