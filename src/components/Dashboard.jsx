@@ -489,7 +489,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   // --- začátek tvorby nové výpravy ---
-  function startNewSession() { setPickingType(true) }
+  function startNewSession() { setPickingType(true); setMobileSheetOpen(false) }
 
   function chooseType(type) {
     setPickingType(false)
@@ -555,6 +555,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function startAddCatch() {
     setCatchChoosing(true)
+    setMobileSheetOpen(false)
   }
 
   function chooseCatchOnRod(rod) {
@@ -713,6 +714,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   function startRelocateCatch(catchId) {
     relocateCatchIdRef.current = catchId
     setTicketCatch(null)
+    setMobileSheetOpen(false)
     setPlacementTarget('relocate-catch')
   }
 
@@ -720,6 +722,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const s = editingSession
     await saveEditSession()
     relocateSessionIdRef.current = s.id
+    setMobileSheetOpen(false)
     if (AREA_TYPES.includes(s.type)) {
       pendingTypeRef.current = s.type
       setAreaDraft({ areas: [], current: [] })
@@ -799,6 +802,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const userOk = activeUserFilter === 'all' || s.user_id === activeUserFilter
     return catOk && userOk
   })
+
+  function peekLabel() {
+    if (viewMode === 'detail' && activeSession) return activeSession.title
+    const parts = []
+    if (activeCategory !== 'all') parts.push(activeCategory === 'dravec' ? 'Dravci' : 'Bílá ryba')
+    if (activeUserFilter !== 'all') parts.push(userName(activeUserFilter))
+    const catchCount = visibleSessions.reduce((sum, s) => sum + filteredCatches(s).length, 0)
+    const prefix = parts.length ? parts.join(' · ') + ' · ' : ''
+    return `${prefix}${visibleSessions.length} výprav · ${catchCount} úlovků`
+  }
 
   const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || areaDraft || rodPointsDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
 
@@ -1128,7 +1141,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
       <div className={`mobile-sheet ${mobileSheetOpen ? 'expanded' : ''}`}>
         <div className="mobile-peek-bar" onClick={() => setMobileSheetOpen((v) => !v)}>
-          <span>{viewMode === 'detail' && activeSession ? activeSession.title : `Výpravy (${visibleSessions.length})`}</span>
+          <span>{peekLabel()}</span>
           <span className="peek-chevron">{mobileSheetOpen ? '▾' : '▴'}</span>
         </div>
         <div className="mobile-sheet-body">
