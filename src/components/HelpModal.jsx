@@ -11,59 +11,61 @@ export default function HelpModal({ onClose }) {
         <div className="ticket-body help-body">
 
           <h3>1. Přihlášení a skupina</h3>
-          <p>Zadej e-mail → <strong>Poslat přihlašovací link</strong> → klikni na odkaz v e-mailu. Bez hesla. Při prvním přihlášení buď <strong>založíš skupinu</strong>, nebo zadáš <strong>kód pozvánky</strong> od kamaráda (ten vygeneruješ přes „+ pozvat parťáka“).</p>
+          <p>Zadej e-mail → <strong>Poslat přihlašovací link</strong> → klikni na odkaz v e-mailu (v tom samém prohlížeči, kde jsi ho žádal). Bez hesla. Při prvním přihlášení buď <strong>založíš skupinu</strong>, nebo zadáš <strong>kód pozvánky</strong> od kamaráda (ten vygeneruješ přes „+ pozvat parťáka“).</p>
 
           <h3>2. Základní pojmy</h3>
           <div className="help-def"><strong>Výprava</strong> — jedna návštěva u vody (datum, čas, počasí, revír, u přívlače i cíl)</div>
           <div className="help-def"><strong>Prut</strong> — nastavení/technika, může mít víc nástrah v čase</div>
-          <div className="help-def"><strong>Oblast</strong> — u přívlače: vyšrafovaná plocha, klidně i víc oddělených ploch v jedné výpravě</div>
+          <div className="help-def"><strong>Oblast</strong> — u přívlače: vyšrafovaná plocha/trasa, klidně i víc oddělených ploch v jedné výpravě</div>
           <div className="help-def"><strong>Úlovek</strong> — konkrétní chycená ryba, vlastní přesná pozice, čas, foto</div>
+          <div className="help-def"><strong>Cíl</strong> — u přívlače: na co jsi cílil ("Obecně dravci" nebo konkrétní druh) — appka počítá úspěšnost</div>
 
           <h3>3. Výprava — bod (kapr, muška, plavaná, jiné)</h3>
           <ol>
-            <li>„+ nová výprava“ → vyber typ → klikni na mapu, kam jsi nahodil</li>
-            <li>Vyplň název, revír/lokalitu, datum, čas</li>
+            <li>„+ nová výprava“ → vyber typ</li>
+            <li>Klikáš na mapu — pro Prut 1, pak „+ Další prut“ a klikáš pro Prut 2, atd. → „Hotovo, pokračovat“</li>
+            <li>Vyplň název, revír, datum, čas</li>
             <li>„🌤 Doplnit počasí automaticky“ — teplota/tlak/vítr podle data a pozice (funguje i zpětně), fáze měsíce se dopočítá sama</li>
-            <li>U prutu nástraha (klidně „+ další nástraha“, foto se zapamatuje pro příště), „+ další prut“ pro víc prutů se samostatnou pozicí</li>
+            <li>U prutu nástraha (klidně „+ další nástraha“, foto se zapamatuje pro příště)</li>
           </ol>
 
           <h3>4. Výprava — oblast (přívlač)</h3>
           <ol>
             <li>„+ nová výprava“ → typ Přívlač → klikej podél trasy (aspoň 3 body)</li>
-            <li>Chytal jsi i jinde? „+ Další oblast“ a nakresli další — klidně víc oddělených ploch v jedné výpravě</li>
-            <li>„Hotovo, pokračovat“ → vyplň formulář</li>
-            <li>Volitelně vyplň <strong>Cíl</strong> — „Obecně dravci“ nebo konkrétní druh (např. „Bolen“). Appka pak sama pozná a označí 🎯, když se úlovek s cílem shoduje, a počítá úspěšnost ve statistikách</li>
+            <li>Chytal jsi i jinde? „+ Další oblast“ a nakresli další</li>
+            <li>„Hotovo, pokračovat“ → formulář, volitelně vyplň <strong>Cíl</strong></li>
           </ol>
 
-          <h3>5. Nástrahy — chytřejší než vypadají</h3>
-          <p>Appka si pamatuje všechny nástrahy, které kdy kdokoli ve skupině zadal, a při psaní je nabízí — <strong>oddělené pro dravce a bílou rybu</strong>, takže u přívlače neuvidíš boilies z kapří výpravy. Přidáš fotku k nástraze jednou, a appka ji automaticky doplní i ke starším záznamům se stejným jménem (jen u tvých vlastních).</p>
+          <h3>5. Nástrahy</h3>
+          <p>Appka nabízí při psaní jen nástrahy z výprav <strong>stejné kategorie</strong> (u přívlače neuvidíš boilies z kapří výpravy). Foto k nástraze přidáš jednou, appka ho doplní i ke starším záznamům se stejným jménem (jen u tvých vlastních).</p>
 
-          <h3>6. Zápis úlovku</h3>
-          <p>„+ úlovek“ → zvol pozici prutu (rychlé) nebo klikni na jinou pozici mapy (přesné) → druh, kategorie, míry, čas, revír, foto ryby i nástrahy.</p>
-          <p className="help-note">Kategorie se přednastaví podle typu výpravy, klidně ji ale změň, pokud jsi chytil něco netypického.</p>
+          <h3>6. Zápis a úprava úlovku</h3>
+          <p>„+ úlovek“ → zvol pozici prutu nebo klikni na jinou pozici mapy → druh, kategorie, míry, čas, revír, foto ryby i nástrahy. V detailu úlovku: ✏️ Upravit, 📍 Změnit pozici na mapě, 🗑 Smazat. Klik na „Lokace“ nebo „Výprava" tě zavede přímo na mapu k té výpravě a konkrétnímu bodu.</p>
 
-          <h3>7. Úprava, mazání, přesun</h3>
-          <p><strong>Úlovek:</strong> klik na rybu → ✏️ Upravit (i datum/čas, kategorii, foto, revír), 📍 změnit pozici na mapě, nebo 🗑 Smazat<br/>
-          <strong>Prut:</strong> tužka ✏️ v detailu výpravy<br/>
-          <strong>Celá výprava:</strong> „✏️ Upravit výpravu“ u počasí — název, datum, čas, počasí, revír, cíl, 🗺 přesun bodu/překreslení oblasti, nebo 🗑 Smazat výpravu</p>
-          <p className="help-note">Upravit/smazat může jen ten, komu výprava patří. Ostatní ve skupině vidí všechno, ale jen svoje si můžou měnit.</p>
+          <h3>7. Úprava, mazání, rychlý zápis</h3>
+          <p><strong>Celá výprava:</strong> „✏️ Upravit výpravu“ — název, datum, počasí, cíl, 🗺 přesun bodu/překreslení oblasti, 🗑 smazat.<br/>
+          <strong>„📋 Nová jako tahle“</strong> — předvyplní novou výpravu stejnou lokací, pruty i nástrahami — hodí se pro opakovaná místa, jen doplníš datum a čas.</p>
+          <p className="help-note">Upravit/smazat může jen ten, komu záznam patří. Ostatní vidí všechno, ale měnit si můžou jen svoje.</p>
 
-          <h3>8. Filtry a pohled na mapě</h3>
-          <p><strong>Vše / Dravci / Bílá ryba</strong> — hned ukáže úlovky té kategorie ze všech výprav najednou (agregovaný pohled). Klik na konkrétní výpravu v sidebaru zúží mapu jen na ni (detailní pohled).<br/>
-          <strong>Kdo</strong> — filtr podle osoby, kombinovatelný s kategorií (např. „Dravci“ + „Petr“).</p>
+          <h3>8. Filtry a mapa</h3>
+          <p><strong>Vše / Dravci / Bílá ryba</strong> — agregovaný pohled přes všechny výpravy najednou. Klik na konkrétní výpravu zúží mapu na ni.<br/>
+          <strong>Kdo</strong> — filtr podle osoby, kombinovatelný s kategorií.<br/>
+          <strong>📍 Moje pozice</strong> — skočí na tvoji aktuální GPS pozici.</p>
 
-          <h3>9. Barvy na mapě</h3>
-          <p>Výplň kolečka = kategorie (dravec/bílá ryba). Barevný rámeček kolem = kdo rybu chytil (barvu nastavíš v profilu ⚙️).</p>
+          <h3>9. Barvy, seznam výprav</h3>
+          <p>Výplň kolečka = kategorie, rámeček = kdo chytil (barva v profilu ⚙️). Výpravy jsou seskupené podle roku/měsíce — „Rozbalit/Sbalit vše“ nahoře.</p>
 
-          <h3>10. Seznam výprav</h3>
-          <p>Výpravy jsou seskupené podle <strong>roku a měsíce</strong>, nejnovější rozbalené, starší sbalené. „Rozbalit vše“ / „Sbalit vše“ nahoře, nebo klikni na název měsíce/roku jednotlivě.</p>
+          <h3>10. Statistiky, rekordy, galerie</h3>
+          <p>📊 <strong>Statistiky</strong> — návštěvy, úlovky podle druhu, úspěšnost podle cíle, a <strong>„📈 Kdy se daří“</strong> (úlovky podle fáze měsíce a tlaku).<br/>
+          🏆 <strong>Rekordy</strong> — největší úlovek (podle délky) od každého druhu, s datem, revírem a kdo ho chytil.<br/>
+          🖼 <strong>Galerie</strong> — mřížka všech fotek ryb a nástrah.</p>
 
-          <h3>11. Nastavení a statistiky</h3>
-          <p>⚙️ — jméno a barva profilu<br/>
-          📊 — přehled za celou partu: návštěvy, úlovky podle druhu, a u přívlače i <strong>úspěšnost podle cíle</strong> (celkově i pro každého člena)</p>
+          <h3>11. Export a nastavení</h3>
+          <p>⬇️ <strong>Export dat</strong> — stáhne JSON se všemi výpravami/úlovky jako záloha.<br/>
+          ⚙️ <strong>Nastavení</strong> — jméno a barva profilu.</p>
 
           <p className="help-note" style={{ marginTop: 16 }}>
-            💡 Klidně zapisuj i starší výpravy zpětně — appka dohledá historické počasí podle data, jen u starších/lokálních jevů jde spíš o odhad pro oblast než přesné měření z místa.
+            💡 Klidně zapisuj i starší výpravy zpětně — appka dohledá historické počasí podle data i zpětně, jen u starších/lokálních jevů jde spíš o odhad pro oblast než přesné měření z místa.
           </p>
         </div>
       </div>
