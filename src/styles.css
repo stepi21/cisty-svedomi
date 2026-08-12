@@ -191,7 +191,6 @@ header h1 .accent{ color:var(--amber); }
 .s-tag.target{ background:var(--water-soft); border-color:var(--water-mid); color:var(--water-deep); }
 
 main{ position:relative; display:flex; flex-direction:column; min-height:0; }
-.leaflet-top, .leaflet-bottom{ z-index:350; }
 @media (max-width:860px){ .leaflet-control-container{ display:none; } }
 .my-location-btn{
   position:absolute; bottom:16px; left:16px; z-index:400;
