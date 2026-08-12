@@ -1016,16 +1016,18 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       <header>
         <div className="head-row">
           <h1>Čistý<span className="accent">svědomí</span></h1>
-          <div className="head-actions">
+          <div className="head-actions-wrap">
             <span className="whoami">{myProfile?.display_name}</span>
-            <button className="new-btn" onClick={() => setShowGallery(true)} title="Galerie">🖼</button>
-            <button className="new-btn" onClick={() => setShowRecords(true)} title="Rekordy">🏆</button>
-            <button className="new-btn" onClick={() => setShowHelp(true)} title="Návod">❓</button>
-            <button className="new-btn" onClick={exportData} title="Export dat">⬇️</button>
-            <button className="new-btn" onClick={() => setShowStats(true)} title="Statistiky">📊</button>
-            <button className="new-btn" onClick={() => setShowSettings(true)} title="Nastavení">⚙️</button>
-            <button className="new-btn" onClick={createInvite}>+ pozvat parťáka</button>
-            <button className="new-btn" onClick={onSignOut}>Odhlásit</button>
+            <div className="head-actions">
+              <button className="new-btn" onClick={() => setShowGallery(true)} title="Galerie">🖼</button>
+              <button className="new-btn" onClick={() => setShowRecords(true)} title="Rekordy">🏆</button>
+              <button className="new-btn" onClick={() => setShowHelp(true)} title="Návod">❓</button>
+              <button className="new-btn" onClick={exportData} title="Export dat">⬇️</button>
+              <button className="new-btn" onClick={() => setShowStats(true)} title="Statistiky">📊</button>
+              <button className="new-btn" onClick={() => setShowSettings(true)} title="Nastavení">⚙️</button>
+              <button className="new-btn" onClick={createInvite}>+ pozvat parťáka</button>
+              <button className="new-btn" onClick={onSignOut}>Odhlásit</button>
+            </div>
           </div>
         </div>
         {inviteInfo && (
