@@ -49,6 +49,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [showGallery, setShowGallery] = useState(false)
   const [showBaits, setShowBaits] = useState(false)
   const [baitsInitialKey, setBaitsInitialKey] = useState(null)
+  const [baitCatalog, setBaitCatalog] = useState([])
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [ticketCatch, setTicketCatch] = useState(null)
@@ -74,7 +75,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const markersLayer = useRef(null)
   const draftLayer = useRef(null)
 
-  useEffect(() => { loadSessions(); loadMembers() }, [groupId])
+  useEffect(() => { loadSessions(); loadMembers(); loadBaitCatalog() }, [groupId])
+
+  async function loadBaitCatalog() {
+    const { data } = await supabase
+      .from('baits')
+      .select('*')
+      .eq('group_id', groupId)
+      .order('name')
+    if (data) setBaitCatalog(data)
+  }
 
   async function loadMembers() {
     const { data } = await supabase
@@ -778,6 +788,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         if (r.bait) r.bait.split(',').forEach((n) => { const t = n.trim(); if (t) set.add(t) })
       })
     })
+    baitCatalog.forEach((b) => {
+      if (category && b.category && b.category !== category) return
+      if (b.name) set.add(b.name.trim())
+    })
     return Array.from(set).sort()
   }
 
@@ -798,6 +812,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function baitPhotoLookup() {
     const map = {}
+    baitCatalog.forEach((b) => { if (b.name && b.photo_url) map[b.name.trim().toLowerCase()] = b.photo_url })
     sessions.forEach((s) => {
       ;(s.rods || []).forEach((r) => {
         ;(r.baits || []).forEach((b) => { if (b.name && b.photo_url) map[b.name.trim().toLowerCase()] = b.photo_url })
@@ -1211,7 +1226,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       {showBaits && (
         <BaitsModal
           sessions={sessions}
+          baitCatalog={baitCatalog}
+          groupId={groupId}
+          userId={userId}
           initialBaitKey={baitsInitialKey}
+          onCatalogChanged={loadBaitCatalog}
           onClose={() => { setShowBaits(false); setBaitsInitialKey(null) }}
           onOpenCatch={(c, key) => { setShowBaits(false); setBaitsInitialKey(key); setTicketCatch(c) }}
         />

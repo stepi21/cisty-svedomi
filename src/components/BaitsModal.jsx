@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { supabase } from '../supabaseClient'
+import { uploadPhoto } from '../lib/storage.js'
 
 const fishSVG = (color) => `
   <svg viewBox="0 0 64 34" xmlns="http://www.w3.org/2000/svg">
@@ -8,31 +10,70 @@ const fishSVG = (color) => `
   </svg>`
 const CATEGORY_COLOR = { dravec: '#5C7A85', bila: '#C4A572' }
 
-export default function BaitsModal({ sessions, initialBaitKey, onClose, onOpenCatch }) {
+export default function BaitsModal({ sessions, baitCatalog, groupId, userId, initialBaitKey, onCatalogChanged, onClose, onOpenCatch }) {
   const [selectedKey, setSelectedKey] = useState(initialBaitKey || null)
+  const [adding, setAdding] = useState(false)
+  const [editingCatalogId, setEditingCatalogId] = useState(null)
 
-  const map = {}
+  // --- spočítat úlovky na jednotlivé nástrahy z existujících dat ---
+  const catchMap = {}
   sessions.forEach((s) => {
     ;(s.catches || []).forEach((c) => {
       if (!c.bait) return
       const key = c.bait.trim().toLowerCase()
       if (!key) return
-      if (!map[key]) map[key] = { label: c.bait.trim(), photo_url: null, catches: [], dravec: 0, bila: 0 }
-      map[key].catches.push({ ...c, sessionRef: s })
-      map[key][c.category] = (map[key][c.category] || 0) + 1
-      if (!map[key].photo_url && c.bait_photo_url) map[key].photo_url = c.bait_photo_url
+      if (!catchMap[key]) catchMap[key] = { catches: [], dravec: 0, bila: 0, photo_url: null }
+      catchMap[key].catches.push({ ...c, sessionRef: s })
+      catchMap[key][c.category] = (catchMap[key][c.category] || 0) + 1
+      if (!catchMap[key].photo_url && c.bait_photo_url) catchMap[key].photo_url = c.bait_photo_url
     })
   })
 
-  const baits = Object.entries(map).map(([key, v]) => ({
-    key, label: v.label, photo_url: v.photo_url, catches: v.catches,
-    category: (v.dravec || 0) >= (v.bila || 0) ? 'dravec' : 'bila',
-  }))
+  // --- sloučit s katalogem (katalog vyhrává na jméno/kategorii/foto, pokud je zadané) ---
+  const merged = {}
+  Object.entries(catchMap).forEach(([key, v]) => {
+    merged[key] = {
+      key, label: v.catches[0]?.bait?.trim() || key,
+      photo_url: v.photo_url, catches: v.catches,
+      category: (v.dravec || 0) >= (v.bila || 0) ? 'dravec' : 'bila',
+      catalogEntry: null,
+    }
+  })
+  baitCatalog.forEach((b) => {
+    const key = b.name.trim().toLowerCase()
+    const existing = merged[key]
+    merged[key] = {
+      key, label: b.name.trim(),
+      photo_url: b.photo_url || existing?.photo_url || null,
+      catches: existing?.catches || [],
+      category: b.category || existing?.category || 'dravec',
+      catalogEntry: b,
+    }
+  })
+
+  const baits = Object.values(merged)
   const dravciBaits = baits.filter((b) => b.category === 'dravec').sort((a, b) => b.catches.length - a.catches.length)
   const bilaBaits = baits.filter((b) => b.category === 'bila').sort((a, b) => b.catches.length - a.catches.length)
   const selected = baits.find((b) => b.key === selectedKey)
 
+  async function handleCatalogChanged() {
+    await onCatalogChanged?.()
+  }
+
+  // ---------- detail nástrahy ----------
   if (selected) {
+    const canEditCatalog = selected.catalogEntry && selected.catalogEntry.created_by === userId
+    if (editingCatalogId) {
+      return (
+        <EditBaitForm
+          bait={selected}
+          groupId={groupId}
+          userId={userId}
+          onCancel={() => setEditingCatalogId(null)}
+          onSaved={async () => { setEditingCatalogId(null); await handleCatalogChanged() }}
+        />
+      )
+    }
     return (
       <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
         <div className="ticket" style={{ maxWidth: 440 }}>
@@ -43,32 +84,58 @@ export default function BaitsModal({ sessions, initialBaitKey, onClose, onOpenCa
           </div>
           <div className="perforation"></div>
           <div className="ticket-body">
-            <button className="new-btn" onClick={() => setSelectedKey(null)} style={{ marginBottom: 12 }}>← Zpět na nástrahy</button>
-            {selected.photo_url && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <button className="new-btn" onClick={() => setSelectedKey(null)}>← Zpět na nástrahy</button>
+              {(selected.catalogEntry ? canEditCatalog : true) && (
+                <button className="new-btn" onClick={() => setEditingCatalogId(selected.key)}>✏️ Upravit</button>
+              )}
+            </div>
+            {selected.photo_url ? (
               <div className="ticket-illustration">
                 <img src={selected.photo_url} alt={selected.label} className="catch-photo" />
               </div>
+            ) : (
+              <div className="ticket-illustration">
+                <div style={{ width: 100 }} dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[selected.category]) }} />
+              </div>
             )}
-            <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{selected.catches.length} chycených ryb na tuto nástrahu</p>
-            <div className="catch-list" style={{ maxHeight: 'none' }}>
-              {selected.catches
-                .sort((a, b) => (b.caught_at || b.sessionRef.session_date || '').localeCompare(a.caught_at || a.sessionRef.session_date || ''))
-                .map((c) => (
-                  <div key={c.id} className="catch-row" onClick={() => onOpenCatch(c, selected.key)}>
-                    <div className="fish-mini" dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />
-                    <div>
-                      <div className="c-name">{c.species}</div>
-                      <div className="c-sub">{c.length_cm ?? '—'} cm · {c.sessionRef.session_date}</div>
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+              {selected.catches.length === 0 ? 'Zatím na tuto nástrahu nic nechyceno.' : `${selected.catches.length} chycených ryb na tuto nástrahu`}
+            </p>
+            {selected.catches.length > 0 && (
+              <div className="catch-list" style={{ maxHeight: 'none' }}>
+                {selected.catches
+                  .sort((a, b) => (b.caught_at || b.sessionRef.session_date || '').localeCompare(a.caught_at || a.sessionRef.session_date || ''))
+                  .map((c) => (
+                    <div key={c.id} className="catch-row" onClick={() => onOpenCatch(c, selected.key)}>
+                      <div className="fish-mini" dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />
+                      <div>
+                        <div className="c-name">{c.species}</div>
+                        <div className="c-sub">{c.length_cm ?? '—'} cm · {c.sessionRef.session_date}</div>
+                      </div>
                     </div>
-                  </div>
-                ))}
-            </div>
+                  ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
     )
   }
 
+  // ---------- formulář na novou nástrahu ----------
+  if (adding) {
+    return (
+      <AddBaitForm
+        groupId={groupId}
+        userId={userId}
+        onCancel={() => setAdding(false)}
+        onSaved={async () => { setAdding(false); await handleCatalogChanged() }}
+      />
+    )
+  }
+
+  // ---------- seznam nástrah ----------
   return (
     <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="ticket" style={{ maxWidth: 440 }}>
@@ -79,6 +146,8 @@ export default function BaitsModal({ sessions, initialBaitKey, onClose, onOpenCa
         </div>
         <div className="perforation"></div>
         <div className="ticket-body">
+          <button className="new-btn" onClick={() => setAdding(true)} style={{ marginBottom: 14 }}>+ Přidat nástrahu</button>
+
           <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 15, margin: '0 0 6px' }}>Dravci</h3>
           {dravciBaits.length === 0 && <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Zatím žádné.</p>}
           {dravciBaits.map((b) => (
@@ -93,6 +162,125 @@ export default function BaitsModal({ sessions, initialBaitKey, onClose, onOpenCa
               <div className="record-head"><strong>{b.label}</strong><span className="record-length">{b.catches.length}×</span></div>
             </div>
           ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AddBaitForm({ groupId, userId, onCancel, onSaved }) {
+  const [name, setName] = useState('')
+  const [category, setCategory] = useState('dravec')
+  const [photoFile, setPhotoFile] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setBusy(true)
+    setError(null)
+    let photo_url = null
+    if (photoFile) photo_url = await uploadPhoto(photoFile, `baits/catalog`)
+    const { error } = await supabase.from('baits').insert({
+      group_id: groupId, created_by: userId, name, category, photo_url,
+    })
+    setBusy(false)
+    if (error) { setError(error.message); return }
+    onSaved()
+  }
+
+  return (
+    <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onCancel()}>
+      <div className="ticket" style={{ maxWidth: 380 }}>
+        <div className="ticket-top">
+          <button className="ticket-close" onClick={onCancel}>✕</button>
+          <div className="eyebrow">Nová nástraha</div>
+          <h2>Přidat do katalogu</h2>
+        </div>
+        <div className="perforation"></div>
+        <div className="ticket-body">
+          <form onSubmit={handleSubmit}>
+            <label className="field-label">Název</label>
+            <input className="text-input" required value={name} onChange={(e) => setName(e.target.value)} placeholder="např. Boilie tuňák 20mm" autoFocus />
+            <label className="field-label">Kategorie</label>
+            <select className="text-input" value={category} onChange={(e) => setCategory(e.target.value)}>
+              <option value="dravec">Dravec</option>
+              <option value="bila">Bílá ryba</option>
+            </select>
+            <label className="field-label">Foto (nepovinné)</label>
+            <label className="photo-label" style={{ display: 'inline-block', marginTop: 4 }}>
+              📷 {photoFile ? photoFile.name : 'vybrat foto'}
+              <input type="file" accept="image/*" hidden onChange={(e) => setPhotoFile(e.target.files[0])} />
+            </label>
+            {error && <p className="error-text">{error}</p>}
+            <button className="btn-primary" type="submit" disabled={busy} style={{ marginTop: 14 }}>{busy ? 'Ukládám…' : 'Přidat nástrahu'}</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EditBaitForm({ bait, groupId, userId, onCancel, onSaved }) {
+  const [name, setName] = useState(bait.label)
+  const [category, setCategory] = useState(bait.category)
+  const [photoFile, setPhotoFile] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setBusy(true)
+    setError(null)
+    let photo_url = bait.photo_url
+    if (photoFile) {
+      const url = await uploadPhoto(photoFile, `baits/catalog`)
+      if (url) photo_url = url
+    }
+    let error
+    if (bait.catalogEntry) {
+      ;({ error } = await supabase.from('baits').update({ name, category, photo_url }).eq('id', bait.catalogEntry.id))
+    } else {
+      ;({ error } = await supabase.from('baits').insert({ group_id: groupId, created_by: userId, name, category, photo_url }))
+    }
+    setBusy(false)
+    if (error) { setError(error.message); return }
+    onSaved()
+  }
+
+  return (
+    <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onCancel()}>
+      <div className="ticket" style={{ maxWidth: 380 }}>
+        <div className="ticket-top">
+          <button className="ticket-close" onClick={onCancel}>✕</button>
+          <div className="eyebrow">Úprava</div>
+          <h2>{bait.label}</h2>
+        </div>
+        <div className="perforation"></div>
+        <div className="ticket-body">
+          {!bait.catalogEntry && (
+            <p className="help-note" style={{ marginBottom: 10 }}>
+              Tahle nástraha zatím nebyla v katalogu — uložením ji tam přidáš, ať jde upravit i příště.
+            </p>
+          )}
+          <form onSubmit={handleSubmit}>
+            <label className="field-label">Název</label>
+            <input className="text-input" required value={name} onChange={(e) => setName(e.target.value)} />
+            <p className="help-note">Přejmenování tady neopraví staré úlovky, které nástrahu měly zapsanou jinak — ty je potřeba upravit zvlášť.</p>
+            <label className="field-label">Kategorie</label>
+            <select className="text-input" value={category} onChange={(e) => setCategory(e.target.value)}>
+              <option value="dravec">Dravec</option>
+              <option value="bila">Bílá ryba</option>
+            </select>
+            <label className="field-label">Foto</label>
+            <label className="photo-label" style={{ display: 'inline-block', marginTop: 4 }}>
+              📷 {photoFile ? photoFile.name : (bait.photo_url ? 'změnit foto' : 'vybrat foto')}
+              <input type="file" accept="image/*" hidden onChange={(e) => setPhotoFile(e.target.files[0])} />
+            </label>
+            {bait.photo_url && !photoFile && <img src={bait.photo_url} alt="" className="bait-thumb" />}
+            {error && <p className="error-text">{error}</p>}
+            <button className="btn-primary" type="submit" disabled={busy} style={{ marginTop: 14 }}>{busy ? 'Ukládám…' : 'Uložit'}</button>
+          </form>
         </div>
       </div>
     </div>
