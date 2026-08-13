@@ -44,7 +44,7 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
     ;(s.rods || []).forEach((r) => {
       const names = []
       ;(r.baits || []).forEach((b) => { if (b.name) names.push({ name: b.name.trim(), photo_url: b.photo_url || null }) })
-      if (r.bait) r.bait.split(',').forEach((n) => { const t = n.trim(); if (t) names.push({ name: t, photo_url: r.bait_photo_url || null }) })
+      if ((!r.baits || r.baits.length === 0) && r.bait) r.bait.split(',').forEach((n) => { const t = n.trim(); if (t) names.push({ name: t, photo_url: r.bait_photo_url || null }) })
       names.forEach(({ name, photo_url }) => {
         const key = name.toLowerCase()
         if (!key) return

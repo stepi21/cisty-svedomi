@@ -829,7 +829,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       if (category && TYPE_CATEGORY[s.type] !== category) return
       ;(s.rods || []).forEach((r) => {
         ;(r.baits || []).forEach((b) => { if (b.name) set.add(b.name.trim()) })
-        if (r.bait) r.bait.split(',').forEach((n) => { const t = n.trim(); if (t) set.add(t) })
+        if ((!r.baits || r.baits.length === 0) && r.bait) r.bait.split(',').forEach((n) => { const t = n.trim(); if (t) set.add(t) })
       })
     })
     baitCatalog.forEach((b) => {

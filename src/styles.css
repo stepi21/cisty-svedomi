@@ -320,3 +320,6 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
 }
 .bait-edit-row{ display:flex; align-items:center; gap:6px; margin-bottom:6px; }
 .bait-edit-row .text-input{ flex:1; }
+@media (max-width:860px){
+  .text-input, select.text-input{ font-size:16px; }
+}
