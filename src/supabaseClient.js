@@ -10,11 +10,4 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  global: {
-    fetch: (url, options = {}) => {
-      const bustUrl = url + (url.includes('?') ? '&' : '?') + '_cb=' + Date.now()
-      return fetch(bustUrl, { ...options, cache: 'no-store' })
-    },
-  },
-})
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
