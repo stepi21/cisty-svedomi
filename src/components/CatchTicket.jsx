@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { uploadPhoto } from '../lib/storage.js'
-import { moonPhaseName } from '../lib/weather.js'
+import { moonPhaseName, fetchWeather } from '../lib/weather.js'
 
-const CATEGORY_COLOR = { dravec: '#1F4E5F', bila: '#D9A054' }
+const CATEGORY_COLOR = { dravec: '#5C7A85', bila: '#C4A572' }
 
 const fishSVG = (color) => `
   <svg viewBox="0 0 64 34" xmlns="http://www.w3.org/2000/svg">
@@ -22,13 +22,29 @@ function toLocalTimeInput(isoString) {
 export default function CatchTicket({ catchData: c, session, catcherName, canEdit = false, baitPhotoMap = {}, baitListId = 'known-baits-all', onBackfillBaitPhoto, onRelocate, onFocusLocation, onOpenSession, onClose, onUpdated, onDeleted }) {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [weatherBusy, setWeatherBusy] = useState(false)
+  const [weatherError, setWeatherError] = useState(null)
   const [form, setForm] = useState({
     species: c.species, category: c.category, revir: c.revir || '',
     length_cm: c.length_cm ?? '', weight_kg: c.weight_kg ?? '', bait: c.bait ?? '',
     time: c.caught_at ? toLocalTimeInput(c.caught_at) : '',
     photoFile: null, baitPhotoFile: null, bait_photo_url: c.bait_photo_url || null,
+    weather_temp_c: c.weather_temp_c ?? null, weather_pressure_hpa: c.weather_pressure_hpa ?? null,
+    weather_wind: c.weather_wind || null, weather_desc: c.weather_desc || null,
   })
   const color = CATEGORY_COLOR[c.category]
+
+  async function handleFetchWeather() {
+    if (!form.time) { setWeatherError('Nejdřív vyplň čas úlovku.'); return }
+    setWeatherBusy(true); setWeatherError(null)
+    try {
+      const w = await fetchWeather(c.lat, c.lng, session?.session_date || c.caught_at?.slice(0, 10), form.time)
+      setForm((f) => ({ ...f, weather_temp_c: w.temp, weather_pressure_hpa: w.pressure, weather_wind: w.wind, weather_desc: w.desc }))
+    } catch (e) {
+      setWeatherError(e.message)
+    }
+    setWeatherBusy(false)
+  }
 
   function handleBaitChange(value) {
     setForm((f) => {
@@ -65,6 +81,8 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
       species: form.species, category: form.category, revir: form.revir || null,
       length_cm: form.length_cm || null, weight_kg: form.weight_kg || null,
       bait: form.bait, photo_url, bait_photo_url, caught_at,
+      weather_temp_c: form.weather_temp_c, weather_pressure_hpa: form.weather_pressure_hpa,
+      weather_wind: form.weather_wind, weather_desc: form.weather_desc,
     }).eq('id', c.id)
     setBusy(false)
     if (error) { alert(error.message); return }
@@ -121,15 +139,18 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                   <span className="val link-val" style={{ fontFamily: 'inherit', fontWeight: 600 }} onClick={onOpenSession}>{session.title} →</span>
                 </div>
               )}
-              {session && (
+              {(c.weather_temp_c != null || session) && (
                 <div className="conditions-strip">
-                  <span className="cond-chip">📅 {session.session_date}</span>
-                  <span className="cond-chip">🌡 {session.weather_temp_c ?? '—'}°C</span>
-                  <span className="cond-chip">📊 {session.weather_pressure_hpa ?? '—'} hPa</span>
-                  <span className="cond-chip">💨 {session.weather_wind || '—'}</span>
-                  <span className="cond-chip">🌙 {moonPhaseName(session.session_date)}</span>
+                  <span className="cond-chip">📅 {session?.session_date || c.caught_at?.slice(0, 10)}</span>
+                  <span className="cond-chip">🌡 {c.weather_temp_c ?? session?.weather_temp_c ?? '—'}°C</span>
+                  <span className="cond-chip">📊 {c.weather_pressure_hpa ?? session?.weather_pressure_hpa ?? '—'} hPa</span>
+                  <span className="cond-chip">💨 {c.weather_wind || session?.weather_wind || '—'}</span>
+                  <span className="cond-chip">🌙 {moonPhaseName(session?.session_date || c.caught_at?.slice(0, 10))}</span>
                 </div>
               )}
+              <p className="help-note" style={{ marginTop: 4 }}>
+                {c.weather_temp_c != null ? 'Počasí přesně pro čas úlovku.' : 'Počasí z výpravy — nemusí přesně odpovídat času tohoto úlovku.'}
+              </p>
               <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                 {canEdit && <button className="new-btn" onClick={() => setEditing(true)}>✏️ Upravit</button>}
                 {canEdit && <button className="new-btn danger-btn" onClick={handleDelete} disabled={busy}>🗑 Smazat</button>}
@@ -173,6 +194,13 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                 📷 {form.photoFile ? form.photoFile.name : (c.photo_url ? 'změnit foto' : 'vybrat foto')}
                 <input type="file" accept="image/*" hidden onChange={(e) => setForm({ ...form, photoFile: e.target.files[0] })} />
               </label>
+              <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy} style={{ marginTop: 8 }}>
+                {weatherBusy ? 'Zjišťuji…' : '🌤 Dopočítat počasí pro tento čas'}
+              </button>
+              {weatherError && <p className="error-text">{weatherError}</p>}
+              {form.weather_temp_c != null && (
+                <p className="hint-text">{form.weather_temp_c}°C · {form.weather_pressure_hpa} hPa · {form.weather_wind} · {form.weather_desc}</p>
+              )}
               <button type="button" className="new-btn" onClick={onRelocate} style={{ marginTop: 4 }}>📍 Změnit pozici úlovku na mapě</button>
               <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
                 <button className="new-btn" type="button" onClick={() => setEditing(false)}>Zrušit</button>

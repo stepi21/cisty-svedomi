@@ -73,8 +73,8 @@ header h1 .accent{ color:var(--amber); }
 
 .layout{ display:grid; grid-template-columns:300px 1fr; flex:1; min-height:0; }
 @media (max-width:860px){
-  html, body, #root{ height:100vh; height:100dvh; overflow:hidden; }
-  .app{ height:100vh; height:100dvh; overflow:hidden; }
+  html, body, #root{ height:100%; overflow:hidden; }
+  .app{ position:fixed; inset:0; overflow:hidden; }
   .layout{ grid-template-columns:1fr; position:relative; overflow:hidden; }
   .sidebar{ display:none; }
   .desktop-detail-wrap{ display:none; }
@@ -193,7 +193,7 @@ header h1 .accent{ color:var(--amber); }
 main{ position:relative; display:flex; flex-direction:column; min-height:0; }
 @media (max-width:860px){ .leaflet-control-container{ display:none; } }
 .my-location-btn{
-  position:absolute; bottom:16px; left:16px; z-index:400;
+  position:absolute; bottom:16px; left:16px; z-index:420;
   background:var(--white); border:1px solid var(--paper-line); border-radius:20px;
   padding:8px 14px; font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--ink);
   box-shadow:0 4px 12px rgba(0,0,0,.15); cursor:pointer;

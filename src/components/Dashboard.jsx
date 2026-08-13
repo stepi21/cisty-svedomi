@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient'
 import CatchTicket from './CatchTicket.jsx'
 import HelpModal from './HelpModal.jsx'
 import GalleryModal from './GalleryModal.jsx'
+import BaitsModal from './BaitsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
 import { uploadPhoto } from '../lib/storage.js'
 
@@ -16,8 +17,11 @@ const fishSVG = (color) => `
     <circle cx="46" cy="14" r="2.3" fill="#1a1a1a"/>
   </svg>`
 const rodColors = ['#2C6E71', '#B97F35', '#6B7A4F', '#D9A054']
-const USER_PALETTE = ['#2C6E71', '#B97F35', '#6B7A4F', '#8A4B6B', '#3F6B9E', '#9C6B30', '#4B7A2E', '#7A3F5E']
-const CATEGORY_COLOR = { dravec: '#1F4E5F', bila: '#D9A054' }
+const USER_PALETTE = [
+  '#2C6E71', '#B4432E', '#6B7A4F', '#8A4B6B', '#3F6B9E', '#C9A227', '#4B7A2E', '#7A3F5E',
+  '#2E8B8B', '#D1622F', '#5C4B8A', '#8A2E3E', '#3E8E5A', '#9C4F96', '#4A6B8A', '#A65A2E',
+]
+const CATEGORY_COLOR = { dravec: '#5C7A85', bila: '#C4A572' }
 const SESSION_TYPES = [
   { value: 'kapr', label: 'Kapři (bod)' },
   { value: 'privlac', label: 'Přívlač (oblast)' },
@@ -43,6 +47,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [showHelp, setShowHelp] = useState(false)
   const [showRecords, setShowRecords] = useState(false)
   const [showGallery, setShowGallery] = useState(false)
+  const [showBaits, setShowBaits] = useState(false)
+  const [baitsInitialKey, setBaitsInitialKey] = useState(null)
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [ticketCatch, setTicketCatch] = useState(null)
@@ -149,7 +155,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         const targetId = pendingTicketCatchIdRef.current
         for (const s of data) {
           const found = (s.catches || []).find((c) => c.id === targetId)
-          if (found) { setTicketCatch(found); break }
+          if (found) { setBaitsInitialKey(null); setTicketCatch(found); break }
         }
         pendingTicketCatchIdRef.current = null
       }
@@ -314,11 +320,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function focusOnPoint(lat, lng) {
     if (!mapInstance.current || lat == null || lng == null) return
+    setMobileSheetOpen(false)
     mapInstance.current.setView([lat, lng], 16)
   }
 
   function focusOnArea(pts) {
     if (!mapInstance.current || !pts.length) return
+    setMobileSheetOpen(false)
     const bounds = L.latLngBounds(pts.map((p) => [p.lat, p.lng]))
     mapInstance.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 })
   }
@@ -363,7 +371,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         const html = `<div style="width:32px;height:32px;background:${fillColor};border-radius:50%;display:flex;align-items:center;justify-content:center;border:5px solid ${ringColor};box-shadow:0 2px 6px rgba(0,0,0,.35)">${fishSVG('#fff')}</div>`
         const icon = L.divIcon({ html, className: '', iconSize: [32, 32], iconAnchor: [16, 16] })
         const marker = L.marker([c.lat ?? activeSession.lat, c.lng ?? activeSession.lng], { icon })
-        marker.on('click', () => setTicketCatch(c))
+        marker.on('click', () => { setBaitsInitialKey(null); setTicketCatch(c) })
         marker.addTo(markersLayer.current)
       })
       return
@@ -385,7 +393,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       const html = `<div style="width:28px;height:28px;background:${fillColor};border-radius:50%;display:flex;align-items:center;justify-content:center;border:5px solid ${ringColor};box-shadow:0 2px 6px rgba(0,0,0,.35)">${fishSVG('#fff')}</div>`
       const icon = L.divIcon({ html, className: '', iconSize: [28, 28], iconAnchor: [14, 14] })
       const marker = L.marker([c.lat ?? s.lat, c.lng ?? s.lng], { icon })
-      marker.on('click', () => setTicketCatch(c))
+      marker.on('click', () => { setBaitsInitialKey(null); setTicketCatch(c) })
       marker.addTo(markersLayer.current)
     })
 
@@ -625,6 +633,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       session_id: session.id, group_id: groupId, rod_id: c.rodId || null,
       species: c.species, category: c.category, length_cm: c.length || null, weight_kg: c.weight || null,
       bait: c.bait, caught_at: caughtAt, lat: c.point.lat, lng: c.point.lng, photo_url, bait_photo_url, revir: c.revir || null,
+      weather_temp_c: c.weather_temp_c ?? null, weather_pressure_hpa: c.weather_pressure_hpa ?? null,
+      weather_wind: c.weather_wind || null, weather_desc: c.weather_desc || null,
     })
     if (error) { alert(error.message); return }
     setDraftCatch(null)
@@ -920,7 +930,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                     {canEdit && <button className="new-btn" onClick={() => startEditSession(activeSession)}>✏️ Upravit výpravu</button>}
                   </div>
                 </div>
-                <div className="weather-row">
+                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 4 }}>
+                  📅 {activeSession.session_date}{activeSession.time_from ? ` · ${activeSession.time_from}–${activeSession.time_to || '?'}` : ''}
+                </div>
+                <div className="weather-row" style={{ marginTop: 8 }}>
                   <div className="w-item"><div className="num">{activeSession.weather_temp_c ?? '—'}°C</div><div className="lab">teplota</div></div>
                   <div className="w-item"><div className="num">{activeSession.weather_pressure_hpa ?? '—'} hPa</div><div className="lab">tlak</div></div>
                   <div className="w-item"><div className="num">{activeSession.weather_wind || '—'}</div><div className="lab">vítr</div></div>
@@ -993,7 +1006,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                     const isGeneral = target.includes('obecně')
                     const matchesTarget = target && (isGeneral ? c.category === 'dravec' : c.species?.trim().toLowerCase() === target)
                     return (
-                      <div className="catch-row" key={c.id} onClick={() => setTicketCatch(c)}>
+                      <div className="catch-row" key={c.id} onClick={() => { setBaitsInitialKey(null); setTicketCatch(c) }}>
                         <div className="fish-mini" dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />
                         <div>
                           <div className="c-name">{c.species} {matchesTarget && <span title="Odpovídá cíli výpravy">🎯</span>}</div>
@@ -1032,6 +1045,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           <div className="head-actions-wrap">
             <span className="whoami">{myProfile?.display_name}</span>
             <div className="head-actions">
+              <button className="new-btn" onClick={() => { setBaitsInitialKey(null); setShowBaits(true) }} title="Nástrahy">🪱</button>
               <button className="new-btn" onClick={() => setShowGallery(true)} title="Galerie">🖼</button>
               <button className="new-btn" onClick={() => setShowRecords(true)} title="Rekordy">🏆</button>
               <button className="new-btn" onClick={() => setShowHelp(true)} title="Návod">❓</button>
@@ -1171,6 +1185,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           draft={draftCatch}
           setDraft={setDraftCatch}
           rods={activeSession.rods || []}
+          session={activeSession}
           onSave={saveCatch}
           onClose={() => setDraftCatch(null)}
           baitPhotoMap={baitPhotoLookup()}
@@ -1181,11 +1196,25 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
 
       {showRecords && (
-        <RecordsModal sessions={sessions} userName={userName} userColor={userColor} onClose={() => setShowRecords(false)} onOpenCatch={(c) => { setTicketCatch(c); setShowRecords(false) }} />
+        <RecordsModal sessions={sessions} userName={userName} userColor={userColor} onClose={() => setShowRecords(false)} onOpenCatch={(c) => { setBaitsInitialKey(null); setTicketCatch(c); setShowRecords(false) }} />
       )}
 
       {showGallery && (
-        <GalleryModal sessions={sessions} onClose={() => setShowGallery(false)} onOpenCatch={(c) => { setTicketCatch(c); setShowGallery(false) }} />
+        <GalleryModal
+          sessions={sessions}
+          onClose={() => setShowGallery(false)}
+          onOpenCatch={(c) => { setBaitsInitialKey(null); setTicketCatch(c); setShowGallery(false) }}
+          onOpenBait={(label) => { setShowGallery(false); setBaitsInitialKey(label.trim().toLowerCase()); setShowBaits(true) }}
+        />
+      )}
+
+      {showBaits && (
+        <BaitsModal
+          sessions={sessions}
+          initialBaitKey={baitsInitialKey}
+          onClose={() => { setShowBaits(false); setBaitsInitialKey(null) }}
+          onOpenCatch={(c, key) => { setShowBaits(false); setBaitsInitialKey(key); setTicketCatch(c) }}
+        />
       )}
 
       {showStats && (
@@ -1226,6 +1255,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             const c = ticketCatch
             const s = sessionForCatch(c)
             setTicketCatch(null)
+            setMobileSheetOpen(false)
             if (!s) { mapInstance.current?.setView([c.lat, c.lng], 16); return }
             if (activeId === s.id && viewMode === 'detail') {
               mapInstance.current?.setView([c.lat, c.lng], 16)
@@ -1237,9 +1267,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           }}
           onOpenSession={() => {
             const s = sessionForCatch(ticketCatch)
-            if (s) { setTicketCatch(null); setActiveId(s.id); setViewMode('detail') }
+            if (s) { setTicketCatch(null); setMobileSheetOpen(false); setActiveId(s.id); setViewMode('detail') }
           }}
-          onClose={() => setTicketCatch(null)}
+          onClose={() => {
+            setTicketCatch(null)
+            if (baitsInitialKey) setShowBaits(true)
+          }}
           onUpdated={loadSessions}
           onDeleted={() => { setTicketCatch(null); loadSessions() }}
         />
@@ -1834,8 +1867,10 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
   )
 }
 
-function CatchFormPanel({ draft, setDraft, rods, onSave, onClose, baitPhotoMap = {}, baitListId = 'known-baits-all' }) {
+function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitPhotoMap = {}, baitListId = 'known-baits-all' }) {
   const [busy, setBusy] = useState(false)
+  const [weatherBusy, setWeatherBusy] = useState(false)
+  const [weatherError, setWeatherError] = useState(null)
   function set(field, value) { setDraft((d) => ({ ...d, [field]: value })) }
 
   function handleBaitChange(value) {
@@ -1847,6 +1882,18 @@ function CatchFormPanel({ draft, setDraft, rods, onSave, onClose, baitPhotoMap =
       }
       return next
     })
+  }
+
+  async function handleFetchWeather() {
+    if (!draft.time) { setWeatherError('Nejdřív vyplň čas úlovku.'); return }
+    setWeatherBusy(true); setWeatherError(null)
+    try {
+      const w = await fetchWeather(draft.point.lat, draft.point.lng, session.session_date, draft.time)
+      setDraft((d) => ({ ...d, weather_temp_c: w.temp, weather_pressure_hpa: w.pressure, weather_wind: w.wind, weather_desc: w.desc }))
+    } catch (e) {
+      setWeatherError(e.message)
+    }
+    setWeatherBusy(false)
   }
 
   async function handleSubmit(e) {
@@ -1891,6 +1938,15 @@ function CatchFormPanel({ draft, setDraft, rods, onSave, onClose, baitPhotoMap =
                 <input className="text-input" type="time" value={draft.time} onChange={(e) => set('time', e.target.value)} />
               </div>
             </div>
+            <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy} style={{ marginBottom: 8 }}>
+              {weatherBusy ? 'Zjišťuji…' : '🌤 Dopočítat počasí pro tento čas'}
+            </button>
+            {weatherError && <p className="error-text">{weatherError}</p>}
+            {draft.weather_temp_c != null && (
+              <p className="hint-text" style={{ marginBottom: 10 }}>
+                {draft.weather_temp_c}°C · {draft.weather_pressure_hpa} hPa · {draft.weather_wind} · {draft.weather_desc}
+              </p>
+            )}
             <label className="field-label">Nástraha</label>
             <input className="text-input" value={draft.bait} onChange={(e) => handleBaitChange(e.target.value)} placeholder="boilie tuňák 20mm" list={baitListId} autoComplete="off" />
             <label className="photo-label" style={{ display: 'inline-block', marginTop: 4, marginRight: 8 }}>

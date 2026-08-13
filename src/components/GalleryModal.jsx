@@ -1,4 +1,4 @@
-export default function GalleryModal({ sessions, onClose, onOpenCatch }) {
+export default function GalleryModal({ sessions, onClose, onOpenCatch, onOpenBait }) {
   const seen = new Set()
   const photos = []
 
@@ -43,7 +43,7 @@ export default function GalleryModal({ sessions, onClose, onOpenCatch }) {
                 <div
                   key={i}
                   className="gallery-item"
-                  onClick={() => p.catchRef && onOpenCatch(p.catchRef)}
+                  onClick={() => p.type === 'catch' ? (p.catchRef && onOpenCatch(p.catchRef)) : onOpenBait(p.label)}
                   title={p.label}
                 >
                   <img src={p.url} alt={p.label} />
