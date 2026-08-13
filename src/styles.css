@@ -199,7 +199,13 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
   box-shadow:0 4px 12px rgba(0,0,0,.15); cursor:pointer;
 }
 .my-location-btn:hover{ border-color:var(--water-mid); color:var(--water-mid); }
-@media (max-width:860px){ .my-location-btn{ bottom:68px; } }
+@media (max-width:860px){
+  .my-location-btn{
+    top:12px; right:12px; bottom:auto; left:auto;
+    padding:9px; border-radius:50%; z-index:420;
+  }
+  .my-location-btn .btn-label{ display:none; }
+}
 #map{ flex:1; min-height:280px; }
 
 .detail-strip{ background:var(--white); border-top:1px solid var(--paper-line); padding:16px 22px; display:grid; grid-template-columns:1.1fr 1fr 1.4fr; gap:22px; }

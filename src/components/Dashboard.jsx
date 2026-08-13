@@ -1072,7 +1072,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
         <main>
           <div ref={mapRef} id="map" style={{ cursor: isPlacingSomething ? 'crosshair' : '' }} />
-          <button className="my-location-btn" onClick={goToMyLocation} title="Moje pozice">📍 Moje pozice</button>
+          <button className="my-location-btn" onClick={goToMyLocation} title="Moje pozice">📍<span className="btn-label"> Moje pozice</span></button>
 
           {pickingType && (
             <div className="type-picker">
