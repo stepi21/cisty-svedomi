@@ -1331,6 +1331,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onCatalogChanged={loadBaitCatalog}
           onRenamePropagate={renameBaitEverywhere}
           onRemoveFromRods={removeBaitFromMyRods}
+          onBackfillBaitPhoto={backfillBaitPhoto}
           onClose={() => { setShowBaits(false); setBaitsInitialKey(null) }}
           onOpenCatch={(c, key) => { setShowBaits(false); setBaitsInitialKey(key); setTicketCatch(c) }}
           onOpenSession={(sessionId) => { setShowBaits(false); setActiveId(sessionId); setViewMode('detail') }}

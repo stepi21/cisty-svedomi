@@ -11,7 +11,7 @@ const fishSVG = (color) => `
 const CATEGORY_COLOR = { dravec: '#5C7A85', bila: '#C4A572' }
 const TYPE_CATEGORY = { kapr: 'bila', privlac: 'dravec', muska: 'dravec', plavana: 'bila', jine: null }
 
-export default function BaitsModal({ sessions, baitCatalog, groupId, userId, initialBaitKey, onCatalogChanged, onRenamePropagate, onRemoveFromRods, onClose, onOpenCatch, onOpenSession }) {
+export default function BaitsModal({ sessions, baitCatalog, groupId, userId, initialBaitKey, onCatalogChanged, onRenamePropagate, onRemoveFromRods, onBackfillBaitPhoto, onClose, onOpenCatch, onOpenSession }) {
   const [selectedKey, setSelectedKey] = useState(initialBaitKey || null)
   const [adding, setAdding] = useState(false)
   const [editingCatalogId, setEditingCatalogId] = useState(null)
@@ -126,6 +126,7 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
           groupId={groupId}
           userId={userId}
           onRenamePropagate={onRenamePropagate}
+          onBackfillBaitPhoto={onBackfillBaitPhoto}
           onCancel={() => setEditingCatalogId(null)}
           onSaved={async () => { setEditingCatalogId(null); await handleCatalogChanged() }}
         />
@@ -308,7 +309,7 @@ function AddBaitForm({ groupId, userId, onCancel, onSaved }) {
   )
 }
 
-function EditBaitForm({ bait, groupId, userId, onRenamePropagate, onCancel, onSaved }) {
+function EditBaitForm({ bait, groupId, userId, onRenamePropagate, onBackfillBaitPhoto, onCancel, onSaved }) {
   const [name, setName] = useState(bait.label)
   const [category, setCategory] = useState(bait.category)
   const [photoFile, setPhotoFile] = useState(null)
@@ -320,9 +321,10 @@ function EditBaitForm({ bait, groupId, userId, onRenamePropagate, onCancel, onSa
     setBusy(true)
     setError(null)
     let photo_url = bait.photo_url
+    let newPhotoUploaded = false
     if (photoFile) {
       const url = await uploadPhoto(photoFile, `baits/catalog`)
-      if (url) photo_url = url
+      if (url) { photo_url = url; newPhotoUploaded = true }
     }
     const renamed = name.trim().toLowerCase() !== bait.label.trim().toLowerCase()
     let error
@@ -333,6 +335,9 @@ function EditBaitForm({ bait, groupId, userId, onRenamePropagate, onCancel, onSa
     }
     if (!error && renamed) {
       await onRenamePropagate?.(bait.label, name)
+    }
+    if (!error && newPhotoUploaded) {
+      await onBackfillBaitPhoto?.(name, photo_url)
     }
     setBusy(false)
     if (error) { setError(error.message); return }
