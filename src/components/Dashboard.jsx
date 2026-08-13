@@ -1590,6 +1590,12 @@ function SettingsModal({ userId, profile, onClose, onSaved }) {
   const [color, setColor] = useState(profile?.color || USER_PALETTE[0])
   const [busy, setBusy] = useState(false)
 
+  const [password, setPassword] = useState('')
+  const [password2, setPassword2] = useState('')
+  const [pwBusy, setPwBusy] = useState(false)
+  const [pwMessage, setPwMessage] = useState(null)
+  const [pwError, setPwError] = useState(null)
+
   async function handleSave(e) {
     e.preventDefault()
     setBusy(true)
@@ -1601,6 +1607,20 @@ function SettingsModal({ userId, profile, onClose, onSaved }) {
     setBusy(false)
     if (error) { alert(error.message); return }
     onSaved(data)
+  }
+
+  async function handleSetPassword(e) {
+    e.preventDefault()
+    setPwError(null)
+    setPwMessage(null)
+    if (password.length < 6) { setPwError('Heslo musí mít aspoň 6 znaků.'); return }
+    if (password !== password2) { setPwError('Hesla se neshodují.'); return }
+    setPwBusy(true)
+    const { error } = await supabase.auth.updateUser({ password })
+    setPwBusy(false)
+    if (error) { setPwError(error.message); return }
+    setPassword(''); setPassword2('')
+    setPwMessage('Heslo je nastaveno. Od teď se můžeš přihlašovat i heslem, bez čekání na e-mail.')
   }
 
   return (
@@ -1629,6 +1649,18 @@ function SettingsModal({ userId, profile, onClose, onSaved }) {
             </div>
             <button className="btn-primary" type="submit" disabled={busy} style={{ marginTop: 16 }}>{busy ? 'Ukládám…' : 'Uložit'}</button>
           </form>
+
+          <div style={{ borderTop: '1px dashed var(--paper-line)', marginTop: 20, paddingTop: 16 }}>
+            <label className="field-label" style={{ marginTop: 0 }}>Přihlašovací heslo (nepovinné)</label>
+            <p className="help-note">Nastav si heslo, ať se nemusíš pokaždé přihlašovat přes e-mail — hodí se hlavně na appku na ploše telefonu.</p>
+            <form onSubmit={handleSetPassword}>
+              <input className="text-input" type="password" placeholder="nové heslo (aspoň 6 znaků)" value={password} onChange={(e) => setPassword(e.target.value)} style={{ marginTop: 8 }} />
+              <input className="text-input" type="password" placeholder="zopakuj heslo" value={password2} onChange={(e) => setPassword2(e.target.value)} style={{ marginTop: 8 }} />
+              {pwError && <p className="error-text">{pwError}</p>}
+              {pwMessage && <p className="hint-text" style={{ marginTop: 8 }}>{pwMessage}</p>}
+              <button className="new-btn" type="submit" disabled={pwBusy} style={{ marginTop: 10 }}>{pwBusy ? 'Ukládám…' : 'Nastavit heslo'}</button>
+            </form>
+          </div>
         </div>
       </div>
     </div>

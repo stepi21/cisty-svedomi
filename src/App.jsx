@@ -9,14 +9,16 @@ export default function App() {
   const [profile, setProfile] = useState(null)
   const [groupId, setGroupId] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [recovering, setRecovering] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
       setLoading(false)
     })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, sess) => {
       setSession(sess)
+      if (event === 'PASSWORD_RECOVERY') setRecovering(true)
     })
     return () => listener.subscription.unsubscribe()
   }, [])
@@ -50,6 +52,10 @@ export default function App() {
     return <div className="center-screen"><div className="loader-text">Načítám…</div></div>
   }
 
+  if (recovering) {
+    return <SetNewPassword onDone={() => setRecovering(false)} />
+  }
+
   if (!session) {
     return <Login />
   }
@@ -67,3 +73,40 @@ export default function App() {
     />
   )
 }
+
+function SetNewPassword({ onDone }) {
+  const [password, setPassword] = useState('')
+  const [password2, setPassword2] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setError(null)
+    if (password.length < 6) { setError('Heslo musí mít aspoň 6 znaků.'); return }
+    if (password !== password2) { setError('Hesla se neshodují.'); return }
+    setBusy(true)
+    const { error } = await supabase.auth.updateUser({ password })
+    setBusy(false)
+    if (error) { setError(error.message); return }
+    onDone()
+  }
+
+  return (
+    <div className="center-screen">
+      <div className="login-card">
+        <div className="login-eyebrow">ČISTÝ SVĚDOMÍ</div>
+        <h1 className="login-title">Nové heslo</h1>
+        <form onSubmit={handleSubmit}>
+          <label className="field-label">Nové heslo</label>
+          <input className="text-input" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="aspoň 6 znaků" />
+          <label className="field-label">Zopakuj heslo</label>
+          <input className="text-input" type="password" required value={password2} onChange={(e) => setPassword2(e.target.value)} />
+          <button className="btn-primary" type="submit" disabled={busy}>{busy ? 'Ukládám…' : 'Uložit nové heslo'}</button>
+          {error && <p className="error-text">{error}</p>}
+        </form>
+      </div>
+    </div>
+  )
+}
+
