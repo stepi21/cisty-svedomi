@@ -321,10 +321,9 @@ function EditBaitForm({ bait, groupId, userId, onRenamePropagate, onBackfillBait
     setBusy(true)
     setError(null)
     let photo_url = bait.photo_url
-    let newPhotoUploaded = false
     if (photoFile) {
       const url = await uploadPhoto(photoFile, `baits/catalog`)
-      if (url) { photo_url = url; newPhotoUploaded = true }
+      if (url) photo_url = url
     }
     const renamed = name.trim().toLowerCase() !== bait.label.trim().toLowerCase()
     let error
@@ -336,7 +335,7 @@ function EditBaitForm({ bait, groupId, userId, onRenamePropagate, onBackfillBait
     if (!error && renamed) {
       await onRenamePropagate?.(bait.label, name)
     }
-    if (!error && newPhotoUploaded) {
+    if (!error && photo_url) {
       const result = await onBackfillBaitPhoto?.(name, photo_url)
       if (result && result.blocked > 0) {
         setError(`Foto se propsalo u ${result.updated} tvých záznamů. U ${result.blocked} se to nepodařilo — nejspíš patří jinému členovi party, ne tobě.`)
