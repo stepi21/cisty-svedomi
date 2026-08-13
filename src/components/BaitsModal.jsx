@@ -33,6 +33,12 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
 
   // --- doplnit nástrahy zadané u prutů, i když na ně ještě nic nechytlo ---
   const rodBaitMap = {}
+  const sessionsByBaitKey = {}
+  function registerSessionUsage(key, session) {
+    if (!key) return
+    if (!sessionsByBaitKey[key]) sessionsByBaitKey[key] = new Map()
+    sessionsByBaitKey[key].set(session.id, session)
+  }
   sessions.forEach((s) => {
     const guessCategory = TYPE_CATEGORY[s.type] || null
     ;(s.rods || []).forEach((r) => {
@@ -44,7 +50,11 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
         if (!key) return
         if (!rodBaitMap[key]) rodBaitMap[key] = { label: name, photo_url, category: guessCategory }
         if (!rodBaitMap[key].photo_url && photo_url) rodBaitMap[key].photo_url = photo_url
+        registerSessionUsage(key, s)
       })
+    })
+    ;(s.catches || []).forEach((c) => {
+      if (c.bait) registerSessionUsage(c.bait.trim().toLowerCase(), s)
     })
   })
 
@@ -74,7 +84,10 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
     }
   })
 
-  const baits = Object.values(merged)
+  const baits = Object.values(merged).map((b) => ({
+    ...b,
+    sessionsUsed: Array.from((sessionsByBaitKey[b.key] || new Map()).values()),
+  }))
   const filteredBaits = baits
     .filter((b) => filter === 'all' || b.category === filter)
     .sort((a, b) => b.catches.length - a.catches.length)
@@ -87,14 +100,21 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
   // ---------- detail nástrahy ----------
   if (selected) {
     const canEditCatalog = selected.catalogEntry && selected.catalogEntry.created_by === userId
+    const usedSessionIds = new Set(selected.catches.map((c) => c.sessionRef.id))
+    const sessionsWithoutCatch = selected.sessionsUsed.filter((s) => !usedSessionIds.has(s.id))
+    const inUse = selected.catches.length > 0 || selected.sessionsUsed.length > 0
 
     async function handleDelete() {
-      const usageNote = selected.catches.length > 0
-        ? `Byla použita u ${selected.catches.length} úlovků (${[...new Set(selected.catches.map((c) => c.sessionRef.session_date))].join(', ')}). Smazáním se katalogový záznam odstraní, ale historické úlovky si nástrahu v sobě zachovají.`
-        : 'Zatím na ni nic nechyceno.'
-      if (!window.confirm(`Smazat nástrahu "${selected.label}"?\n\n${usageNote}`)) return
+      if (inUse) {
+        const dates = [...new Set([
+          ...selected.catches.map((c) => c.sessionRef.session_date),
+          ...selected.sessionsUsed.map((s) => s.session_date),
+        ])]
+        alert(`Nástraha "${selected.label}" je použitá (${dates.join(', ')}) — nejde smazat, dokud je zapsaná ve výpravě nebo úlovku.`)
+        return
+      }
+      if (!window.confirm(`Nástraha "${selected.label}" není nikde použitá. Smazat ji z katalogu?`)) return
       if (selected.catalogEntry) await supabase.from('baits').delete().eq('id', selected.catalogEntry.id)
-      await onRemoveFromRods?.(selected.label)
       setSelectedKey(null)
       await handleCatalogChanged()
     }
@@ -163,6 +183,22 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
                     </div>
                   ))}
               </div>
+            )}
+            {sessionsWithoutCatch.length > 0 && (
+              <>
+                <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 14 }}>
+                  Použito i na těchto výpravách, bez zaznamenaného úlovku:
+                </p>
+                <div className="catch-list" style={{ maxHeight: 'none' }}>
+                  {sessionsWithoutCatch
+                    .sort((a, b) => (b.session_date || '').localeCompare(a.session_date || ''))
+                    .map((s) => (
+                      <div key={s.id} className="record-row" onClick={() => onOpenSession(s.id)}>
+                        <div className="record-head"><strong>{s.title}</strong><span className="c-sub">{s.session_date}</span></div>
+                      </div>
+                    ))}
+                </div>
+              </>
             )}
           </div>
         </div>
