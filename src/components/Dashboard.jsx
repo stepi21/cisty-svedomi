@@ -861,6 +861,36 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return TYPE_CATEGORY[type] || null
   }
 
+  function mergedBaitOptions(category) {
+    const map = {}
+    baitCatalog.forEach((b) => {
+      if (category && b.category && b.category !== category) return
+      map[b.name.trim().toLowerCase()] = { id: b.id, name: b.name.trim(), photo_url: b.photo_url, category: b.category }
+    })
+    sessions.forEach((s) => {
+      const guessCategory = TYPE_CATEGORY[s.type] || null
+      ;(s.rods || []).forEach((r) => {
+        const entries = []
+        ;(r.baits || []).forEach((b) => { if (b.name) entries.push({ name: b.name.trim(), photo_url: b.photo_url || null }) })
+        if ((!r.baits || r.baits.length === 0) && r.bait) entries.push({ name: r.bait.trim(), photo_url: r.bait_photo_url || null })
+        entries.forEach(({ name, photo_url }) => {
+          if (category && guessCategory && guessCategory !== category) return
+          const key = name.toLowerCase()
+          if (!key || map[key]) return
+          map[key] = { id: key, name, photo_url, category: guessCategory }
+        })
+      })
+      ;(s.catches || []).forEach((c) => {
+        if (!c.bait) return
+        if (category && c.category !== category) return
+        const key = c.bait.trim().toLowerCase()
+        if (map[key]) return
+        map[key] = { id: key, name: c.bait.trim(), photo_url: c.bait_photo_url || null, category: c.category }
+      })
+    })
+    return Object.values(map).sort((a, b) => a.name.localeCompare(b.name))
+  }
+
   function allKnownSpecies() {
     const set = new Set(['Obecně dravci'])
     sessions.forEach((s) => {
@@ -1025,7 +1055,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                       color={rodColors[i % rodColors.length]}
                       baitPhotoMap={baitPhotoLookup()}
                       baitListId={baitListId(activeSession.type)}
-                      baitCatalog={baitCatalog}
+                      baitCatalog={mergedBaitOptions(baitCategoryFor(activeSession.type))}
                       baitCategory={baitCategoryFor(activeSession.type)}
                       onAddBait={addBaitToCatalog}
                       onBackfillBaitPhoto={backfillBaitPhoto}
@@ -1254,7 +1284,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onClose={() => setDraftSession(null)}
           baitPhotoMap={baitPhotoLookup()}
           baitListId={baitListId(draftSession.type)}
-          baitCatalog={baitCatalog}
+          baitCatalog={mergedBaitOptions(baitCategoryFor(draftSession.type))}
           baitCategory={baitCategoryFor(draftSession.type)}
           onAddBait={addBaitToCatalog}
         />
@@ -1270,7 +1300,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onClose={() => setDraftCatch(null)}
           baitPhotoMap={baitPhotoLookup()}
           baitListId={baitListId(activeSession.type)}
-          baitCatalog={baitCatalog}
+          baitCatalog={mergedBaitOptions(baitCategoryFor(activeSession.type))}
           baitCategory={baitCategoryFor(activeSession.type)}
           onAddBait={addBaitToCatalog}
         />
@@ -1339,7 +1369,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           canEdit={sessionForCatch(ticketCatch)?.user_id === userId}
           baitPhotoMap={baitPhotoLookup()}
           baitListId={baitListId(sessionForCatch(ticketCatch)?.type)}
-          baitCatalog={baitCatalog}
+          baitCatalog={mergedBaitOptions(baitCategoryFor(sessionForCatch(ticketCatch)?.type))}
           baitCategory={baitCategoryFor(sessionForCatch(ticketCatch)?.type)}
           onAddBait={addBaitToCatalog}
           onBackfillBaitPhoto={backfillBaitPhoto}
