@@ -5,6 +5,7 @@ import CatchTicket from './CatchTicket.jsx'
 import HelpModal from './HelpModal.jsx'
 import GalleryModal from './GalleryModal.jsx'
 import BaitsModal from './BaitsModal.jsx'
+import BaitPicker from './BaitPicker.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
 import { uploadPhoto } from '../lib/storage.js'
 
@@ -839,11 +840,25 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return Array.from(set).sort()
   }
 
+  async function addBaitToCatalog(name, category) {
+    const { data, error } = await supabase.from('baits')
+      .insert({ group_id: groupId, created_by: userId, name, category })
+      .select()
+      .single()
+    if (error) { alert(error.message); return null }
+    await loadBaitCatalog()
+    return data
+  }
+
   function baitListId(type) {
     const cat = TYPE_CATEGORY[type]
     if (cat === 'dravec') return 'known-baits-dravec'
     if (cat === 'bila') return 'known-baits-bila'
     return 'known-baits-all'
+  }
+
+  function baitCategoryFor(type) {
+    return TYPE_CATEGORY[type] || null
   }
 
   function allKnownSpecies() {
@@ -1010,6 +1025,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                       color={rodColors[i % rodColors.length]}
                       baitPhotoMap={baitPhotoLookup()}
                       baitListId={baitListId(activeSession.type)}
+                      baitCatalog={baitCatalog}
+                      baitCategory={baitCategoryFor(activeSession.type)}
+                      onAddBait={addBaitToCatalog}
                       onBackfillBaitPhoto={backfillBaitPhoto}
                       onArmPosition={() => setPlacementTarget(`edit-rod-${r.id}`)}
                       onDone={() => { setEditingRodId(null); loadSessions() }}
@@ -1236,6 +1254,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onClose={() => setDraftSession(null)}
           baitPhotoMap={baitPhotoLookup()}
           baitListId={baitListId(draftSession.type)}
+          baitCatalog={baitCatalog}
+          baitCategory={baitCategoryFor(draftSession.type)}
+          onAddBait={addBaitToCatalog}
         />
       )}
 
@@ -1249,6 +1270,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onClose={() => setDraftCatch(null)}
           baitPhotoMap={baitPhotoLookup()}
           baitListId={baitListId(activeSession.type)}
+          baitCatalog={baitCatalog}
+          baitCategory={baitCategoryFor(activeSession.type)}
+          onAddBait={addBaitToCatalog}
         />
       )}
 
@@ -1315,6 +1339,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           canEdit={sessionForCatch(ticketCatch)?.user_id === userId}
           baitPhotoMap={baitPhotoLookup()}
           baitListId={baitListId(sessionForCatch(ticketCatch)?.type)}
+          baitCatalog={baitCatalog}
+          baitCategory={baitCategoryFor(sessionForCatch(ticketCatch)?.type)}
+          onAddBait={addBaitToCatalog}
           onBackfillBaitPhoto={backfillBaitPhoto}
           onRelocate={() => startRelocateCatch(ticketCatch.id)}
           onFocusLocation={() => {
@@ -1733,7 +1760,7 @@ function SettingsModal({ userId, profile, onClose, onSaved }) {
   )
 }
 
-function RodEditRow({ rod, color, baitPhotoMap = {}, baitListId = 'known-baits-all', onBackfillBaitPhoto, onArmPosition, onDone, onCancel }) {
+function RodEditRow({ rod, color, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, onAddBait, onBackfillBaitPhoto, onArmPosition, onDone, onCancel }) {
   const [name, setName] = useState(rod.name)
   const initialBaits = (rod.baits && rod.baits.length > 0)
     ? rod.baits.map((b) => ({ name: b.name, photo_url: b.photo_url, photoFile: null }))
@@ -1785,7 +1812,14 @@ function RodEditRow({ rod, color, baitPhotoMap = {}, baitListId = 'known-baits-a
       <input className="text-input" value={name} onChange={(e) => setName(e.target.value)} style={{ marginBottom: 8 }} />
       {baits.map((b, i) => (
         <div key={i} className="bait-edit-row">
-          <input className="text-input" value={b.name} onChange={(e) => updateBait(i, 'name', e.target.value)} placeholder="nástraha" list={baitListId} autoComplete="off" />
+          <BaitPicker
+            value={b.name}
+            category={baitCategory}
+            catalog={baitCatalog}
+            onChange={(name) => updateBait(i, 'name', name)}
+            onAddBait={onAddBait}
+            placeholder="nástraha"
+          />
           <label className="photo-label">
             📷 {b.photoFile ? b.photoFile.name : (b.photo_url ? 'změnit' : 'foto')}
             <input type="file" accept="image/*" hidden onChange={(e) => updateBait(i, 'photoFile', e.target.files[0])} />
@@ -1806,7 +1840,7 @@ function RodEditRow({ rod, color, baitPhotoMap = {}, baitListId = 'known-baits-a
   )
 }
 
-function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhotoMap = {}, baitListId = 'known-baits-all' }) {
+function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, onAddBait }) {
   const [busy, setBusy] = useState(false)
   const [weatherBusy, setWeatherBusy] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
@@ -1940,7 +1974,14 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
                 <input className="text-input" value={r.name} onChange={(e) => setRod(i, 'name', e.target.value)} placeholder="Prut 1" style={{ marginBottom: 8 }} />
                 {r.baits.map((b, bi) => (
                   <div key={bi} className="bait-edit-row">
-                    <input className="text-input" value={b.name} onChange={(e) => updateBait(i, bi, 'name', e.target.value)} placeholder="nástraha" list={baitListId} autoComplete="off" />
+                    <BaitPicker
+                      value={b.name}
+                      category={baitCategory}
+                      catalog={baitCatalog}
+                      onChange={(name) => updateBait(i, bi, 'name', name)}
+                      onAddBait={onAddBait}
+                      placeholder="nástraha"
+                    />
                     <label className="photo-label">
                       📷 {b.photoFile ? b.photoFile.name : (b.photo_url ? 'nalezeno z historie' : 'foto')}
                       <input type="file" accept="image/*" hidden onChange={(e) => updateBait(i, bi, 'photoFile', e.target.files[0])} />
@@ -1965,7 +2006,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
   )
 }
 
-function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitPhotoMap = {}, baitListId = 'known-baits-all' }) {
+function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, onAddBait }) {
   const [busy, setBusy] = useState(false)
   const [weatherBusy, setWeatherBusy] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
@@ -2046,7 +2087,14 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
               </p>
             )}
             <label className="field-label">Nástraha</label>
-            <input className="text-input" value={draft.bait} onChange={(e) => handleBaitChange(e.target.value)} placeholder="boilie tuňák 20mm" list={baitListId} autoComplete="off" />
+            <BaitPicker
+              value={draft.bait}
+              category={baitCategory}
+              catalog={baitCatalog}
+              onChange={handleBaitChange}
+              onAddBait={onAddBait}
+              placeholder="boilie tuňák 20mm"
+            />
             <label className="photo-label" style={{ display: 'inline-block', marginTop: 4, marginRight: 8 }}>
               📷 {draft.baitPhotoFile ? draft.baitPhotoFile.name : (draft.bait_photo_url ? 'nalezeno z historie' : 'foto nástrahy')}
               <input type="file" accept="image/*" hidden onChange={(e) => set('baitPhotoFile', e.target.files[0])} />

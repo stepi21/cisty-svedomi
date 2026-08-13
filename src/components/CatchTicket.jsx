@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { uploadPhoto } from '../lib/storage.js'
 import { moonPhaseName, fetchWeather } from '../lib/weather.js'
+import BaitPicker from './BaitPicker.jsx'
 
 const CATEGORY_COLOR = { dravec: '#5C7A85', bila: '#C4A572' }
 
@@ -19,7 +20,7 @@ function toLocalTimeInput(isoString) {
   return `${hh}:${mm}`
 }
 
-export default function CatchTicket({ catchData: c, session, catcherName, canEdit = false, baitPhotoMap = {}, baitListId = 'known-baits-all', onBackfillBaitPhoto, onRelocate, onFocusLocation, onOpenSession, onClose, onUpdated, onDeleted }) {
+export default function CatchTicket({ catchData: c, session, catcherName, canEdit = false, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, onAddBait, onBackfillBaitPhoto, onRelocate, onFocusLocation, onOpenSession, onClose, onUpdated, onDeleted }) {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [weatherBusy, setWeatherBusy] = useState(false)
@@ -182,7 +183,13 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                 </div>
               </div>
               <label className="field-label">Nástraha</label>
-              <input className="text-input" value={form.bait} onChange={(e) => handleBaitChange(e.target.value)} list={baitListId} autoComplete="off" />
+              <BaitPicker
+                value={form.bait}
+                category={baitCategory}
+                catalog={baitCatalog}
+                onChange={handleBaitChange}
+                onAddBait={onAddBait}
+              />
               <label className="photo-label" style={{ display: 'inline-block', marginTop: 4 }}>
                 📷 {form.baitPhotoFile ? form.baitPhotoFile.name : (form.bait_photo_url ? 'nalezeno / uloženo' : 'foto nástrahy')}
                 <input type="file" accept="image/*" hidden onChange={(e) => setForm({ ...form, baitPhotoFile: e.target.files[0] })} />

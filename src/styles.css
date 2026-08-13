@@ -273,7 +273,7 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
   position:fixed; top:90px; right:20px; z-index:500;
   max-height:calc(100vh - 110px); overflow-y:auto;
 }
-.side-panel .ticket{ box-shadow:0 20px 50px rgba(22,57,61,.35); }
+.side-panel .ticket{ box-shadow:0 20px 50px rgba(22,57,61,.35); max-height:none; overflow-y:visible; }
 @media (max-width:860px){
   .side-panel{ top:auto; bottom:0; left:0; right:0; max-height:70vh; }
 }
@@ -323,3 +323,24 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
 @media (max-width:860px){
   .text-input, select.text-input{ font-size:16px; }
 }
+.bait-picker{ position:relative; }
+.bait-picker-btn{
+  display:flex; align-items:center; justify-content:space-between; cursor:pointer;
+  text-align:left; font-family:inherit;
+}
+.bait-picker-btn span:first-child{ color:var(--ink); }
+.bait-picker-chevron{ color:var(--ink-soft); font-size:11px; margin-left:6px; }
+.bait-picker-dropdown{
+  position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:600;
+  background:var(--white); border:1px solid var(--paper-line); border-radius:10px;
+  box-shadow:0 10px 30px rgba(0,0,0,.2); padding:6px; max-height:260px; display:flex; flex-direction:column;
+}
+.bait-picker-list{ overflow-y:auto; max-height:200px; }
+.bait-picker-item{
+  display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:6px;
+  cursor:pointer; font-size:14px;
+}
+.bait-picker-item:hover{ background:var(--paper); }
+.bait-picker-item.bait-picker-new{ color:var(--water-mid); font-weight:600; border-top:1px solid var(--paper-line); margin-top:4px; }
+.bait-picker-empty{ padding:8px 10px; font-size:13px; color:var(--ink-soft); }
+.bait-picker-add{ padding:6px; }
