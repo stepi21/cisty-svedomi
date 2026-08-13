@@ -11,7 +11,7 @@ const fishSVG = (color) => `
 const CATEGORY_COLOR = { dravec: '#5C7A85', bila: '#C4A572' }
 const TYPE_CATEGORY = { kapr: 'bila', privlac: 'dravec', muska: 'dravec', plavana: 'bila', jine: null }
 
-export default function BaitsModal({ sessions, baitCatalog, groupId, userId, initialBaitKey, onCatalogChanged, onRenamePropagate, onClose, onOpenCatch }) {
+export default function BaitsModal({ sessions, baitCatalog, groupId, userId, initialBaitKey, onCatalogChanged, onRenamePropagate, onRemoveFromRods, onClose, onOpenCatch, onOpenSession }) {
   const [selectedKey, setSelectedKey] = useState(initialBaitKey || null)
   const [adding, setAdding] = useState(false)
   const [editingCatalogId, setEditingCatalogId] = useState(null)
@@ -87,6 +87,18 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
   // ---------- detail nástrahy ----------
   if (selected) {
     const canEditCatalog = selected.catalogEntry && selected.catalogEntry.created_by === userId
+
+    async function handleDelete() {
+      const usageNote = selected.catches.length > 0
+        ? `Byla použita u ${selected.catches.length} úlovků (${[...new Set(selected.catches.map((c) => c.sessionRef.session_date))].join(', ')}). Smazáním se katalogový záznam odstraní, ale historické úlovky si nástrahu v sobě zachovají.`
+        : 'Zatím na ni nic nechyceno.'
+      if (!window.confirm(`Smazat nástrahu "${selected.label}"?\n\n${usageNote}`)) return
+      if (selected.catalogEntry) await supabase.from('baits').delete().eq('id', selected.catalogEntry.id)
+      await onRemoveFromRods?.(selected.label)
+      setSelectedKey(null)
+      await handleCatalogChanged()
+    }
+
     if (editingCatalogId) {
       return (
         <EditBaitForm
@@ -114,6 +126,9 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
               {(selected.catalogEntry ? canEditCatalog : true) && (
                 <button className="new-btn" onClick={() => setEditingCatalogId(selected.key)}>✏️ Upravit</button>
               )}
+              {(selected.catalogEntry ? canEditCatalog : true) && (
+                <button className="new-btn danger-btn" onClick={handleDelete}>🗑 Smazat</button>
+              )}
             </div>
             {selected.photo_url ? (
               <div className="ticket-illustration">
@@ -134,9 +149,16 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
                   .map((c) => (
                     <div key={c.id} className="catch-row" onClick={() => onOpenCatch(c, selected.key)}>
                       <div className="fish-mini" dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />
-                      <div>
+                      <div style={{ flex: 1 }}>
                         <div className="c-name">{c.species}</div>
                         <div className="c-sub">{c.length_cm ?? '—'} cm · {c.sessionRef.session_date}</div>
+                        <div
+                          className="c-sub link-val"
+                          style={{ marginTop: 2 }}
+                          onClick={(e) => { e.stopPropagation(); onOpenSession(c.sessionRef.id) }}
+                        >
+                          {c.sessionRef.title} →
+                        </div>
                       </div>
                     </div>
                   ))}

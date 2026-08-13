@@ -471,6 +471,21 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     await loadSessions()
   }
 
+  async function removeBaitFromMyRods(name) {
+    const key = (name || '').trim().toLowerCase()
+    if (!key) return
+    for (const s of sessions) {
+      for (const r of (s.rods || [])) {
+        const baits = r.baits || []
+        if (!baits.some((b) => b.name && b.name.trim().toLowerCase() === key)) continue
+        const newBaits = baits.filter((b) => !(b.name && b.name.trim().toLowerCase() === key))
+        const legacyBait = newBaits.map((b) => b.name).filter(Boolean).join(', ') || null
+        await supabase.from('rods').update({ baits: newBaits, bait: legacyBait }).eq('id', r.id)
+      }
+    }
+    await loadSessions()
+  }
+
   function goToMyLocation() {
     if (!navigator.geolocation) { alert('Tento prohlížeč neumí zjistit pozici.'); return }
     navigator.geolocation.getCurrentPosition(
@@ -1261,8 +1276,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           initialBaitKey={baitsInitialKey}
           onCatalogChanged={loadBaitCatalog}
           onRenamePropagate={renameBaitEverywhere}
+          onRemoveFromRods={removeBaitFromMyRods}
           onClose={() => { setShowBaits(false); setBaitsInitialKey(null) }}
           onOpenCatch={(c, key) => { setShowBaits(false); setBaitsInitialKey(key); setTicketCatch(c) }}
+          onOpenSession={(sessionId) => { setShowBaits(false); setActiveId(sessionId); setViewMode('detail') }}
         />
       )}
 
