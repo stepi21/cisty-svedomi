@@ -9,11 +9,13 @@ const fishSVG = (color) => `
     <circle cx="46" cy="14" r="2.3" fill="#1a1a1a"/>
   </svg>`
 const CATEGORY_COLOR = { dravec: '#5C7A85', bila: '#C4A572' }
+const TYPE_CATEGORY = { kapr: 'bila', privlac: 'dravec', muska: 'dravec', plavana: 'bila', jine: null }
 
-export default function BaitsModal({ sessions, baitCatalog, groupId, userId, initialBaitKey, onCatalogChanged, onClose, onOpenCatch }) {
+export default function BaitsModal({ sessions, baitCatalog, groupId, userId, initialBaitKey, onCatalogChanged, onRenamePropagate, onClose, onOpenCatch }) {
   const [selectedKey, setSelectedKey] = useState(initialBaitKey || null)
   const [adding, setAdding] = useState(false)
   const [editingCatalogId, setEditingCatalogId] = useState(null)
+  const [filter, setFilter] = useState('all')
 
   // --- spočítat úlovky na jednotlivé nástrahy z existujících dat ---
   const catchMap = {}
@@ -29,13 +31,34 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
     })
   })
 
-  // --- sloučit s katalogem (katalog vyhrává na jméno/kategorii/foto, pokud je zadané) ---
+  // --- doplnit nástrahy zadané u prutů, i když na ně ještě nic nechytlo ---
+  const rodBaitMap = {}
+  sessions.forEach((s) => {
+    const guessCategory = TYPE_CATEGORY[s.type] || null
+    ;(s.rods || []).forEach((r) => {
+      const names = []
+      ;(r.baits || []).forEach((b) => { if (b.name) names.push({ name: b.name.trim(), photo_url: b.photo_url || null }) })
+      if (r.bait) r.bait.split(',').forEach((n) => { const t = n.trim(); if (t) names.push({ name: t, photo_url: r.bait_photo_url || null }) })
+      names.forEach(({ name, photo_url }) => {
+        const key = name.toLowerCase()
+        if (!key) return
+        if (!rodBaitMap[key]) rodBaitMap[key] = { label: name, photo_url, category: guessCategory }
+        if (!rodBaitMap[key].photo_url && photo_url) rodBaitMap[key].photo_url = photo_url
+      })
+    })
+  })
+
+  // --- sloučit vše: pruty (bez úlovku) -> úlovky -> katalog (katalog vyhrává, pokud je zadaný) ---
   const merged = {}
+  Object.entries(rodBaitMap).forEach(([key, v]) => {
+    merged[key] = { key, label: v.label, photo_url: v.photo_url, catches: [], category: v.category || 'dravec', catalogEntry: null }
+  })
   Object.entries(catchMap).forEach(([key, v]) => {
+    const existing = merged[key]
     merged[key] = {
-      key, label: v.catches[0]?.bait?.trim() || key,
-      photo_url: v.photo_url, catches: v.catches,
-      category: (v.dravec || 0) >= (v.bila || 0) ? 'dravec' : 'bila',
+      key, label: v.catches[0]?.bait?.trim() || existing?.label || key,
+      photo_url: v.photo_url || existing?.photo_url || null, catches: v.catches,
+      category: (v.dravec || 0) >= (v.bila || 0) ? 'dravec' : (existing?.category || 'bila'),
       catalogEntry: null,
     }
   })
@@ -52,8 +75,9 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
   })
 
   const baits = Object.values(merged)
-  const dravciBaits = baits.filter((b) => b.category === 'dravec').sort((a, b) => b.catches.length - a.catches.length)
-  const bilaBaits = baits.filter((b) => b.category === 'bila').sort((a, b) => b.catches.length - a.catches.length)
+  const filteredBaits = baits
+    .filter((b) => filter === 'all' || b.category === filter)
+    .sort((a, b) => b.catches.length - a.catches.length)
   const selected = baits.find((b) => b.key === selectedKey)
 
   async function handleCatalogChanged() {
@@ -69,6 +93,7 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
           bait={selected}
           groupId={groupId}
           userId={userId}
+          onRenamePropagate={onRenamePropagate}
           onCancel={() => setEditingCatalogId(null)}
           onSaved={async () => { setEditingCatalogId(null); await handleCatalogChanged() }}
         />
@@ -84,7 +109,7 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
           </div>
           <div className="perforation"></div>
           <div className="ticket-body">
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
               <button className="new-btn" onClick={() => setSelectedKey(null)}>← Zpět na nástrahy</button>
               {(selected.catalogEntry ? canEditCatalog : true) && (
                 <button className="new-btn" onClick={() => setEditingCatalogId(selected.key)}>✏️ Upravit</button>
@@ -148,16 +173,20 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
         <div className="ticket-body">
           <button className="new-btn" onClick={() => setAdding(true)} style={{ marginBottom: 14 }}>+ Přidat nástrahu</button>
 
-          <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 15, margin: '0 0 6px' }}>Dravci</h3>
-          {dravciBaits.length === 0 && <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Zatím žádné.</p>}
-          {dravciBaits.map((b) => (
-            <div key={b.key} className="record-row" onClick={() => setSelectedKey(b.key)}>
-              <div className="record-head"><strong>{b.label}</strong><span className="record-length">{b.catches.length}×</span></div>
-            </div>
-          ))}
-          <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 15, margin: '18px 0 6px' }}>Bílá ryba</h3>
-          {bilaBaits.length === 0 && <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Zatím žádné.</p>}
-          {bilaBaits.map((b) => (
+          <div className="filter-row" style={{ padding: 0, marginBottom: 12 }}>
+            {['all', 'dravec', 'bila'].map((cat) => (
+              <button
+                key={cat}
+                className={`filter-chip ${filter === cat ? `active ${cat}` : ''}`}
+                onClick={() => setFilter(cat)}
+              >
+                {cat === 'all' ? 'Vše' : cat === 'dravec' ? 'Dravci' : 'Bílá ryba'}
+              </button>
+            ))}
+          </div>
+
+          {filteredBaits.length === 0 && <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Zatím žádné.</p>}
+          {filteredBaits.map((b) => (
             <div key={b.key} className="record-row" onClick={() => setSelectedKey(b.key)}>
               <div className="record-head"><strong>{b.label}</strong><span className="record-length">{b.catches.length}×</span></div>
             </div>
@@ -221,7 +250,7 @@ function AddBaitForm({ groupId, userId, onCancel, onSaved }) {
   )
 }
 
-function EditBaitForm({ bait, groupId, userId, onCancel, onSaved }) {
+function EditBaitForm({ bait, groupId, userId, onRenamePropagate, onCancel, onSaved }) {
   const [name, setName] = useState(bait.label)
   const [category, setCategory] = useState(bait.category)
   const [photoFile, setPhotoFile] = useState(null)
@@ -237,11 +266,15 @@ function EditBaitForm({ bait, groupId, userId, onCancel, onSaved }) {
       const url = await uploadPhoto(photoFile, `baits/catalog`)
       if (url) photo_url = url
     }
+    const renamed = name.trim().toLowerCase() !== bait.label.trim().toLowerCase()
     let error
     if (bait.catalogEntry) {
       ;({ error } = await supabase.from('baits').update({ name, category, photo_url }).eq('id', bait.catalogEntry.id))
     } else {
       ;({ error } = await supabase.from('baits').insert({ group_id: groupId, created_by: userId, name, category, photo_url }))
+    }
+    if (!error && renamed) {
+      await onRenamePropagate?.(bait.label, name)
     }
     setBusy(false)
     if (error) { setError(error.message); return }
@@ -260,13 +293,13 @@ function EditBaitForm({ bait, groupId, userId, onCancel, onSaved }) {
         <div className="ticket-body">
           {!bait.catalogEntry && (
             <p className="help-note" style={{ marginBottom: 10 }}>
-              Tahle nástraha zatím nebyla v katalogu — uložením ji tam přidáš, ať jde upravit i příště.
+              Appka tuhle nástrahu zatím jen "odhadla" z tvé výpravy — nemá svůj vlastní záznam v katalogu. Uložením ho vytvoříš.
             </p>
           )}
           <form onSubmit={handleSubmit}>
             <label className="field-label">Název</label>
             <input className="text-input" required value={name} onChange={(e) => setName(e.target.value)} />
-            <p className="help-note">Přejmenování tady neopraví staré úlovky, které nástrahu měly zapsanou jinak — ty je potřeba upravit zvlášť.</p>
+            <p className="help-note">Přejmenování se propíše i do výprav a úlovků, kde je tahle nástraha zapsaná — ale jen u tvých vlastních (kamarádovy záznamy nemůžeš upravovat).</p>
             <label className="field-label">Kategorie</label>
             <select className="text-input" value={category} onChange={(e) => setCategory(e.target.value)}>
               <option value="dravec">Dravec</option>

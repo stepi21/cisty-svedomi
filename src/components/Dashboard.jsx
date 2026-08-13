@@ -442,6 +442,35 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     await loadSessions()
   }
 
+  async function renameBaitEverywhere(oldName, newName) {
+    const oldKey = (oldName || '').trim().toLowerCase()
+    const newKey = (newName || '').trim().toLowerCase()
+    if (!oldKey || !newName || oldKey === newKey) return
+    for (const s of sessions) {
+      for (const r of (s.rods || [])) {
+        const baits = r.baits || []
+        let changed = false
+        const newBaits = baits.map((b) => {
+          if (b.name && b.name.trim().toLowerCase() === oldKey) {
+            changed = true
+            return { ...b, name: newName }
+          }
+          return b
+        })
+        if (changed) {
+          const legacyBait = newBaits.map((b) => b.name).filter(Boolean).join(', ') || null
+          await supabase.from('rods').update({ baits: newBaits, bait: legacyBait }).eq('id', r.id)
+        }
+      }
+      for (const c of (s.catches || [])) {
+        if (c.bait && c.bait.trim().toLowerCase() === oldKey) {
+          await supabase.from('catches').update({ bait: newName }).eq('id', c.id)
+        }
+      }
+    }
+    await loadSessions()
+  }
+
   function goToMyLocation() {
     if (!navigator.geolocation) { alert('Tento prohlížeč neumí zjistit pozici.'); return }
     navigator.geolocation.getCurrentPosition(
@@ -1231,6 +1260,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           userId={userId}
           initialBaitKey={baitsInitialKey}
           onCatalogChanged={loadBaitCatalog}
+          onRenamePropagate={renameBaitEverywhere}
           onClose={() => { setShowBaits(false); setBaitsInitialKey(null) }}
           onOpenCatch={(c, key) => { setShowBaits(false); setBaitsInitialKey(key); setTicketCatch(c) }}
         />
