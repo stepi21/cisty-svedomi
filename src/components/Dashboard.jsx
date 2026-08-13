@@ -418,7 +418,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   async function backfillBaitPhoto(baitName, photoUrl) {
     const key = (baitName || '').trim().toLowerCase()
-    if (!key || !photoUrl) return
+    if (!key || !photoUrl) return { updated: 0, blocked: 0 }
+    let updated = 0, blocked = 0
     for (const s of sessions) {
       for (const r of (s.rods || [])) {
         const baits = r.baits || []
@@ -431,16 +432,21 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           return b
         })
         if (changed) {
-          await supabase.from('rods').update({ baits: newBaits }).eq('id', r.id)
+          const { data, error } = await supabase.from('rods').update({ baits: newBaits }).eq('id', r.id).select()
+          if (!error && data && data.length > 0) updated++
+          else blocked++
         }
       }
       for (const c of (s.catches || [])) {
         if (c.bait && c.bait.trim().toLowerCase() === key && !c.bait_photo_url) {
-          await supabase.from('catches').update({ bait_photo_url: photoUrl }).eq('id', c.id)
+          const { data, error } = await supabase.from('catches').update({ bait_photo_url: photoUrl }).eq('id', c.id).select()
+          if (!error && data && data.length > 0) updated++
+          else blocked++
         }
       }
     }
     await loadSessions()
+    return { updated, blocked }
   }
 
   async function renameBaitEverywhere(oldName, newName) {

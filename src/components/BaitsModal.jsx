@@ -337,7 +337,10 @@ function EditBaitForm({ bait, groupId, userId, onRenamePropagate, onBackfillBait
       await onRenamePropagate?.(bait.label, name)
     }
     if (!error && newPhotoUploaded) {
-      await onBackfillBaitPhoto?.(name, photo_url)
+      const result = await onBackfillBaitPhoto?.(name, photo_url)
+      if (result && result.blocked > 0) {
+        setError(`Foto se propsalo u ${result.updated} tvých záznamů. U ${result.blocked} se to nepodařilo — nejspíš patří jinému členovi party, ne tobě.`)
+      }
     }
     setBusy(false)
     if (error) { setError(error.message); return }
