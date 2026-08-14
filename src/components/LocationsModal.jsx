@@ -1,13 +1,11 @@
 import { useState } from 'react'
 
-export default function LocationsModal({ locations, userId, onUpdate, onDelete, onClose, onAddArea, onAddPoint }) {
+export default function LocationsModal({ locations, userId, onUpdate, onDelete, onClose, onAddArea }) {
   const [selectedId, setSelectedId] = useState(null)
   const [editing, setEditing] = useState(false)
-  const [choosingNew, setChoosingNew] = useState(false)
 
   const selected = locations.find((l) => l.id === selectedId)
-  const areaLocations = locations.filter((l) => l.area).sort((a, b) => a.name.localeCompare(b.name))
-  const pointLocations = locations.filter((l) => !l.area).sort((a, b) => a.name.localeCompare(b.name))
+  const sorted = [...locations].sort((a, b) => a.name.localeCompare(b.name))
 
   if (selected) {
     const canEdit = selected.created_by === userId
@@ -43,9 +41,7 @@ export default function LocationsModal({ locations, userId, onUpdate, onDelete, 
               )}
             </div>
             {selected.revir && <p className="hint-text">Revír: {selected.revir}</p>}
-            <p className="hint-text">
-              {selected.area ? `Uložená oblast (${selected.area.length} ploch)` : 'Orientační bod (jen pro přiblížení mapy)'}
-            </p>
+            <p className="hint-text">Vyšrafovaná oblast ({selected.area.length} ploch)</p>
             {!canEdit && <p className="help-note" style={{ marginTop: 8 }}>Toto místo přidal jiný člen party — upravit nebo smazat ho může jen on.</p>}
           </div>
         </div>
@@ -64,30 +60,12 @@ export default function LocationsModal({ locations, userId, onUpdate, onDelete, 
         <div className="perforation"></div>
         <div className="ticket-body">
           <p className="help-note" style={{ marginBottom: 10 }}>
-            Nová místa přidáš přímo tady, nebo tlačítkem "📌 Uložit toto místo do katalogu" u výpravy. Obojí (oblast i bod) jde použít u jakéhokoli typu výpravy — jen u přívlače se oblast rovnou vykreslí, jinde slouží k přiblížení mapy.
+            Nová místa přidáš přímo tady, nebo tlačítkem "📌 Uložit toto místo do katalogu" u výpravy. Použitelné u jakéhokoli typu výpravy — u přívlače se oblast rovnou vykreslí, u ostatních typů jen doplní název/revír a přiblíží mapu.
           </p>
-          {!choosingNew ? (
-            <button className="new-btn" onClick={() => setChoosingNew(true)} style={{ marginBottom: 14 }}>+ Přidat místo</button>
-          ) : (
-            <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-              <button className="new-btn" onClick={onAddArea}>🎯 Oblast (vyšrafovaná plocha)</button>
-              <button className="new-btn" onClick={onAddPoint}>📍 Jen orientační bod</button>
-              <button className="new-btn" onClick={() => setChoosingNew(false)}>Zrušit</button>
-            </div>
-          )}
+          <button className="new-btn" onClick={onAddArea} style={{ marginBottom: 14 }}>+ Přidat místo</button>
 
-          <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 15, margin: '0 0 6px' }}>Oblasti (vyšrafovaná plocha)</h3>
-          {areaLocations.length === 0 && <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Zatím žádná.</p>}
-          {areaLocations.map((l) => (
-            <div key={l.id} className="record-row" onClick={() => setSelectedId(l.id)}>
-              <div className="record-head"><strong>{l.name}</strong></div>
-              {l.revir && <div className="c-sub">{l.revir}</div>}
-            </div>
-          ))}
-
-          <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 15, margin: '18px 0 6px' }}>Body (jen orientační)</h3>
-          {pointLocations.length === 0 && <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Zatím žádný.</p>}
-          {pointLocations.map((l) => (
+          {sorted.length === 0 && <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Zatím žádné.</p>}
+          {sorted.map((l) => (
             <div key={l.id} className="record-row" onClick={() => setSelectedId(l.id)}>
               <div className="record-head"><strong>{l.name}</strong></div>
               {l.revir && <div className="c-sub">{l.revir}</div>}

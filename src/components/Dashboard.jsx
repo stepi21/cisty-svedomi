@@ -1203,7 +1203,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   <h3>Podmínky</h3>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button className="new-btn" onClick={() => duplicateSession(activeSession)}>📋 Nová jako tahle</button>
-                    <button className="new-btn" onClick={() => startSaveLocation(activeSession)}>📌 Uložit místo do katalogu</button>
+                    {activeSession.area && (
+                      <button className="new-btn" onClick={() => startSaveLocation(activeSession)}>📌 Uložit místo do katalogu</button>
+                    )}
                     {(activeSession.session_locations || []).length > 0 && canEdit && (
                       <button className="new-btn" onClick={() => updateSessionFromLocations(activeSession)}>🔄 Aktualizovat podle katalogu</button>
                     )}
@@ -1563,7 +1565,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onDelete={deleteLocationFromCatalog}
           onClose={() => setShowLocations(false)}
           onAddArea={startAddLocationArea}
-          onAddPoint={startAddLocationPoint}
         />
       )}
 
@@ -2285,7 +2286,9 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
             ) : (
               <p className="hint-text">Pozice: {draft.point.lat.toFixed(4)}, {draft.point.lng.toFixed(4)}</p>
             )}
-            <button type="button" className="new-btn" onClick={() => onSaveLocation(draft)} style={{ marginBottom: 10 }}>📌 Uložit toto místo do katalogu</button>
+            {draft.area && (
+              <button type="button" className="new-btn" onClick={() => onSaveLocation(draft)} style={{ marginBottom: 10 }}>📌 Uložit toto místo do katalogu</button>
+            )}
             <label className="field-label">Název výpravy</label>
             <input className="text-input" required value={draft.title} onChange={(e) => set('title', e.target.value)} placeholder="např. Orlík — zátoka pod hrází" />
             <label className="field-label">Revír / lokalita</label>
