@@ -2199,7 +2199,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
         return { ...d, linkedLocationIds: linked.filter((id) => id !== loc.id) }
       }
       const next = { ...d, linkedLocationIds: [...linked, loc.id] }
-      if (loc.area) {
+      if (loc.area && d.area) {
         next.area = [...(d.area || []), loc.area]
       } else {
         onZoomToPoint?.(loc.lat, loc.lng)
@@ -2250,16 +2250,19 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
               <div style={{ marginBottom: 10 }}>
                 <label className="field-label" style={{ marginTop: 0 }}>Místa z katalogu</label>
                 {locationsCatalog
-                  .filter((loc) => (draft.area ? !!loc.area : !loc.area))
+                  .sort((a, b) => a.name.localeCompare(b.name))
                   .map((loc) => {
                     const checked = (draft.linkedLocationIds || []).includes(loc.id)
                     return (
                       <label key={loc.id} className="location-check-row">
                         <input type="checkbox" checked={checked} onChange={() => toggleLocation(loc)} />
-                        <span>{loc.name}{loc.revir ? ` (${loc.revir})` : ''}</span>
+                        <span>{loc.area ? '🎯' : '📍'} {loc.name}{loc.revir ? ` (${loc.revir})` : ''}</span>
                       </label>
                     )
                   })}
+                <p className="help-note" style={{ marginTop: 4 }}>
+                  🎯 = vyšrafovaná oblast (vykreslí se jen u přívlače, jinde jen doplní název/revír a přiblíží mapu) · 📍 = jen orientační bod
+                </p>
               </div>
             )}
             {draft.area ? (
