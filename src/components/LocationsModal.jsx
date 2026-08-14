@@ -141,10 +141,14 @@ function LocationPreviewMap({ location }) {
     mapInst.current = map
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map)
     const bounds = []
-    location.area.forEach((pts) => {
-      L.polygon(pts.map((p) => [p.lat, p.lng]), { color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.18 }).addTo(map)
-      pts.forEach((p) => bounds.push([p.lat, p.lng]))
-    })
+    location.area
+      .filter((pts) => Array.isArray(pts))
+      .map((pts) => pts.filter((p) => p && typeof p.lat === 'number' && typeof p.lng === 'number'))
+      .filter((pts) => pts.length >= 3)
+      .forEach((pts) => {
+        L.polygon(pts.map((p) => [p.lat, p.lng]), { color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.18 }).addTo(map)
+        pts.forEach((p) => bounds.push([p.lat, p.lng]))
+      })
     if (bounds.length) map.fitBounds(bounds, { padding: [24, 24] })
     setTimeout(() => map.invalidateSize(), 50)
     return () => { map.remove(); mapInst.current = null }

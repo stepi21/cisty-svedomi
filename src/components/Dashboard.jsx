@@ -349,8 +349,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function normalizeAreas(area) {
     if (!area || area.length === 0) return []
-    if (area[0] && typeof area[0].lat === 'number') return [area] // starý formát: jeden plochý seznam bodů
-    return area // nový formát: pole polygonů
+    const raw = (area[0] && typeof area[0].lat === 'number') ? [area] : area
+    // obranně: vyřaď cokoli, co není platné pole bodů {lat, lng} — appka tak nikdy nespadne na poškozených datech
+    return raw
+      .filter((pts) => Array.isArray(pts))
+      .map((pts) => pts.filter((p) => p && typeof p.lat === 'number' && typeof p.lng === 'number'))
+      .filter((pts) => pts.length >= 3)
   }
 
   function areaCentroid(pts) {
@@ -2348,25 +2352,6 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
     })
   }
 
-  function toggleLocation(loc) {
-    setDraft((d) => {
-      const linked = d.linkedLocationIds || []
-      if (linked.includes(loc.id)) {
-        return { ...d, linkedLocationIds: linked.filter((id) => id !== loc.id) }
-      }
-      const next = { ...d, linkedLocationIds: [...linked, loc.id] }
-      if (loc.area && d.area) {
-        next.area = [...(d.area || []), loc.area]
-      } else {
-        onZoomToPoint?.(loc.lat, loc.lng)
-      }
-      if (!d.revir) next.revir = loc.revir || ''
-      if (!d.title) next.title = loc.name
-      else if (!d.title.includes(loc.name)) next.title = `${d.title}, ${loc.name}`
-      return next
-    })
-  }
-
   async function handleFetchWeather() {
     if (!draft.date) { setWeatherError('Nejdřív vyplň datum.'); return }
     setWeatherBusy(true); setWeatherError(null)
@@ -2402,25 +2387,6 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
         <div className="perforation"></div>
         <div className="ticket-body">
           <form onSubmit={handleSubmit}>
-            {locationsCatalog.length > 0 && (
-              <div style={{ marginBottom: 10 }}>
-                <label className="field-label" style={{ marginTop: 0 }}>Místa z katalogu</label>
-                {locationsCatalog
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((loc) => {
-                    const checked = (draft.linkedLocationIds || []).includes(loc.id)
-                    return (
-                      <label key={loc.id} className="location-check-row">
-                        <input type="checkbox" checked={checked} onChange={() => toggleLocation(loc)} />
-                        <span>{loc.area ? '🎯' : '📍'} {loc.name}{loc.revir ? ` (${loc.revir})` : ''}</span>
-                      </label>
-                    )
-                  })}
-                <p className="help-note" style={{ marginTop: 4 }}>
-                  🎯 = vyšrafovaná oblast (vykreslí se jen u přívlače, jinde jen doplní název/revír a přiblíží mapu) · 📍 = jen orientační bod
-                </p>
-              </div>
-            )}
             {draft.area ? (
               <div style={{ marginBottom: 10 }}>
                 <label className="field-label" style={{ marginTop: 0 }}>Oblasti ({draft.area.length})</label>
