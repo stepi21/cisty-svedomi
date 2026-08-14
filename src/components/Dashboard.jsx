@@ -102,7 +102,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       .select('*')
       .eq('group_id', groupId)
       .order('name')
-    if (data) setLocationsCatalog(data)
+    if (data) {
+      setLocationsCatalog(data)
+      for (const loc of data) {
+        if (loc.area && (loc.lat == null || loc.lng == null)) {
+          const c = areaCentroid(loc.area.flat())
+          await supabase.from('locations').update({ lat: c.lat, lng: c.lng }).eq('id', loc.id)
+          loc.lat = c.lat
+          loc.lng = c.lng
+        }
+      }
+    }
   }
 
   async function loadMembers() {
@@ -525,7 +535,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   function startAddLocationArea() {
     setShowLocations(false)
     startAddAreaPoint((newAreas) => {
-      setSavingLocationFor({ title: '', revir: '', area: newAreas, lat: null, lng: null })
+      const c = areaCentroid(newAreas.flat())
+      setSavingLocationFor({ title: '', revir: '', area: newAreas, lat: c.lat, lng: c.lng })
     })
   }
 
@@ -712,7 +723,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       })
     } else {
       const first = picked[0]
-      if (first) mapInstance.current?.setView([first.lat, first.lng], 15)
+      if (first && first.lat != null && first.lng != null) mapInstance.current?.setView([first.lat, first.lng], 15)
       pendingPointModeCatalogRef.current = { revir, title, locationIds: picked.map((l) => l.id) }
       setRodPointsDraft([])
       setPlacementTarget('session-point')
@@ -1026,8 +1037,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   function startManageLocationAreas(location) {
-    setEditingAreasLocation({ id: location.id, areas: normalizeAreas(location.area).map((a) => [...a]) })
+    const areas = normalizeAreas(location.area)
+    setEditingAreasLocation({ id: location.id, areas: areas.map((a) => [...a]) })
     setShowLocations(false)
+    const bounds = areas.flat().map((p) => [p.lat, p.lng])
+    if (bounds.length) mapInstance.current?.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 })
   }
 
   function removeManagedLocationArea(idx) {
