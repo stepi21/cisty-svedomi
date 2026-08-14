@@ -9,7 +9,7 @@ const fishSVG = (color) => `
   </svg>`
 const CATEGORY_COLOR = { dravec: '#5C7A85', bila: '#C4A572' }
 
-export default function LocationsModal({ locations, sessions, userId, initialLocationId, onUpdate, onDelete, onClose, onAddArea, onOpenCatch, onOpenSession }) {
+export default function LocationsModal({ locations, sessions, userId, initialLocationId, onUpdate, onDelete, onClose, onAddArea, onManageAreas, onOpenCatch, onOpenSession }) {
   const [selectedId, setSelectedId] = useState(initialLocationId || null)
   const [editing, setEditing] = useState(false)
 
@@ -49,6 +49,7 @@ export default function LocationsModal({ locations, sessions, userId, initialLoc
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
               <button className="new-btn" onClick={() => setSelectedId(null)}>← Zpět na místa</button>
               {canEdit && <button className="new-btn" onClick={() => setEditing(true)}>✏️ Upravit</button>}
+              {canEdit && <button className="new-btn" onClick={() => onManageAreas(selected)}>🗺 Upravit oblasti</button>}
               {canEdit && (
                 <button
                   className="new-btn danger-btn"

@@ -75,6 +75,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [editingRodId, setEditingRodId] = useState(null)         // id prutu, co se právě edituje inline
   const [editingSession, setEditingSession] = useState(null)     // rozepsaná editace výpravy (datum, počasí...)
   const [editingAreasSession, setEditingAreasSession] = useState(null) // {id, areas:[]} — správa oblastí u uložené výpravy
+  const [editingAreasLocation, setEditingAreasLocation] = useState(null) // {id, areas:[]} — správa oblastí u místa v katalogu
 
   const placementTargetRef = useRef(null)
   useEffect(() => { placementTargetRef.current = placementTarget }, [placementTarget])
@@ -697,7 +698,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         alert('Žádné z vybraných míst nemá uloženou oblast — pro přívlač zvol místo s vyšrafovanou plochou, nebo nakresli novou.')
         return
       }
-      const areas = areaPicked.map((l) => l.area)
+      const areas = areaPicked.flatMap((l) => l.area)
       const overallCentroid = areaCentroid(areas.flat())
       const firstAreaCentroid = areaCentroid(areas[0])
       const live = liveDefaults()
@@ -1022,6 +1023,33 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     await loadSessions()
     setActiveId(id)
     setViewMode('detail')
+  }
+
+  function startManageLocationAreas(location) {
+    setEditingAreasLocation({ id: location.id, areas: normalizeAreas(location.area).map((a) => [...a]) })
+    setShowLocations(false)
+  }
+
+  function removeManagedLocationArea(idx) {
+    setEditingAreasLocation((prev) => ({ ...prev, areas: prev.areas.filter((_, i) => i !== idx) }))
+  }
+
+  function addAreasToManagedLocation(newAreas) {
+    setEditingAreasLocation((prev) => ({ ...prev, areas: [...prev.areas, ...newAreas] }))
+  }
+
+  async function saveManagedLocationAreas() {
+    const { id, areas } = editingAreasLocation
+    const updates = { area: areas.length ? areas : null }
+    if (areas.length) {
+      const c = areaCentroid(areas.flat())
+      updates.lat = c.lat
+      updates.lng = c.lng
+    }
+    await supabase.from('locations').update(updates).eq('id', id)
+    setEditingAreasLocation(null)
+    await loadLocationsCatalog()
+    setShowLocations(true)
   }
 
   function proceedRelocateArea() {
@@ -1478,6 +1506,26 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             </div>
           )}
 
+          {editingAreasLocation && !areaDraft && (
+            <div className="type-picker" style={{ minWidth: 260 }}>
+              <div className="type-picker-title">Oblasti místa ({editingAreasLocation.areas.length})</div>
+              {editingAreasLocation.areas.map((pts, idx) => (
+                <div key={idx} className="rod-edit-row" style={{ marginBottom: 4 }}>
+                  <span className="hint-text" style={{ margin: 0, flex: 1 }}>Oblast {idx + 1} ({pts.length} bodů)</span>
+                  <button className="new-btn danger-btn" onClick={() => removeManagedLocationArea(idx)}>🗑</button>
+                </div>
+              ))}
+              {editingAreasLocation.areas.length === 0 && (
+                <p className="hint-text">Žádná oblast — přidej aspoň jednu, nebo zruš úpravu.</p>
+              )}
+              <button className="new-btn" onClick={() => startAddAreaPoint((newAreas) => addAreasToManagedLocation(newAreas))} style={{ marginTop: 6 }}>+ Přidat oblast</button>
+              <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                <button className="new-btn" onClick={() => { setEditingAreasLocation(null); setShowLocations(true) }}>Zrušit</button>
+                <button className="btn-primary" style={{ margin: 0 }} onClick={saveManagedLocationAreas} disabled={editingAreasLocation.areas.length === 0}>Uložit</button>
+              </div>
+            </div>
+          )}
+
           {catchChoosing && activeSession && (
             <div className="type-picker">
               <div className="type-picker-title">Kde jsi rybu chytil?</div>
@@ -1654,6 +1702,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onDelete={deleteLocationFromCatalog}
           onClose={() => { setShowLocations(false); setLocationsReturnId(null) }}
           onAddArea={startAddLocationArea}
+          onManageAreas={startManageLocationAreas}
           onOpenCatch={(c, locId) => { setShowLocations(false); setLocationsReturnId(locId); setBaitsInitialKey(null); setTicketCatch(c) }}
           onOpenSession={(sessionId) => { setShowLocations(false); setActiveId(sessionId); setViewMode('detail') }}
         />
