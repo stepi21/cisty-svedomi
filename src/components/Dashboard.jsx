@@ -52,6 +52,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [showBaits, setShowBaits] = useState(false)
   const [showLocations, setShowLocations] = useState(false)
   const [baitsInitialKey, setBaitsInitialKey] = useState(null)
+  const [locationsReturnId, setLocationsReturnId] = useState(null)
   const [baitCatalog, setBaitCatalog] = useState([])
   const [locationsCatalog, setLocationsCatalog] = useState([])
   const [savingLocationFor, setSavingLocationFor] = useState(null) // {title, revir, area, lat, lng} — normalizovaný zdroj pro uložení do katalogu
@@ -180,7 +181,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         const targetId = pendingTicketCatchIdRef.current
         for (const s of data) {
           const found = (s.catches || []).find((c) => c.id === targetId)
-          if (found) { setBaitsInitialKey(null); setTicketCatch(found); break }
+          if (found) { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(found); break }
         }
         pendingTicketCatchIdRef.current = null
       }
@@ -398,7 +399,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         const html = `<div style="width:32px;height:32px;background:${fillColor};border-radius:50%;display:flex;align-items:center;justify-content:center;border:5px solid ${ringColor};box-shadow:0 2px 6px rgba(0,0,0,.35)">${fishSVG('#fff')}</div>`
         const icon = L.divIcon({ html, className: '', iconSize: [32, 32], iconAnchor: [16, 16] })
         const marker = L.marker([c.lat ?? activeSession.lat, c.lng ?? activeSession.lng], { icon })
-        marker.on('click', () => { setBaitsInitialKey(null); setTicketCatch(c) })
+        marker.on('click', () => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c) })
         marker.addTo(markersLayer.current)
       })
       return
@@ -420,7 +421,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       const html = `<div style="width:28px;height:28px;background:${fillColor};border-radius:50%;display:flex;align-items:center;justify-content:center;border:5px solid ${ringColor};box-shadow:0 2px 6px rgba(0,0,0,.35)">${fishSVG('#fff')}</div>`
       const icon = L.divIcon({ html, className: '', iconSize: [28, 28], iconAnchor: [14, 14] })
       const marker = L.marker([c.lat ?? s.lat, c.lng ?? s.lng], { icon })
-      marker.on('click', () => { setBaitsInitialKey(null); setTicketCatch(c) })
+      marker.on('click', () => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c) })
       marker.addTo(markersLayer.current)
     })
 
@@ -1291,7 +1292,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                     const isGeneral = target.includes('obecně')
                     const matchesTarget = target && (isGeneral ? c.category === 'dravec' : c.species?.trim().toLowerCase() === target)
                     return (
-                      <div className="catch-row" key={c.id} onClick={() => { setBaitsInitialKey(null); setTicketCatch(c) }}>
+                      <div className="catch-row" key={c.id} onClick={() => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c) }}>
                         <div className="fish-mini" dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />
                         <div>
                           <div className="c-name">{c.species} {matchesTarget && <span title="Odpovídá cíli výpravy">🎯</span>}</div>
@@ -1528,14 +1529,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       )}
 
       {showRecords && (
-        <RecordsModal sessions={sessions} userName={userName} userColor={userColor} onClose={() => setShowRecords(false)} onOpenCatch={(c) => { setBaitsInitialKey(null); setTicketCatch(c); setShowRecords(false) }} />
+        <RecordsModal sessions={sessions} userName={userName} userColor={userColor} onClose={() => setShowRecords(false)} onOpenCatch={(c) => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c); setShowRecords(false) }} />
       )}
 
       {showGallery && (
         <GalleryModal
           sessions={sessions}
           onClose={() => setShowGallery(false)}
-          onOpenCatch={(c) => { setBaitsInitialKey(null); setTicketCatch(c); setShowGallery(false) }}
+          onOpenCatch={(c) => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c); setShowGallery(false) }}
           onOpenBait={(label) => { setShowGallery(false); setBaitsInitialKey(label.trim().toLowerCase()); setShowBaits(true) }}
         />
       )}
@@ -1552,7 +1553,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onRemoveFromRods={removeBaitFromMyRods}
           onBackfillBaitPhoto={backfillBaitPhoto}
           onClose={() => { setShowBaits(false); setBaitsInitialKey(null) }}
-          onOpenCatch={(c, key) => { setShowBaits(false); setBaitsInitialKey(key); setTicketCatch(c) }}
+          onOpenCatch={(c, key) => { setShowBaits(false); setBaitsInitialKey(key); setLocationsReturnId(null); setTicketCatch(c) }}
           onOpenSession={(sessionId) => { setShowBaits(false); setActiveId(sessionId); setViewMode('detail') }}
         />
       )}
@@ -1560,11 +1561,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       {showLocations && (
         <LocationsModal
           locations={locationsCatalog}
+          sessions={sessions}
           userId={userId}
+          initialLocationId={locationsReturnId}
           onUpdate={updateLocationsCatalogEntry}
           onDelete={deleteLocationFromCatalog}
-          onClose={() => setShowLocations(false)}
+          onClose={() => { setShowLocations(false); setLocationsReturnId(null) }}
           onAddArea={startAddLocationArea}
+          onOpenCatch={(c, locId) => { setShowLocations(false); setLocationsReturnId(locId); setBaitsInitialKey(null); setTicketCatch(c) }}
+          onOpenSession={(sessionId) => { setShowLocations(false); setActiveId(sessionId); setViewMode('detail') }}
         />
       )}
 
@@ -1627,6 +1632,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onClose={() => {
             setTicketCatch(null)
             if (baitsInitialKey) setShowBaits(true)
+            if (locationsReturnId) setShowLocations(true)
           }}
           onUpdated={loadSessions}
           onDeleted={() => { setTicketCatch(null); loadSessions() }}

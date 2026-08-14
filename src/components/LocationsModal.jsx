@@ -1,7 +1,16 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import L from 'leaflet'
 
-export default function LocationsModal({ locations, userId, onUpdate, onDelete, onClose, onAddArea }) {
-  const [selectedId, setSelectedId] = useState(null)
+const fishSVG = (color) => `
+  <svg viewBox="0 0 64 34" xmlns="http://www.w3.org/2000/svg">
+    <path d="M4,17 C4,8 18,3 32,3 C46,3 58,9 60,17 C58,25 46,31 32,31 C18,31 4,26 4,17 Z" fill="${color}"/>
+    <path d="M4,17 L-6,8 L-6,26 Z" fill="${color}"/>
+    <circle cx="46" cy="14" r="2.3" fill="#1a1a1a"/>
+  </svg>`
+const CATEGORY_COLOR = { dravec: '#5C7A85', bila: '#C4A572' }
+
+export default function LocationsModal({ locations, sessions, userId, initialLocationId, onUpdate, onDelete, onClose, onAddArea, onOpenCatch, onOpenSession }) {
+  const [selectedId, setSelectedId] = useState(initialLocationId || null)
   const [editing, setEditing] = useState(false)
 
   const selected = locations.find((l) => l.id === selectedId)
@@ -20,9 +29,16 @@ export default function LocationsModal({ locations, userId, onUpdate, onDelete, 
       )
     }
 
+    const linkedSessions = sessions.filter((s) => (s.session_locations || []).some((sl) => sl.location_id === selected.id))
+    const catches = []
+    linkedSessions.forEach((s) => {
+      ;(s.catches || []).forEach((c) => catches.push({ ...c, sessionRef: s }))
+    })
+    const sessionsWithoutCatch = linkedSessions.filter((s) => (s.catches || []).length === 0)
+
     return (
       <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
-        <div className="ticket" style={{ maxWidth: 400 }}>
+        <div className="ticket" style={{ maxWidth: 440 }}>
           <div className="ticket-top">
             <button className="ticket-close" onClick={onClose}>✕</button>
             <div className="eyebrow">Místo</div>
@@ -41,8 +57,45 @@ export default function LocationsModal({ locations, userId, onUpdate, onDelete, 
               )}
             </div>
             {selected.revir && <p className="hint-text">Revír: {selected.revir}</p>}
-            <p className="hint-text">Vyšrafovaná oblast ({selected.area.length} ploch)</p>
-            {!canEdit && <p className="help-note" style={{ marginTop: 8 }}>Toto místo přidal jiný člen party — upravit nebo smazat ho může jen on.</p>}
+            <LocationPreviewMap location={selected} />
+
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 14 }}>
+              {catches.length === 0 ? 'Zatím na tomto místě nic nechyceno.' : `${catches.length} chycených ryb na tomto místě`}
+            </p>
+            {catches.length > 0 && (
+              <div className="catch-list" style={{ maxHeight: 'none' }}>
+                {catches
+                  .sort((a, b) => (b.caught_at || b.sessionRef.session_date || '').localeCompare(a.caught_at || a.sessionRef.session_date || ''))
+                  .map((c) => (
+                    <div key={c.id} className="catch-row" onClick={() => onOpenCatch(c, selected.id)}>
+                      <div className="fish-mini" dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />
+                      <div>
+                        <div className="c-name">{c.species}</div>
+                        <div className="c-sub">{c.length_cm ?? '—'} cm · {c.sessionRef.session_date}</div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            {sessionsWithoutCatch.length > 0 && (
+              <>
+                <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 14 }}>
+                  Použito i na těchto výpravách, bez zaznamenaného úlovku:
+                </p>
+                <div className="catch-list" style={{ maxHeight: 'none' }}>
+                  {sessionsWithoutCatch
+                    .sort((a, b) => (b.session_date || '').localeCompare(a.session_date || ''))
+                    .map((s) => (
+                      <div key={s.id} className="record-row" onClick={() => onOpenSession(s.id)}>
+                        <div className="record-head"><strong>{s.title}</strong><span className="c-sub">{s.session_date}</span></div>
+                      </div>
+                    ))}
+                </div>
+              </>
+            )}
+
+            {!canEdit && <p className="help-note" style={{ marginTop: 12 }}>Toto místo přidal jiný člen party — upravit nebo smazat ho může jen on.</p>}
           </div>
         </div>
       </div>
@@ -75,6 +128,29 @@ export default function LocationsModal({ locations, userId, onUpdate, onDelete, 
       </div>
     </div>
   )
+}
+
+function LocationPreviewMap({ location }) {
+  const mapEl = useRef(null)
+  const mapInst = useRef(null)
+
+  useEffect(() => {
+    if (!mapEl.current || !location.area) return
+    const map = L.map(mapEl.current, { zoomControl: false, attributionControl: false, dragging: true, scrollWheelZoom: false })
+    mapInst.current = map
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map)
+    const bounds = []
+    location.area.forEach((pts) => {
+      L.polygon(pts.map((p) => [p.lat, p.lng]), { color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.18 }).addTo(map)
+      pts.forEach((p) => bounds.push([p.lat, p.lng]))
+    })
+    if (bounds.length) map.fitBounds(bounds, { padding: [24, 24] })
+    setTimeout(() => map.invalidateSize(), 50)
+    return () => { map.remove(); mapInst.current = null }
+  }, [location.id])
+
+  if (!location.area) return null
+  return <div ref={mapEl} style={{ width: '100%', height: 200, borderRadius: 10, marginTop: 8, border: '1px solid var(--paper-line)' }} />
 }
 
 function EditLocationForm({ location, onCancel, onSaved }) {
