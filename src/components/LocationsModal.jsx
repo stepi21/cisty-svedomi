@@ -64,19 +64,19 @@ export default function LocationsModal({ locations, userId, onUpdate, onDelete, 
         <div className="perforation"></div>
         <div className="ticket-body">
           <p className="help-note" style={{ marginBottom: 10 }}>
-            Nová místa přidáš přímo tady, nebo tlačítkem "📌 Uložit toto místo do katalogu" u výpravy.
+            Nová místa přidáš přímo tady, nebo tlačítkem "📌 Uložit toto místo do katalogu" u výpravy. Obojí (oblast i bod) jde použít u jakéhokoli typu výpravy — jen u přívlače se oblast rovnou vykreslí, jinde slouží k přiblížení mapy.
           </p>
           {!choosingNew ? (
             <button className="new-btn" onClick={() => setChoosingNew(true)} style={{ marginBottom: 14 }}>+ Přidat místo</button>
           ) : (
             <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-              <button className="new-btn" onClick={onAddArea}>🎯 Oblast (přívlač)</button>
-              <button className="new-btn" onClick={onAddPoint}>📍 Bod (kapr, muška...)</button>
+              <button className="new-btn" onClick={onAddArea}>🎯 Oblast (vyšrafovaná plocha)</button>
+              <button className="new-btn" onClick={onAddPoint}>📍 Jen orientační bod</button>
               <button className="new-btn" onClick={() => setChoosingNew(false)}>Zrušit</button>
             </div>
           )}
 
-          <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 15, margin: '0 0 6px' }}>Oblasti (přívlač)</h3>
+          <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 15, margin: '0 0 6px' }}>Oblasti (vyšrafovaná plocha)</h3>
           {areaLocations.length === 0 && <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Zatím žádná.</p>}
           {areaLocations.map((l) => (
             <div key={l.id} className="record-row" onClick={() => setSelectedId(l.id)}>
@@ -85,7 +85,7 @@ export default function LocationsModal({ locations, userId, onUpdate, onDelete, 
             </div>
           ))}
 
-          <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 15, margin: '18px 0 6px' }}>Body (kapr, muška, plavaná...)</h3>
+          <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 15, margin: '18px 0 6px' }}>Body (jen orientační)</h3>
           {pointLocations.length === 0 && <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Zatím žádný.</p>}
           {pointLocations.map((l) => (
             <div key={l.id} className="record-row" onClick={() => setSelectedId(l.id)}>
