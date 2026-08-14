@@ -64,6 +64,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   // --- flow state pro vytváření nové výpravy ---
   const [pickingType, setPickingType] = useState(false)         // ukazuje mini panel "jaký typ?"
+  const [locationPickerStep, setLocationPickerStep] = useState(null) // null | 'choose' | 'catalog'
+  const [pickingCatalogIds, setPickingCatalogIds] = useState([])
   const [areaDraft, setAreaDraft] = useState(null)               // {areas:[], current:[]} během kreslení oblasti
   const [rodPointsDraft, setRodPointsDraft] = useState(null)     // [{lat,lng}, ...] během sbírání pozic prutů (bodové typy)
   const [placementTarget, setPlacementTarget] = useState(null)   // 'session-point' | 'area-point' | 'rod-<i>' | 'catch-point'
@@ -292,6 +294,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   const pendingTypeRef = useRef('kapr')
   const pendingLiveRef = useRef(false)
+  const pendingPointModeCatalogRef = useRef(null)
 
   // --- kreslení preview polygonu(ů) při tvorbě oblasti ---
   useEffect(() => {
@@ -653,10 +656,63 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   function chooseType(type) {
     setPickingType(false)
     pendingTypeRef.current = type
+    setLocationPickerStep('choose')
+  }
+
+  function startDrawNew() {
+    setLocationPickerStep(null)
+    pendingPointModeCatalogRef.current = null
+    const type = pendingTypeRef.current
     if (AREA_TYPES.includes(type)) {
       setAreaDraft({ areas: [], current: [] })
       setPlacementTarget('area-point')
     } else {
+      setRodPointsDraft([])
+      setPlacementTarget('session-point')
+    }
+  }
+
+  function togglePickingCatalogId(id) {
+    setPickingCatalogIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
+  }
+
+  function proceedFromCatalogSelection() {
+    const type = pendingTypeRef.current
+    const picked = locationsCatalog.filter((l) => pickingCatalogIds.includes(l.id))
+    setLocationPickerStep(null)
+    setPickingCatalogIds([])
+    if (picked.length === 0) return
+
+    let revir = ''
+    let title = ''
+    picked.forEach((loc) => {
+      if (!revir) revir = loc.revir || ''
+      if (!title) title = loc.name
+      else if (!title.includes(loc.name)) title = `${title}, ${loc.name}`
+    })
+
+    if (AREA_TYPES.includes(type)) {
+      const areaPicked = picked.filter((l) => l.area)
+      if (areaPicked.length === 0) {
+        alert('Žádné z vybraných míst nemá uloženou oblast — pro přívlač zvol místo s vyšrafovanou plochou, nebo nakresli novou.')
+        return
+      }
+      const areas = areaPicked.map((l) => l.area)
+      const overallCentroid = areaCentroid(areas.flat())
+      const firstAreaCentroid = areaCentroid(areas[0])
+      const live = liveDefaults()
+      setDraftSession({
+        type, title, date: live.date, timeFrom: live.timeFrom, timeTo: '', revir, target_species: '',
+        temp: '', pressure: '', wind: '', desc: '',
+        point: overallCentroid, area: areas,
+        rods: [{ name: 'Prut 1', lat: firstAreaCentroid.lat, lng: firstAreaCentroid.lng, baits: [{ name: '', photoFile: null }] }],
+        live: live.live,
+        linkedLocationIds: picked.map((l) => l.id),
+      })
+    } else {
+      const first = picked[0]
+      if (first) mapInstance.current?.setView([first.lat, first.lng], 15)
+      pendingPointModeCatalogRef.current = { revir, title, locationIds: picked.map((l) => l.id) }
       setRodPointsDraft([])
       setPlacementTarget('session-point')
     }
@@ -670,6 +726,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setAreaDraft(null)
     setRodPointsDraft(null)
     setPlacementTarget(null)
+    pendingPointModeCatalogRef.current = null
   }
 
   function undoRodPoint() {
@@ -683,13 +740,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setPlacementTarget(null)
     setRodPointsDraft(null)
     const live = liveDefaults()
+    const catalogInfo = pendingPointModeCatalogRef.current
+    pendingPointModeCatalogRef.current = null
     setDraftSession({
       type: pendingTypeRef.current,
-      title: '', date: live.date, timeFrom: live.timeFrom, timeTo: '', revir: '', target_species: '',
+      title: catalogInfo?.title || '', date: live.date, timeFrom: live.timeFrom, timeTo: '',
+      revir: catalogInfo?.revir || '', target_species: '',
       temp: '', pressure: '', wind: '', desc: '',
       point: first, area: null,
       rods,
       live: live.live,
+      linkedLocationIds: catalogInfo?.locationIds || [],
     })
   }
 
@@ -1369,6 +1430,31 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 <button key={t.value} className="type-btn" onClick={() => chooseType(t.value)}>{t.label}</button>
               ))}
               <button className="type-cancel" onClick={() => setPickingType(false)}>Zrušit</button>
+            </div>
+          )}
+
+          {locationPickerStep === 'choose' && (
+            <div className="type-picker">
+              <div className="type-picker-title">Jak zadat místo?</div>
+              <button className="type-btn" onClick={() => setLocationPickerStep('catalog')}>📍 Z katalogu</button>
+              <button className="type-btn" onClick={startDrawNew}>🖊 Naklikat nové na mapě</button>
+              <button className="type-cancel" onClick={() => setLocationPickerStep(null)}>Zrušit</button>
+            </div>
+          )}
+
+          {locationPickerStep === 'catalog' && (
+            <div className="type-picker" style={{ minWidth: 260 }}>
+              <div className="type-picker-title">Vyber místa z katalogu</div>
+              {locationsCatalog.length === 0 && <p className="hint-text">Katalog je zatím prázdný.</p>}
+              {locationsCatalog.map((loc) => (
+                <label key={loc.id} className="location-check-row">
+                  <input type="checkbox" checked={pickingCatalogIds.includes(loc.id)} onChange={() => togglePickingCatalogId(loc.id)} />
+                  <span>{loc.area ? '🎯' : '📍'} {loc.name}{loc.revir ? ` (${loc.revir})` : ''}</span>
+                </label>
+              ))}
+              <button className="btn-primary" style={{ margin: '8px 0 0', width: '100%' }} onClick={proceedFromCatalogSelection} disabled={pickingCatalogIds.length === 0}>Pokračovat</button>
+              <button className="new-btn" style={{ marginTop: 6 }} onClick={() => setLocationPickerStep('choose')}>← Zpět</button>
+              <button className="type-cancel" onClick={() => { setLocationPickerStep(null); setPickingCatalogIds([]) }}>Zrušit</button>
             </div>
           )}
 
