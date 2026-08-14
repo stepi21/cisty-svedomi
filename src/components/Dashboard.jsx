@@ -67,6 +67,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [catchChoosing, setCatchChoosing] = useState(false)      // mini panel "na jaké pozici?"
   const [editingRodId, setEditingRodId] = useState(null)         // id prutu, co se právě edituje inline
   const [editingSession, setEditingSession] = useState(null)     // rozepsaná editace výpravy (datum, počasí...)
+  const [editingAreasSession, setEditingAreasSession] = useState(null) // {id, areas:[]} — správa oblastí u uložené výpravy
 
   const placementTargetRef = useRef(null)
   useEffect(() => { placementTargetRef.current = placementTarget }, [placementTarget])
@@ -214,12 +215,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       return
     }
 
-    if (target === 'area-point') {
-      setAreaDraft((prev) => ({ areas: prev?.areas || [], current: [...(prev?.current || []), point] }))
-      return
-    }
-
-    if (target === 'relocate-area-point') {
+    if (target === 'area-point' || target === 'relocate-area-point' || target === 'area-point-append') {
       setAreaDraft((prev) => ({ areas: prev?.areas || [], current: [...(prev?.current || []), point] }))
       return
     }
@@ -622,6 +618,25 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     })
   }
 
+  // --- obecné "přidej mi jednu nebo víc oblastí" — použitelné jak v rozepsaném formuláři, tak u už uložené výpravy ---
+  const pendingAreaAppendRef = useRef(null)
+
+  function startAddAreaPoint(onComplete) {
+    pendingAreaAppendRef.current = onComplete
+    setAreaDraft({ areas: [], current: [] })
+    setPlacementTarget('area-point-append')
+  }
+
+  function finishAppendArea() {
+    const areas = areaDraft.current.length >= 3 ? [...areaDraft.areas, areaDraft.current] : areaDraft.areas
+    if (areas.length === 0) return
+    setAreaDraft(null)
+    setPlacementTarget(null)
+    const cb = pendingAreaAppendRef.current
+    pendingAreaAppendRef.current = null
+    cb?.(areas)
+  }
+
   function startAddCatch() {
     setCatchChoosing(true)
     setMobileSheetOpen(false)
@@ -794,13 +809,43 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     await saveEditSession()
     relocateSessionIdRef.current = s.id
     setMobileSheetOpen(false)
-    if (AREA_TYPES.includes(s.type)) {
-      pendingTypeRef.current = s.type
-      setAreaDraft({ areas: [], current: [] })
-      setPlacementTarget('relocate-area-point')
-    } else {
-      setPlacementTarget('relocate-session-point')
+    setPlacementTarget('relocate-session-point')
+  }
+
+  function startManageAreas(session) {
+    setEditingAreasSession({ id: session.id, areas: normalizeAreas(session.area).map((a) => [...a]) })
+    setEditingSession(null)
+    setMobileSheetOpen(false)
+  }
+
+  function removeManagedArea(idx) {
+    setEditingAreasSession((prev) => ({ ...prev, areas: prev.areas.filter((_, i) => i !== idx) }))
+  }
+
+  function addAreasToManaged(newAreas) {
+    setEditingAreasSession((prev) => ({ ...prev, areas: [...prev.areas, ...newAreas] }))
+  }
+
+  async function saveManagedAreas() {
+    const { id, areas } = editingAreasSession
+    const updates = { area: areas.length ? areas : null }
+    if (areas.length) {
+      const overallCentroid = areaCentroid(areas.flat())
+      updates.lat = overallCentroid.lat
+      updates.lng = overallCentroid.lng
     }
+    await supabase.from('sessions').update(updates).eq('id', id)
+    if (areas.length) {
+      const firstAreaCentroid = areaCentroid(areas[0])
+      const { data: rods } = await supabase.from('rods').select('id').eq('session_id', id).order('created_at').limit(1)
+      if (rods && rods[0]) {
+        await supabase.from('rods').update({ lat: firstAreaCentroid.lat, lng: firstAreaCentroid.lng }).eq('id', rods[0].id)
+      }
+    }
+    setEditingAreasSession(null)
+    await loadSessions()
+    setActiveId(id)
+    setViewMode('detail')
   }
 
   function proceedRelocateArea() {
@@ -1197,6 +1242,26 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             </div>
           )}
 
+          {editingAreasSession && !areaDraft && (
+            <div className="type-picker" style={{ minWidth: 260 }}>
+              <div className="type-picker-title">Oblasti výpravy ({editingAreasSession.areas.length})</div>
+              {editingAreasSession.areas.map((pts, idx) => (
+                <div key={idx} className="rod-edit-row" style={{ marginBottom: 4 }}>
+                  <span className="hint-text" style={{ margin: 0, flex: 1 }}>Oblast {idx + 1} ({pts.length} bodů)</span>
+                  <button className="new-btn danger-btn" onClick={() => removeManagedArea(idx)}>🗑</button>
+                </div>
+              ))}
+              {editingAreasSession.areas.length === 0 && (
+                <p className="hint-text">Žádná oblast — přidej aspoň jednu, nebo zruš úpravu.</p>
+              )}
+              <button className="new-btn" onClick={() => startAddAreaPoint((newAreas) => addAreasToManaged(newAreas))} style={{ marginTop: 6 }}>+ Přidat oblast</button>
+              <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                <button className="new-btn" onClick={() => setEditingAreasSession(null)}>Zrušit</button>
+                <button className="btn-primary" style={{ margin: 0 }} onClick={saveManagedAreas} disabled={editingAreasSession.areas.length === 0}>Uložit</button>
+              </div>
+            </div>
+          )}
+
           {catchChoosing && activeSession && (
             <div className="type-picker">
               <div className="type-picker-title">Kde jsi rybu chytil?</div>
@@ -1243,12 +1308,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 <button className="new-btn" onClick={finishCurrentArea} disabled={areaDraft.current.length < 3}>+ Další oblast</button>
                 <button
                   className="btn-primary" style={{ margin: 0 }}
-                  onClick={placementTarget === 'relocate-area-point' ? proceedRelocateArea : proceedToForm}
+                  onClick={placementTarget === 'relocate-area-point' ? proceedRelocateArea : placementTarget === 'area-point-append' ? finishAppendArea : proceedToForm}
                   disabled={areaDraft.areas.length === 0 && areaDraft.current.length < 3}
                 >
-                  {placementTarget === 'relocate-area-point' ? 'Uložit novou oblast' : 'Hotovo, pokračovat'}
+                  {placementTarget === 'relocate-area-point' ? 'Uložit novou oblast' : placementTarget === 'area-point-append' ? 'Přidat oblast(i)' : 'Hotovo, pokračovat'}
                 </button>
-                <button className="new-btn" onClick={cancelAreaOrPoint}>Zrušit</button>
+                <button className="new-btn" onClick={placementTarget === 'area-point-append' ? () => { setAreaDraft(null); setPlacementTarget(null); pendingAreaAppendRef.current = null } : cancelAreaOrPoint}>Zrušit</button>
               </div>
             </div>
           )}
@@ -1293,6 +1358,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           baitCatalog={mergedBaitOptions(baitCategoryFor(draftSession.type))}
           baitCategory={baitCategoryFor(draftSession.type)}
           onAddBait={addBaitToCatalog}
+          onStartAddArea={startAddAreaPoint}
         />
       )}
 
@@ -1356,6 +1422,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onClose={() => setEditingSession(null)}
           onDelete={deleteSession}
           onRelocate={handleRelocateSession}
+          onManageAreas={() => startManageAreas(sessions.find((s) => s.id === editingSession.id))}
         />
       )}
 
@@ -1617,7 +1684,7 @@ function StatsModal({ sessions, members, userColor, onClose }) {
   )
 }
 
-function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onRelocate }) {
+function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onRelocate, onManageAreas }) {
   const [busy, setBusy] = useState(false)
   const [weatherBusy, setWeatherBusy] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
@@ -1678,9 +1745,15 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
               </div>
             </div>
             <p className="hint-text">🌙 {moonPhaseName(draft.date)}</p>
-            <button type="button" className="new-btn" onClick={onRelocate} style={{ marginBottom: 10 }}>
-              🗺 {AREA_TYPES.includes(draft.type) ? 'Překreslit oblast na mapě' : 'Změnit bod nahození na mapě'}
-            </button>
+            {AREA_TYPES.includes(draft.type) ? (
+              <button type="button" className="new-btn" onClick={onManageAreas} style={{ marginBottom: 10 }}>
+                🗺 Upravit oblasti (přidat / smazat)
+              </button>
+            ) : (
+              <button type="button" className="new-btn" onClick={onRelocate} style={{ marginBottom: 10 }}>
+                🗺 Změnit bod nahození na mapě
+              </button>
+            )}
 
             <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy}>
               {weatherBusy ? 'Zjišťuji počasí…' : '🌤 Přepočítat počasí pro nové datum'}
@@ -1877,7 +1950,7 @@ function RodEditRow({ rod, color, baitPhotoMap = {}, baitListId = 'known-baits-a
   )
 }
 
-function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, onAddBait }) {
+function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, onAddBait, onStartAddArea }) {
   const [busy, setBusy] = useState(false)
   const [weatherBusy, setWeatherBusy] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
@@ -1954,9 +2027,26 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
         <div className="perforation"></div>
         <div className="ticket-body">
           <form onSubmit={handleSubmit}>
-            <p className="hint-text">
-              {draft.area ? `Oblast: ${draft.area.length} bodů` : `Pozice: ${draft.point.lat.toFixed(4)}, ${draft.point.lng.toFixed(4)}`}
-            </p>
+            {draft.area ? (
+              <div style={{ marginBottom: 10 }}>
+                <label className="field-label" style={{ marginTop: 0 }}>Oblasti ({draft.area.length})</label>
+                {draft.area.map((pts, idx) => (
+                  <div key={idx} className="rod-edit-row" style={{ marginBottom: 4 }}>
+                    <span className="hint-text" style={{ margin: 0, flex: 1 }}>Oblast {idx + 1} ({pts.length} bodů)</span>
+                    <button
+                      type="button" className="new-btn danger-btn"
+                      onClick={() => set('area', draft.area.filter((_, i) => i !== idx))}
+                    >🗑</button>
+                  </div>
+                ))}
+                <button
+                  type="button" className="new-btn"
+                  onClick={() => onStartAddArea((newAreas) => set('area', [...(draft.area || []), ...newAreas]))}
+                >+ Přidat oblast</button>
+              </div>
+            ) : (
+              <p className="hint-text">Pozice: {draft.point.lat.toFixed(4)}, {draft.point.lng.toFixed(4)}</p>
+            )}
             <label className="field-label">Název výpravy</label>
             <input className="text-input" required value={draft.title} onChange={(e) => set('title', e.target.value)} placeholder="např. Orlík — zátoka pod hrází" />
             <label className="field-label">Revír / lokalita</label>
