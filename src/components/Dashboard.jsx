@@ -6,6 +6,7 @@ import HelpModal from './HelpModal.jsx'
 import GalleryModal from './GalleryModal.jsx'
 import BaitsModal from './BaitsModal.jsx'
 import BaitPicker from './BaitPicker.jsx'
+import LocationsModal from './LocationsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
 import { uploadPhoto } from '../lib/storage.js'
 
@@ -49,8 +50,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [showRecords, setShowRecords] = useState(false)
   const [showGallery, setShowGallery] = useState(false)
   const [showBaits, setShowBaits] = useState(false)
+  const [showLocations, setShowLocations] = useState(false)
   const [baitsInitialKey, setBaitsInitialKey] = useState(null)
   const [baitCatalog, setBaitCatalog] = useState([])
+  const [locationsCatalog, setLocationsCatalog] = useState([])
+  const [savingLocationFor, setSavingLocationFor] = useState(null) // {title, revir, area, lat, lng} — normalizovaný zdroj pro uložení do katalogu
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [ticketCatch, setTicketCatch] = useState(null)
@@ -77,7 +81,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const markersLayer = useRef(null)
   const draftLayer = useRef(null)
 
-  useEffect(() => { loadSessions(); loadMembers(); loadBaitCatalog() }, [groupId])
+  useEffect(() => { loadSessions(); loadMembers(); loadBaitCatalog(); loadLocationsCatalog() }, [groupId])
 
   async function loadBaitCatalog() {
     const { data } = await supabase
@@ -86,6 +90,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       .eq('group_id', groupId)
       .order('name')
     if (data) setBaitCatalog(data)
+  }
+
+  async function loadLocationsCatalog() {
+    const { data } = await supabase
+      .from('locations')
+      .select('*')
+      .eq('group_id', groupId)
+      .order('name')
+    if (data) setLocationsCatalog(data)
   }
 
   async function loadMembers() {
@@ -157,7 +170,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setLoading(true)
     const { data, error } = await supabase
       .from('sessions')
-      .select('*, rods(*), catches(*)')
+      .select('*, rods(*), catches(*), session_locations(location_id)')
       .eq('group_id', groupId)
       .order('session_date', { ascending: false })
     if (!error) {
@@ -490,6 +503,58 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     await loadSessions()
   }
 
+  function startSaveLocation(source) {
+    // source může být draftSession (má .point) nebo uložená výprava (má .lat/.lng přímo)
+    const area = source.area || null
+    const lat = source.point ? source.point.lat : source.lat
+    const lng = source.point ? source.point.lng : source.lng
+    setSavingLocationFor({ title: source.title || '', revir: source.revir || '', area, lat, lng })
+  }
+
+  async function saveLocationToCatalog(name, revir) {
+    const s = savingLocationFor
+    const { error } = await supabase.from('locations').insert({
+      group_id: groupId, created_by: userId, name, revir: revir || null,
+      area: s.area, lat: s.lat, lng: s.lng,
+    })
+    if (error) { alert(error.message); return }
+    setSavingLocationFor(null)
+    await loadLocationsCatalog()
+  }
+
+  async function updateLocationsCatalogEntry(id, fields) {
+    const { error } = await supabase.from('locations').update(fields).eq('id', id)
+    if (error) { alert(error.message); return }
+    await loadLocationsCatalog()
+  }
+
+  async function deleteLocationFromCatalog(id) {
+    const { error } = await supabase.from('locations').delete().eq('id', id)
+    if (error) { alert(error.message); return }
+    await loadLocationsCatalog()
+  }
+
+  async function updateSessionFromLocations(session) {
+    const linkedIds = (session.session_locations || []).map((sl) => sl.location_id)
+    if (linkedIds.length === 0) return
+    const linked = locationsCatalog.filter((l) => linkedIds.includes(l.id))
+    const areaLocations = linked.filter((l) => l.area)
+    const updates = {}
+    if (areaLocations.length > 0) {
+      const areas = areaLocations.map((l) => l.area)
+      updates.area = areas
+      const c = areaCentroid(areas.flat())
+      updates.lat = c.lat
+      updates.lng = c.lng
+    } else if (linked[0]) {
+      updates.lat = linked[0].lat
+      updates.lng = linked[0].lng
+    }
+    const { error } = await supabase.from('sessions').update(updates).eq('id', session.id)
+    if (error) { alert(error.message); return }
+    await loadSessions()
+  }
+
   function goToMyLocation() {
     if (!navigator.geolocation) { alert('Tento prohlížeč neumí zjistit pozici.'); return }
     navigator.geolocation.getCurrentPosition(
@@ -690,6 +755,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         status: s.live ? 'in_progress' : 'completed',
       }).select().single()
     if (sErr) { alert(sErr.message); return }
+
+    if (s.linkedLocationIds && s.linkedLocationIds.length > 0) {
+      await supabase.from('session_locations').insert(
+        s.linkedLocationIds.map((location_id) => ({ session_id: session.id, location_id }))
+      )
+    }
 
     for (const r of s.rods.filter((r) => r.name)) {
       const baitsPayload = []
@@ -1112,8 +1183,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               <div className="det-block">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
                   <h3>Podmínky</h3>
-                  <div style={{ display: 'flex', gap: 6 }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button className="new-btn" onClick={() => duplicateSession(activeSession)}>📋 Nová jako tahle</button>
+                    <button className="new-btn" onClick={() => startSaveLocation(activeSession)}>📌 Uložit místo do katalogu</button>
+                    {(activeSession.session_locations || []).length > 0 && canEdit && (
+                      <button className="new-btn" onClick={() => updateSessionFromLocations(activeSession)}>🔄 Aktualizovat podle katalogu</button>
+                    )}
                     {canEdit && <button className="new-btn" onClick={() => startEditSession(activeSession)}>✏️ Upravit výpravu</button>}
                   </div>
                 </div>
@@ -1235,6 +1310,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           <div className="head-actions-wrap">
             <span className="whoami">{myProfile?.display_name}</span>
             <div className="head-actions">
+              <button className="new-btn" onClick={() => setShowLocations(true)} title="Revíry">📍</button>
               <button className="new-btn" onClick={() => { setBaitsInitialKey(null); setShowBaits(true) }} title="Nástrahy">🪱</button>
               <button className="new-btn" onClick={() => setShowGallery(true)} title="Galerie">🖼</button>
               <button className="new-btn" onClick={() => setShowRecords(true)} title="Rekordy">🏆</button>
@@ -1392,6 +1468,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           baitCategory={baitCategoryFor(draftSession.type)}
           onAddBait={addBaitToCatalog}
           onStartAddArea={startAddAreaPoint}
+          locationsCatalog={locationsCatalog}
+          onSaveLocation={startSaveLocation}
+          onZoomToPoint={(lat, lng) => mapInstance.current?.setView([lat, lng], 15)}
         />
       )}
 
@@ -1412,6 +1491,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       )}
 
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+
+      {savingLocationFor && (
+        <SaveLocationForm
+          source={savingLocationFor}
+          onCancel={() => setSavingLocationFor(null)}
+          onSave={saveLocationToCatalog}
+        />
+      )}
 
       {showRecords && (
         <RecordsModal sessions={sessions} userName={userName} userColor={userColor} onClose={() => setShowRecords(false)} onOpenCatch={(c) => { setBaitsInitialKey(null); setTicketCatch(c); setShowRecords(false) }} />
@@ -1440,6 +1527,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onClose={() => { setShowBaits(false); setBaitsInitialKey(null) }}
           onOpenCatch={(c, key) => { setShowBaits(false); setBaitsInitialKey(key); setTicketCatch(c) }}
           onOpenSession={(sessionId) => { setShowBaits(false); setActiveId(sessionId); setViewMode('detail') }}
+        />
+      )}
+
+      {showLocations && (
+        <LocationsModal
+          locations={locationsCatalog}
+          userId={userId}
+          onUpdate={updateLocationsCatalogEntry}
+          onDelete={deleteLocationFromCatalog}
+          onClose={() => setShowLocations(false)}
         />
       )}
 
@@ -1507,6 +1604,44 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onDeleted={() => { setTicketCatch(null); loadSessions() }}
         />
       )}
+    </div>
+  )
+}
+
+function SaveLocationForm({ source, onCancel, onSave }) {
+  const [name, setName] = useState(source.title || '')
+  const [revir, setRevir] = useState(source.revir || '')
+  const [busy, setBusy] = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setBusy(true)
+    await onSave(name, revir)
+    setBusy(false)
+  }
+
+  return (
+    <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onCancel()}>
+      <div className="ticket" style={{ maxWidth: 380 }}>
+        <div className="ticket-top">
+          <button className="ticket-close" onClick={onCancel}>✕</button>
+          <div className="eyebrow">Katalog míst</div>
+          <h2>📌 Uložit toto místo</h2>
+        </div>
+        <div className="perforation"></div>
+        <div className="ticket-body">
+          <p className="help-note" style={{ marginBottom: 10 }}>
+            {source.area ? `Uloží se vyšrafovaná oblast (${source.area.length} ploch).` : 'Uloží se orientační bod pro rychlé přiblížení mapy.'}
+          </p>
+          <form onSubmit={handleSubmit}>
+            <label className="field-label">Název místa</label>
+            <input className="text-input" required autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="např. Labe - Vaflák" />
+            <label className="field-label">Revír</label>
+            <input className="text-input" value={revir} onChange={(e) => setRevir(e.target.value)} />
+            <button className="btn-primary" type="submit" disabled={busy} style={{ marginTop: 14 }}>{busy ? 'Ukládám…' : 'Uložit do katalogu'}</button>
+          </form>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1983,7 +2118,7 @@ function RodEditRow({ rod, color, baitPhotoMap = {}, baitListId = 'known-baits-a
   )
 }
 
-function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, onAddBait, onStartAddArea }) {
+function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, onAddBait, onStartAddArea, locationsCatalog = [], onSaveLocation, onZoomToPoint }) {
   const [busy, setBusy] = useState(false)
   const [weatherBusy, setWeatherBusy] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
@@ -2030,6 +2165,25 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
     })
   }
 
+  function toggleLocation(loc) {
+    setDraft((d) => {
+      const linked = d.linkedLocationIds || []
+      if (linked.includes(loc.id)) {
+        return { ...d, linkedLocationIds: linked.filter((id) => id !== loc.id) }
+      }
+      const next = { ...d, linkedLocationIds: [...linked, loc.id] }
+      if (loc.area) {
+        next.area = [...(d.area || []), loc.area]
+      } else {
+        onZoomToPoint?.(loc.lat, loc.lng)
+      }
+      if (!d.revir) next.revir = loc.revir || ''
+      if (!d.title) next.title = loc.name
+      else if (!d.title.includes(loc.name)) next.title = `${d.title}, ${loc.name}`
+      return next
+    })
+  }
+
   async function handleFetchWeather() {
     if (!draft.date) { setWeatherError('Nejdřív vyplň datum.'); return }
     setWeatherBusy(true); setWeatherError(null)
@@ -2065,6 +2219,22 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
         <div className="perforation"></div>
         <div className="ticket-body">
           <form onSubmit={handleSubmit}>
+            {locationsCatalog.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <label className="field-label" style={{ marginTop: 0 }}>Místa z katalogu</label>
+                {locationsCatalog
+                  .filter((loc) => (draft.area ? !!loc.area : !loc.area))
+                  .map((loc) => {
+                    const checked = (draft.linkedLocationIds || []).includes(loc.id)
+                    return (
+                      <label key={loc.id} className="location-check-row">
+                        <input type="checkbox" checked={checked} onChange={() => toggleLocation(loc)} />
+                        <span>{loc.name}{loc.revir ? ` (${loc.revir})` : ''}</span>
+                      </label>
+                    )
+                  })}
+              </div>
+            )}
             {draft.area ? (
               <div style={{ marginBottom: 10 }}>
                 <label className="field-label" style={{ marginTop: 0 }}>Oblasti ({draft.area.length})</label>
@@ -2085,6 +2255,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
             ) : (
               <p className="hint-text">Pozice: {draft.point.lat.toFixed(4)}, {draft.point.lng.toFixed(4)}</p>
             )}
+            <button type="button" className="new-btn" onClick={() => onSaveLocation(draft)} style={{ marginBottom: 10 }}>📌 Uložit toto místo do katalogu</button>
             <label className="field-label">Název výpravy</label>
             <input className="text-input" required value={draft.title} onChange={(e) => set('title', e.target.value)} placeholder="např. Orlík — zátoka pod hrází" />
             <label className="field-label">Revír / lokalita</label>

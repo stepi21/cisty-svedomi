@@ -325,6 +325,10 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
 
 .rod-edit-block{ border:1px solid var(--paper-line); border-radius:8px; padding:8px; margin-bottom:8px; background:var(--paper); }
 .rod-edit-row{ display:flex; gap:8px; margin-top:6px; flex-wrap:wrap; align-items:center; }
+.location-check-row{
+  display:flex; align-items:center; gap:8px; padding:6px 2px; font-size:14px; cursor:pointer;
+}
+.location-check-row input{ cursor:pointer; }
 .rod-edit-row .new-btn{ font-size:10.5px; }
 .photo-label{
   font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:var(--ink-soft);
