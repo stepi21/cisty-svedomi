@@ -271,6 +271,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   const pendingTypeRef = useRef('kapr')
+  const pendingLiveRef = useRef(false)
 
   // --- kreslení preview polygonu(ů) při tvorbě oblasti ---
   useEffect(() => {
@@ -554,7 +555,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   // --- začátek tvorby nové výpravy ---
-  function startNewSession() { setPickingType(true); setMobileSheetOpen(false) }
+  function startNewSession() { pendingLiveRef.current = false; setPickingType(true); setMobileSheetOpen(false) }
+  function startNewSessionLive() { pendingLiveRef.current = true; setPickingType(true); setMobileSheetOpen(false) }
+
+  async function endLiveSession(session) {
+    const now = new Date()
+    const timeStr = now.toTimeString().slice(0, 5)
+    const { error } = await supabase.from('sessions').update({ time_to: timeStr, status: 'completed' }).eq('id', session.id)
+    if (error) { alert(error.message); return }
+    await loadSessions()
+  }
 
   function chooseType(type) {
     setPickingType(false)
@@ -588,18 +598,30 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const rods = rodPointsDraft.map((p, i) => ({ name: `Prut ${i + 1}`, lat: p.lat, lng: p.lng, baits: [{ name: '', photoFile: null }] }))
     setPlacementTarget(null)
     setRodPointsDraft(null)
+    const live = liveDefaults()
     setDraftSession({
       type: pendingTypeRef.current,
-      title: '', date: '', timeFrom: '', timeTo: '', revir: '', target_species: '',
+      title: '', date: live.date, timeFrom: live.timeFrom, timeTo: '', revir: '', target_species: '',
       temp: '', pressure: '', wind: '', desc: '',
       point: first, area: null,
       rods,
+      live: live.live,
     })
   }
 
   function finishCurrentArea() {
     if (areaDraft.current.length < 3) return
     setAreaDraft({ areas: [...areaDraft.areas, areaDraft.current], current: [] })
+  }
+
+  function liveDefaults() {
+    if (!pendingLiveRef.current) return { live: false, date: '', timeFrom: '' }
+    const now = new Date()
+    return {
+      live: true,
+      date: now.toISOString().slice(0, 10),
+      timeFrom: now.toTimeString().slice(0, 5),
+    }
   }
 
   function proceedToForm() {
@@ -609,12 +631,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const firstAreaCentroid = areaCentroid(areas[0])
     setAreaDraft(null)
     setPlacementTarget(null)
+    const live = liveDefaults()
     setDraftSession({
       type: pendingTypeRef.current,
-      title: '', date: '', timeFrom: '', timeTo: '', revir: '', target_species: '',
+      title: '', date: live.date, timeFrom: live.timeFrom, timeTo: '', revir: '', target_species: '',
       temp: '', pressure: '', wind: '', desc: '',
       point: overallCentroid, area: areas,
       rods: [{ name: 'Prut 1', lat: firstAreaCentroid.lat, lng: firstAreaCentroid.lng, baits: [{ name: '', photoFile: null }] }],
+      live: live.live,
     })
   }
 
@@ -663,6 +687,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         lat: s.point.lat, lng: s.point.lng, area: s.area,
         weather_temp_c: s.temp || null, weather_pressure_hpa: s.pressure || null,
         weather_wind: s.wind || null, weather_desc: s.desc || null,
+        status: s.live ? 'in_progress' : 'completed',
       }).select().single()
     if (sErr) { alert(sErr.message); return }
 
@@ -1046,7 +1071,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                         {!monthCollapsed && m.sessions.map((s) => (
                           <div
                             key={s.id}
-                            className={`session-item ${viewMode === 'detail' && s.id === activeId ? 'active' : ''}`}
+                            className={`session-item ${viewMode === 'detail' && s.id === activeId ? 'active' : ''} ${s.status === 'in_progress' ? 'live' : ''}`}
                             style={{ borderLeft: `3px solid ${userColor(s.user_id)}`, paddingLeft: 15 }}
                             onClick={() => { setActiveId(s.id); setViewMode('detail') }}
                           >
@@ -1055,6 +1080,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                               <div className="s-title">{s.title}</div>
                               <div className="s-sub">{s.session_date} · {s.time_from}–{s.time_to} · {userName(s.user_id)}{s.revir ? ` · ${s.revir}` : ''}</div>
                               <div className="s-tags">
+                                {s.status === 'in_progress' && <span className="s-tag live-tag">🔴 Probíhá</span>}
                                 <span className="s-tag">{s.type}</span>
                                 {s.target_species && <span className="s-tag target">🎯 {s.target_species}</span>}
                                 <span className="s-tag catch">{filteredCatches(s).length} úlovky</span>
@@ -1077,6 +1103,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return (
           activeSession && viewMode === 'detail' && !draftSession && (
             <div className="detail-strip">
+              {activeSession.status === 'in_progress' && (
+                <div className="live-banner" style={{ gridColumn: '1 / -1' }}>
+                  <span>🔴 Výprava právě probíhá</span>
+                  {canEdit && <button className="new-btn" onClick={() => endLiveSession(activeSession)}>Ukončit výpravu</button>}
+                </div>
+              )}
               <div className="det-block">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
                   <h3>Podmínky</h3>
@@ -1231,6 +1263,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         <main>
           <div ref={mapRef} id="map" style={{ cursor: isPlacingSomething ? 'crosshair' : '' }} />
           <button className="my-location-btn" onClick={goToMyLocation} title="Moje pozice">📍<span className="btn-label"> Moje pozice</span></button>
+          <button className="live-session-btn" onClick={startNewSessionLive} title="Výprava teď">▶️<span className="btn-label"> Výprava teď</span></button>
 
           {pickingType && (
             <div className="type-picker">
@@ -2008,6 +2041,11 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
     }
     setWeatherBusy(false)
   }
+
+  useEffect(() => {
+    if (draft.live && draft.temp === '') { handleFetchWeather() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
