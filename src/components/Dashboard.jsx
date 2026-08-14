@@ -253,6 +253,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       return
     }
 
+    if (target === 'new-location-point') {
+      setPlacementTarget(null)
+      setSavingLocationFor({ title: '', revir: '', area: null, lat: point.lat, lng: point.lng })
+      return
+    }
+
     if (target === 'catch-point') {
       setPlacementTarget(null)
       const s = activeSessionRef.current
@@ -509,6 +515,18 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const lat = source.point ? source.point.lat : source.lat
     const lng = source.point ? source.point.lng : source.lng
     setSavingLocationFor({ title: source.title || '', revir: source.revir || '', area, lat, lng })
+  }
+
+  function startAddLocationArea() {
+    setShowLocations(false)
+    startAddAreaPoint((newAreas) => {
+      setSavingLocationFor({ title: '', revir: '', area: newAreas, lat: null, lng: null })
+    })
+  }
+
+  function startAddLocationPoint() {
+    setShowLocations(false)
+    setPlacementTarget('new-location-point')
   }
 
   async function saveLocationToCatalog(name, revir) {
@@ -1074,7 +1092,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return `${prefix}${visibleSessions.length} výprav · ${catchCount} úlovků`
   }
 
-  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || areaDraft || rodPointsDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
+  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || placementTarget === 'new-location-point' || areaDraft || rodPointsDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
 
   function renderSessionList() {
     return (
@@ -1391,6 +1409,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             </div>
           )}
 
+          {placementTarget === 'new-location-point' && (
+            <div className="place-hint">
+              Klikni na mapu — orientační bod pro nové místo.
+              <button className="ticket-close" onClick={() => setPlacementTarget(null)}>✕</button>
+            </div>
+          )}
+
           {rodPointsDraft && (
             <div className="place-hint area-hint">
               Klikni na mapu, kam jsi nahodil Prut {rodPointsDraft.length + 1}{rodPointsDraft.length > 0 ? ` (zatím nastaveno: ${rodPointsDraft.length})` : ''}.
@@ -1537,6 +1562,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onUpdate={updateLocationsCatalogEntry}
           onDelete={deleteLocationFromCatalog}
           onClose={() => setShowLocations(false)}
+          onAddArea={startAddLocationArea}
+          onAddPoint={startAddLocationPoint}
         />
       )}
 

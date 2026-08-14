@@ -1,8 +1,9 @@
 import { useState } from 'react'
 
-export default function LocationsModal({ locations, userId, onUpdate, onDelete, onClose }) {
+export default function LocationsModal({ locations, userId, onUpdate, onDelete, onClose, onAddArea, onAddPoint }) {
   const [selectedId, setSelectedId] = useState(null)
   const [editing, setEditing] = useState(false)
+  const [choosingNew, setChoosingNew] = useState(false)
 
   const selected = locations.find((l) => l.id === selectedId)
   const areaLocations = locations.filter((l) => l.area).sort((a, b) => a.name.localeCompare(b.name))
@@ -62,9 +63,18 @@ export default function LocationsModal({ locations, userId, onUpdate, onDelete, 
         </div>
         <div className="perforation"></div>
         <div className="ticket-body">
-          <p className="help-note" style={{ marginBottom: 14 }}>
-            Nová místa přidáš tlačítkem "📌 Uložit toto místo do katalogu" přímo u výpravy (rozepsané i uložené).
+          <p className="help-note" style={{ marginBottom: 10 }}>
+            Nová místa přidáš přímo tady, nebo tlačítkem "📌 Uložit toto místo do katalogu" u výpravy.
           </p>
+          {!choosingNew ? (
+            <button className="new-btn" onClick={() => setChoosingNew(true)} style={{ marginBottom: 14 }}>+ Přidat místo</button>
+          ) : (
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+              <button className="new-btn" onClick={onAddArea}>🎯 Oblast (přívlač)</button>
+              <button className="new-btn" onClick={onAddPoint}>📍 Bod (kapr, muška...)</button>
+              <button className="new-btn" onClick={() => setChoosingNew(false)}>Zrušit</button>
+            </div>
+          )}
 
           <h3 style={{ fontFamily: "'Fraunces', serif", fontSize: 15, margin: '0 0 6px' }}>Oblasti (přívlač)</h3>
           {areaLocations.length === 0 && <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Zatím žádná.</p>}
