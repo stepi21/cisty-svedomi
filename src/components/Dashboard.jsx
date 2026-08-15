@@ -34,6 +34,33 @@ const SESSION_TYPES = [
 const AREA_TYPES = ['privlac'] // typy, kde se místo bodu kreslí oblast
 const TYPE_CATEGORY = { kapr: 'bila', privlac: 'dravec', muska: 'dravec', plavana: 'bila', jine: null }
 
+// --- sloučení názvu/revíru víc katalogových míst do jednoho popisku výpravy ---
+// Stejná "voda" (část názvu před " - ") se sloučí do jednoho: "Labe - Vaflák, soutok".
+// Různá voda se vypíše zvlášť: "Labe - soutok, Jizera - Otradovice".
+function mergeLocationNames(locations) {
+  const groups = []
+  locations.forEach((loc) => {
+    const name = (loc.name || '').trim()
+    const dashIdx = name.indexOf(' - ')
+    const prefix = dashIdx === -1 ? null : name.slice(0, dashIdx)
+    const suffix = dashIdx === -1 ? name : name.slice(dashIdx + 3)
+    const existing = prefix ? groups.find((g) => g.prefix === prefix) : null
+    if (existing) {
+      if (!existing.suffixes.includes(suffix)) existing.suffixes.push(suffix)
+    } else {
+      groups.push({ prefix, suffixes: [suffix] })
+    }
+  })
+  return groups.map((g) => (g.prefix ? `${g.prefix} - ${g.suffixes.join(', ')}` : g.suffixes[0])).join(', ')
+}
+
+// Revíry unikátně, v pořadí prvního výskytu podle výběru.
+function mergeLocationRevirs(locations) {
+  const seen = []
+  locations.forEach((loc) => { if (loc.revir && !seen.includes(loc.revir)) seen.push(loc.revir) })
+  return seen.join(', ') || null
+}
+
 export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [sessions, setSessions] = useState([])
   const [activeId, setActiveId] = useState(null)
@@ -64,8 +91,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   // --- flow state pro vytváření nové výpravy ---
   const [pickingType, setPickingType] = useState(false)         // ukazuje mini panel "jaký typ?"
-  const [locationPickerStep, setLocationPickerStep] = useState(null) // null | 'choose' | 'catalog'
+  const [locationPickerStep, setLocationPickerStep] = useState(null) // null | 'choose' | 'catalog' | 'attach'
   const [pickingCatalogIds, setPickingCatalogIds] = useState([])
+  const [locationActionMenuFor, setLocationActionMenuFor] = useState(null) // uložená výprava, pro kterou se ukazuje menu 📍 Místo
+  const [attachingLocationsSessionId, setAttachingLocationsSessionId] = useState(null) // id výpravy, které se dodatečně mění navázaná místa
   const [areaDraft, setAreaDraft] = useState(null)               // {areas:[], current:[]} během kreslení oblasti
   const [rodPointsDraft, setRodPointsDraft] = useState(null)     // [{lat,lng}, ...] během sbírání pozic prutů (bodové typy)
   const [placementTarget, setPlacementTarget] = useState(null)   // 'session-point' | 'area-point' | 'rod-<i>' | 'catch-point'
@@ -579,7 +608,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const areaLocations = linked.filter((l) => l.area)
     const updates = {}
     if (areaLocations.length > 0) {
-      const areas = areaLocations.map((l) => l.area)
+      const areas = areaLocations.flatMap((l) => normalizeAreas(l.area))
       updates.area = areas
       const c = areaCentroid(areas.flat())
       updates.lat = c.lat
@@ -590,6 +619,67 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     }
     const { error } = await supabase.from('sessions').update(updates).eq('id', session.id)
     if (error) { alert(error.message); return }
+    await loadSessions()
+  }
+
+  function openLocationMenu(session) {
+    const hasLinked = (session.session_locations || []).length > 0
+    if (!hasLinked) { startAttachLocationsToSession(session); return }
+    setLocationActionMenuFor(session)
+  }
+
+  function startAttachLocationsToSession(session) {
+    const linkedIds = (session.session_locations || []).map((sl) => sl.location_id)
+    setAttachingLocationsSessionId(session.id)
+    setPickingCatalogIds(linkedIds)
+    setLocationPickerStep('attach')
+  }
+
+  async function proceedAttachLocations() {
+    const sessionId = attachingLocationsSessionId
+    const pickedIds = pickingCatalogIds
+    setLocationPickerStep(null)
+    setAttachingLocationsSessionId(null)
+    setPickingCatalogIds([])
+    if (!sessionId) return
+
+    // nahradí navázaná místa přesně tím, co je zaškrtnuté (i odškrtnutí něčeho stávajícího)
+    await supabase.from('session_locations').delete().eq('session_id', sessionId)
+    if (pickedIds.length > 0) {
+      await supabase.from('session_locations').insert(
+        pickedIds.map((location_id) => ({ session_id: sessionId, location_id }))
+      )
+    }
+
+    const picked = locationsCatalog.filter((l) => pickedIds.includes(l.id))
+    const updates = {}
+    if (picked.length > 0) {
+      updates.title = mergeLocationNames(picked)
+      updates.revir = mergeLocationRevirs(picked)
+      const areaLocations = picked.filter((l) => l.area)
+      if (areaLocations.length > 0) {
+        const areas = areaLocations.flatMap((l) => normalizeAreas(l.area))
+        updates.area = areas
+        const c = areaCentroid(areas.flat())
+        updates.lat = c.lat
+        updates.lng = c.lng
+      } else {
+        updates.area = null
+        updates.lat = picked[0].lat
+        updates.lng = picked[0].lng
+      }
+    }
+    if (Object.keys(updates).length > 0) {
+      const { error } = await supabase.from('sessions').update(updates).eq('id', sessionId)
+      if (error) { alert(error.message); return }
+    }
+    await loadSessions()
+  }
+
+  async function setCatchRevir(catchId, revir) {
+    const { error } = await supabase.from('catches').update({ revir }).eq('id', catchId)
+    if (error) { alert(error.message); return }
+    setTicketCatch((prev) => (prev && prev.id === catchId ? { ...prev, revir } : prev))
     await loadSessions()
   }
 
@@ -1314,9 +1404,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                     {activeSession.area && (
                       <button className="new-btn" onClick={() => startSaveLocation(activeSession)}>📌 Uložit místo do katalogu</button>
                     )}
-                    {(activeSession.session_locations || []).length > 0 && canEdit && (
-                      <button className="new-btn" onClick={() => updateSessionFromLocations(activeSession)}>🔄 Aktualizovat podle katalogu</button>
-                    )}
+                    {canEdit && <button className="new-btn" onClick={() => openLocationMenu(activeSession)}>📍 Místo</button>}
                     {canEdit && <button className="new-btn" onClick={() => startEditSession(activeSession)}>✏️ Upravit výpravu</button>}
                   </div>
                 </div>
@@ -1485,6 +1573,39 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               <button className="type-btn" onClick={() => setLocationPickerStep('catalog')}>📍 Z katalogu</button>
               <button className="type-btn" onClick={startDrawNew}>🖊 Naklikat nové na mapě</button>
               <button className="type-cancel" onClick={() => setLocationPickerStep(null)}>Zrušit</button>
+            </div>
+          )}
+
+          {locationActionMenuFor && (
+            <div className="type-picker">
+              <div className="type-picker-title">📍 Místo výpravy</div>
+              <button
+                className="type-btn"
+                onClick={() => { const s = locationActionMenuFor; setLocationActionMenuFor(null); updateSessionFromLocations(s) }}
+              >🔄 Aktualizovat podle katalogu</button>
+              <button
+                className="type-btn"
+                onClick={() => { const s = locationActionMenuFor; setLocationActionMenuFor(null); startAttachLocationsToSession(s) }}
+              >+ Přidat/změnit místa</button>
+              <button className="type-cancel" onClick={() => setLocationActionMenuFor(null)}>Zrušit</button>
+            </div>
+          )}
+
+          {locationPickerStep === 'attach' && (
+            <div className="type-picker" style={{ minWidth: 260 }}>
+              <div className="type-picker-title">Vyber místa z katalogu</div>
+              {locationsCatalog.length === 0 && <p className="hint-text">Katalog je zatím prázdný.</p>}
+              {locationsCatalog.map((loc) => (
+                <label key={loc.id} className="location-check-row">
+                  <input type="checkbox" checked={pickingCatalogIds.includes(loc.id)} onChange={() => togglePickingCatalogId(loc.id)} />
+                  <span>{loc.area ? '🎯' : '📍'} {loc.name}{loc.revir ? ` (${loc.revir})` : ''}</span>
+                </label>
+              ))}
+              <button className="btn-primary" style={{ margin: '8px 0 0', width: '100%' }} onClick={proceedAttachLocations} disabled={pickingCatalogIds.length === 0}>Uložit výběr</button>
+              <button
+                className="type-cancel"
+                onClick={() => { setLocationPickerStep(null); setPickingCatalogIds([]); setAttachingLocationsSessionId(null) }}
+              >Zrušit</button>
             </div>
           )}
 
@@ -1763,6 +1884,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           baitCategory={baitCategoryFor(sessionForCatch(ticketCatch)?.type)}
           onAddBait={addBaitToCatalog}
           onBackfillBaitPhoto={backfillBaitPhoto}
+          locationsCatalog={locationsCatalog}
+          onSetCatchRevir={setCatchRevir}
           onRelocate={() => startRelocateCatch(ticketCatch.id)}
           onFocusLocation={() => {
             const c = ticketCatch
