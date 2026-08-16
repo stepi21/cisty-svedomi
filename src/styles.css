@@ -356,6 +356,8 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
 .bait-picker-chevron{ color:var(--ink-soft); font-size:11px; margin-left:6px; flex:none; }
 .bait-picker-modal{ z-index:1000; }
 .bait-picker-modal-list{ max-height:50vh; overflow-y:auto; }
+.location-checklist{ max-height:42vh; overflow-y:auto; margin-bottom:4px; }
+.new-btn.active-toggle{ background:var(--water-deep); color:var(--white); border-color:var(--water-deep); }
 .bait-picker-item{
   display:flex; align-items:center; gap:8px; padding:10px 8px; border-radius:6px;
   cursor:pointer; font-size:14px; border-bottom:1px solid #EFEBDF;

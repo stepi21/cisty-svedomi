@@ -20,7 +20,7 @@ function toLocalTimeInput(isoString) {
   return `${hh}:${mm}`
 }
 
-export default function CatchTicket({ catchData: c, session, catcherName, canEdit = false, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, locationsCatalog = [], onAddBait, onBackfillBaitPhoto, onSetCatchRevir, onRelocate, onFocusLocation, onOpenSession, onClose, onUpdated, onDeleted }) {
+export default function CatchTicket({ catchData: c, session, catcherName, canEdit = false, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, locationsCatalog = [], onAddBait, onBackfillBaitPhoto, onSetCatchLocation, onRelocate, onFocusLocation, onOpenSession, onClose, onUpdated, onDeleted }) {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [pickingRevir, setPickingRevir] = useState(false)
@@ -28,15 +28,9 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
     .map((sl) => locationsCatalog.find((l) => l.id === sl.location_id))
     .filter(Boolean)
 
-  function handleRevirClick() {
-    if (linkedLocations.length === 0) return
-    if (linkedLocations.length === 1) { onSetCatchRevir?.(c.id, linkedLocations[0].revir || null); return }
-    setPickingRevir(true)
-  }
-
-  function handlePickRevir(revir) {
+  function handlePickRevir(loc) {
     setPickingRevir(false)
-    onSetCatchRevir?.(c.id, revir)
+    onSetCatchLocation?.(c.id, loc.id, loc.revir || null)
   }
   const [weatherBusy, setWeatherBusy] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
@@ -128,7 +122,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
             <div className="perforation"></div>
             <div className="ticket-body">
               {linkedLocations.map((l) => (
-                <div key={l.id} className="bait-picker-item" onClick={() => handlePickRevir(l.revir || null)}>
+                <div key={l.id} className="bait-picker-item" onClick={() => handlePickRevir(l)}>
                   <span>{l.name}{l.revir ? ` (${l.revir})` : ''}</span>
                 </div>
               ))}
@@ -188,7 +182,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
               </p>
               <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                 {canEdit && <button className="new-btn" onClick={() => setEditing(true)}>✏️ Upravit</button>}
-                {canEdit && linkedLocations.length > 0 && <button className="new-btn" onClick={handleRevirClick}>📍 Revír</button>}
+                {canEdit && linkedLocations.length >= 2 && <button className="new-btn" onClick={() => setPickingRevir(true)}>📍 Revír</button>}
                 {canEdit && <button className="new-btn danger-btn" onClick={handleDelete} disabled={busy}>🗑 Smazat</button>}
               </div>
             </>

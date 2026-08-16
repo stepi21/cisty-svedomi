@@ -32,9 +32,9 @@ export default function LocationsModal({ locations, sessions, userId, initialLoc
     const linkedSessions = sessions.filter((s) => (s.session_locations || []).some((sl) => sl.location_id === selected.id))
     const catches = []
     linkedSessions.forEach((s) => {
-      ;(s.catches || []).forEach((c) => catches.push({ ...c, sessionRef: s }))
+      ;(s.catches || []).forEach((c) => { if (c.location_id === selected.id) catches.push({ ...c, sessionRef: s }) })
     })
-    const sessionsWithoutCatch = linkedSessions.filter((s) => (s.catches || []).length === 0)
+    const sessionsWithoutCatch = linkedSessions.filter((s) => !(s.catches || []).some((c) => c.location_id === selected.id))
 
     return (
       <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>

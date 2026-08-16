@@ -105,6 +105,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [editingSession, setEditingSession] = useState(null)     // rozepsaná editace výpravy (datum, počasí...)
   const [editingAreasSession, setEditingAreasSession] = useState(null) // {id, areas:[]} — správa oblastí u uložené výpravy
   const [editingAreasLocation, setEditingAreasLocation] = useState(null) // {id, areas:[]} — správa oblastí u místa v katalogu
+  const [locationsView, setLocationsView] = useState(false) // přepínač "📍 Revíry" — dočasně nahradí sidebar/mapu katalogem míst, nic jiného se nemění
 
   const placementTargetRef = useRef(null)
   useEffect(() => { placementTargetRef.current = placementTarget }, [placementTarget])
@@ -386,6 +387,32 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       .filter((pts) => pts.length >= 3)
   }
 
+  // Stejné jako normalizeAreas, ale pro sessions.area, kde si každý polygon
+  // navíc pamatuje location_id katalogového místa, ze kterého vznikl (nebo
+  // null, pokud je nakreslený ručně). Zvládne i starší data uložená ve
+  // starém "plochém" formátu (pole polí bodů bez location_id) — ta se
+  // zobrazí jako "Oblast N" dokud výpravu znovu neaktualizuješ/nepřiřadíš
+  // z katalogu, kdy se location_id doplní.
+  function normalizeSessionAreas(area) {
+    if (!area || area.length === 0) return []
+    const raw = (area[0] && typeof area[0].lat === 'number') ? [area] : area
+    return raw
+      .map((entry) => {
+        if (entry && !Array.isArray(entry) && Array.isArray(entry.points)) {
+          const points = entry.points.filter((p) => p && typeof p.lat === 'number' && typeof p.lng === 'number')
+          if (points.length < 3) return null
+          return { location_id: entry.location_id || null, points }
+        }
+        if (Array.isArray(entry)) {
+          const points = entry.filter((p) => p && typeof p.lat === 'number' && typeof p.lng === 'number')
+          if (points.length < 3) return null
+          return { location_id: null, points }
+        }
+        return null
+      })
+      .filter(Boolean)
+  }
+
   function areaCentroid(pts) {
     return {
       lat: pts.reduce((s, p) => s + p.lat, 0) / pts.length,
@@ -412,6 +439,32 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     markersLayer.current.clearLayers()
     const map = mapInstance.current
 
+    if (locationsView) {
+      const bounds = []
+      locationsCatalog.forEach((loc) => {
+        if (loc.area) {
+          normalizeAreas(loc.area).forEach((pts) => {
+            const polygon = L.polygon(pts.map((p) => [p.lat, p.lng]), {
+              color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.18,
+            }).bindPopup(`${loc.name}${loc.revir ? ` (${loc.revir})` : ''}`)
+            polygon.on('click', () => { setLocationsReturnId(loc.id); setBaitsInitialKey(null); setShowLocations(true) })
+            polygon.addTo(markersLayer.current)
+            pts.forEach((p) => bounds.push([p.lat, p.lng]))
+          })
+        } else if (loc.lat != null && loc.lng != null) {
+          const marker = L.circleMarker([loc.lat, loc.lng], {
+            radius: 8, color: '#B97F35', weight: 2, fillColor: '#D9A054', fillOpacity: 0.8,
+          }).bindPopup(`${loc.name}${loc.revir ? ` (${loc.revir})` : ''}`)
+          marker.on('click', () => { setLocationsReturnId(loc.id); setBaitsInitialKey(null); setShowLocations(true) })
+          marker.addTo(markersLayer.current)
+          bounds.push([loc.lat, loc.lng])
+        }
+      })
+      if (bounds.length) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 })
+      else map.setView([49.8, 15.5], 8)
+      return
+    }
+
     if (viewMode === 'detail' && activeSession) {
       if (pendingMapFocusRef.current && pendingMapFocusRef.current.sessionId === activeSession.id) {
         const f = pendingMapFocusRef.current
@@ -421,14 +474,21 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         map.setView([activeSession.lat, activeSession.lng], 14)
       }
 
-      normalizeAreas(activeSession.area).forEach((pts, ai) => {
+      normalizeSessionAreas(activeSession.area).forEach((entry, ai) => {
+        const pts = entry.points
         L.polygon(pts.map((p) => [p.lat, p.lng]), {
           color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.12,
         }).addTo(markersLayer.current)
         const c = areaCentroid(pts)
-        L.circleMarker([c.lat, c.lng], {
+        const loc = entry.location_id ? locationsCatalog.find((l) => l.id === entry.location_id) : null
+        const label = loc ? loc.name : `Oblast ${ai + 1}`
+        const marker = L.circleMarker([c.lat, c.lng], {
           radius: 7, color: '#6B7A4F', weight: 2, fillColor: '#EDE9DC', fillOpacity: 1,
-        }).bindPopup(`Oblast ${ai + 1}`).addTo(markersLayer.current)
+        }).bindPopup(loc ? `${label} <br><i>(klikni pro detail v katalogu)</i>` : label)
+        marker.addTo(markersLayer.current)
+        if (loc) {
+          marker.on('click', () => { setLocationsReturnId(loc.id); setShowLocations(true) })
+        }
       })
 
       if (!AREA_TYPES.includes(activeSession.type)) {
@@ -478,7 +538,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     } else {
       map.setView([49.8, 15.5], 8)
     }
-  }, [activeSession, activeCategory, activeUserFilter, viewMode, sessions])
+  }, [activeSession, activeCategory, activeUserFilter, viewMode, sessions, locationsCatalog, locationsView])
 
   async function backfillBaitPhoto(baitName, photoUrl) {
     const key = (baitName || '').trim().toLowerCase()
@@ -559,7 +619,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function startSaveLocation(source) {
     // source může být draftSession (má .point) nebo uložená výprava (má .lat/.lng přímo)
-    const area = source.area || null
+    // sessions.area má u polygonů navíc location_id — katalogové místo to nepotřebuje, bereme jen body
+    const area = source.area ? normalizeSessionAreas(source.area).map((entry) => entry.points) : null
     const lat = source.point ? source.point.lat : source.lat
     const lng = source.point ? source.point.lng : source.lng
     setSavingLocationFor({ title: source.title || '', revir: source.revir || '', area, lat, lng })
@@ -608,9 +669,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const areaLocations = linked.filter((l) => l.area)
     const updates = {}
     if (areaLocations.length > 0) {
-      const areas = areaLocations.flatMap((l) => normalizeAreas(l.area))
+      const areas = areaLocations.flatMap((l) => normalizeAreas(l.area).map((points) => ({ location_id: l.id, points })))
       updates.area = areas
-      const c = areaCentroid(areas.flat())
+      const c = areaCentroid(areas.flatMap((a) => a.points))
       updates.lat = c.lat
       updates.lng = c.lng
     } else if (linked[0]) {
@@ -619,10 +680,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     }
     const { error } = await supabase.from('sessions').update(updates).eq('id', session.id)
     if (error) { alert(error.message); return }
+    // jednoznačný případ -> refresh revíru i u úlovků (kdyby se revír katalogového místa mezitím změnil)
+    if (linked.length === 1) {
+      await supabase.from('catches').update({ location_id: linked[0].id, revir: linked[0].revir || null }).eq('session_id', session.id)
+    }
     await loadSessions()
   }
 
   function openLocationMenu(session) {
+    setMobileSheetOpen(false)
     const hasLinked = (session.session_locations || []).length > 0
     if (!hasLinked) { startAttachLocationsToSession(session); return }
     setLocationActionMenuFor(session)
@@ -658,9 +724,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       updates.revir = mergeLocationRevirs(picked)
       const areaLocations = picked.filter((l) => l.area)
       if (areaLocations.length > 0) {
-        const areas = areaLocations.flatMap((l) => normalizeAreas(l.area))
+        const areas = areaLocations.flatMap((l) => normalizeAreas(l.area).map((points) => ({ location_id: l.id, points })))
         updates.area = areas
-        const c = areaCentroid(areas.flat())
+        const c = areaCentroid(areas.flatMap((a) => a.points))
         updates.lat = c.lat
         updates.lng = c.lng
       } else {
@@ -673,13 +739,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       const { error } = await supabase.from('sessions').update(updates).eq('id', sessionId)
       if (error) { alert(error.message); return }
     }
+    // jednoznačný případ (přesně 1 vybrané místo) -> rovnou propsat revír/vazbu do všech úlovků výpravy
+    if (picked.length === 1) {
+      await supabase.from('catches').update({ location_id: picked[0].id, revir: picked[0].revir || null }).eq('session_id', sessionId)
+    }
     await loadSessions()
   }
 
-  async function setCatchRevir(catchId, revir) {
-    const { error } = await supabase.from('catches').update({ revir }).eq('id', catchId)
+  async function setCatchLocation(catchId, locationId, revir) {
+    const { error } = await supabase.from('catches').update({ location_id: locationId, revir }).eq('id', catchId)
     if (error) { alert(error.message); return }
-    setTicketCatch((prev) => (prev && prev.id === catchId ? { ...prev, revir } : prev))
+    setTicketCatch((prev) => (prev && prev.id === catchId ? { ...prev, location_id: locationId, revir } : prev))
     await loadSessions()
   }
 
@@ -704,8 +774,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       type: s.type, title: s.title, date: '', timeFrom: '', timeTo: '',
       revir: s.revir || '', target_species: s.target_species || '',
       temp: '', pressure: '', wind: '', desc: '',
-      point: { lat: s.lat, lng: s.lng }, area: s.area || null,
+      point: { lat: s.lat, lng: s.lng }, area: s.area ? normalizeSessionAreas(s.area) : null,
       rods: rods.length ? rods : [{ name: 'Prut 1', lat: s.lat, lng: s.lng, baits: [{ name: '', photoFile: null }] }],
+      linkedLocationIds: (s.session_locations || []).map((sl) => sl.location_id),
     })
   }
 
@@ -748,8 +819,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   // --- začátek tvorby nové výpravy ---
-  function startNewSession() { pendingLiveRef.current = false; setPickingType(true); setMobileSheetOpen(false) }
-  function startNewSessionLive() { pendingLiveRef.current = true; setPickingType(true); setMobileSheetOpen(false) }
+  function startNewSession() { pendingLiveRef.current = false; setPickingType(true); setMobileSheetOpen(false); setLocationsView(false) }
+  function startNewSessionLive() { pendingLiveRef.current = true; setPickingType(true); setMobileSheetOpen(false); setLocationsView(false) }
 
   async function endLiveSession(session) {
     const now = new Date()
@@ -789,13 +860,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setPickingCatalogIds([])
     if (picked.length === 0) return
 
-    let revir = ''
-    let title = ''
-    picked.forEach((loc) => {
-      if (!revir) revir = loc.revir || ''
-      if (!title) title = loc.name
-      else if (!title.includes(loc.name)) title = `${title}, ${loc.name}`
-    })
+    const revir = mergeLocationRevirs(picked)
+    const title = mergeLocationNames(picked)
 
     if (AREA_TYPES.includes(type)) {
       const areaPicked = picked.filter((l) => l.area)
@@ -803,9 +869,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         alert('Žádné z vybraných míst nemá uloženou oblast — pro přívlač zvol místo s vyšrafovanou plochou, nebo nakresli novou.')
         return
       }
-      const areas = areaPicked.flatMap((l) => l.area)
-      const overallCentroid = areaCentroid(areas.flat())
-      const firstAreaCentroid = areaCentroid(areas[0])
+      const areas = areaPicked.flatMap((l) => normalizeAreas(l.area).map((points) => ({ location_id: l.id, points })))
+      const overallCentroid = areaCentroid(areas.flatMap((a) => a.points))
+      const firstAreaCentroid = areaCentroid(areas[0].points)
       const live = liveDefaults()
       setDraftSession({
         type, title, date: live.date, timeFrom: live.timeFrom, timeTo: '', revir, target_species: '',
@@ -876,10 +942,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   function proceedToForm() {
-    const areas = areaDraft.current.length >= 3 ? [...areaDraft.areas, areaDraft.current] : areaDraft.areas
-    if (areas.length === 0) return
-    const overallCentroid = areaCentroid(areas.flat())
-    const firstAreaCentroid = areaCentroid(areas[0])
+    const rawAreas = areaDraft.current.length >= 3 ? [...areaDraft.areas, areaDraft.current] : areaDraft.areas
+    if (rawAreas.length === 0) return
+    const areas = rawAreas.map((points) => ({ location_id: null, points }))
+    const overallCentroid = areaCentroid(areas.flatMap((a) => a.points))
+    const firstAreaCentroid = areaCentroid(areas[0].points)
     setAreaDraft(null)
     setPlacementTarget(null)
     const live = liveDefaults()
@@ -987,10 +1054,19 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       bait_photo_url = await uploadPhoto(c.baitPhotoFile, `catches/${session.id}`)
       if (bait_photo_url) backfillBaitPhoto(c.bait, bait_photo_url)
     }
+    // jednoznačný případ (výprava má navázané jen jedno katalogové místo) -> rovnou přiřadit i novému úlovku
+    const linkedIds = (session.session_locations || []).map((sl) => sl.location_id)
+    let location_id = null
+    let revir = c.revir || null
+    if (linkedIds.length === 1) {
+      const loc = locationsCatalog.find((l) => l.id === linkedIds[0])
+      if (loc) { location_id = loc.id; revir = loc.revir || null }
+    }
     const { error } = await supabase.from('catches').insert({
       session_id: session.id, group_id: groupId, rod_id: c.rodId || null,
       species: c.species, category: c.category, length_cm: c.length || null, weight_kg: c.weight || null,
-      bait: c.bait, caught_at: caughtAt, lat: c.point.lat, lng: c.point.lng, photo_url, bait_photo_url, revir: c.revir || null,
+      bait: c.bait, caught_at: caughtAt, lat: c.point.lat, lng: c.point.lng, photo_url, bait_photo_url,
+      location_id, revir,
       weather_temp_c: c.weather_temp_c ?? null, weather_pressure_hpa: c.weather_pressure_hpa ?? null,
       weather_wind: c.weather_wind || null, weather_desc: c.weather_desc || null,
     })
@@ -1095,7 +1171,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   function startManageAreas(session) {
-    setEditingAreasSession({ id: session.id, areas: normalizeAreas(session.area).map((a) => [...a]) })
+    setEditingAreasSession({ id: session.id, areas: normalizeSessionAreas(session.area) })
     setEditingSession(null)
     setMobileSheetOpen(false)
   }
@@ -1105,20 +1181,20 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   function addAreasToManaged(newAreas) {
-    setEditingAreasSession((prev) => ({ ...prev, areas: [...prev.areas, ...newAreas] }))
+    setEditingAreasSession((prev) => ({ ...prev, areas: [...prev.areas, ...newAreas.map((points) => ({ location_id: null, points }))] }))
   }
 
   async function saveManagedAreas() {
     const { id, areas } = editingAreasSession
     const updates = { area: areas.length ? areas : null }
     if (areas.length) {
-      const overallCentroid = areaCentroid(areas.flat())
+      const overallCentroid = areaCentroid(areas.flatMap((a) => a.points))
       updates.lat = overallCentroid.lat
       updates.lng = overallCentroid.lng
     }
     await supabase.from('sessions').update(updates).eq('id', id)
     if (areas.length) {
-      const firstAreaCentroid = areaCentroid(areas[0])
+      const firstAreaCentroid = areaCentroid(areas[0].points)
       const { data: rods } = await supabase.from('rods').select('id').eq('session_id', id).order('created_at').limit(1)
       if (rods && rods[0]) {
         await supabase.from('rods').update({ lat: firstAreaCentroid.lat, lng: firstAreaCentroid.lng }).eq('id', rods[0].id)
@@ -1161,10 +1237,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   function proceedRelocateArea() {
-    const areas = areaDraft.current.length >= 3 ? [...areaDraft.areas, areaDraft.current] : areaDraft.areas
-    if (areas.length === 0) return
-    const overallCentroid = areaCentroid(areas.flat())
-    const firstAreaCentroid = areaCentroid(areas[0])
+    const rawAreas = areaDraft.current.length >= 3 ? [...areaDraft.areas, areaDraft.current] : areaDraft.areas
+    if (rawAreas.length === 0) return
+    const areas = rawAreas.map((points) => ({ location_id: null, points }))
+    const overallCentroid = areaCentroid(areas.flatMap((a) => a.points))
+    const firstAreaCentroid = areaCentroid(areas[0].points)
     const sid = relocateSessionIdRef.current
     setAreaDraft(null)
     setPlacementTarget(null)
@@ -1281,6 +1358,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   })
 
   function peekLabel() {
+    if (locationsView) return `📍 Revíry · ${locationsCatalog.length}`
     if (viewMode === 'detail' && activeSession) return activeSession.title
     const parts = []
     if (activeCategory !== 'all') parts.push(activeCategory === 'dravec' ? 'Dravci' : 'Bílá ryba')
@@ -1291,6 +1369,31 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || placementTarget === 'new-location-point' || areaDraft || rodPointsDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
+
+  // --- postranní panel/mobilní lišta v režimu "📍 Revíry" — nezávislé na viewMode/activeId výprav, ty se drží beze změny v pozadí ---
+  function renderLocationsList() {
+    const sorted = [...locationsCatalog].sort((a, b) => a.name.localeCompare(b.name))
+    return (
+      <>
+        <div className="sb-head">
+          <span>Revíry</span>
+          <button className="new-btn" onClick={startAddLocationArea}>+ Přidat místo</button>
+        </div>
+        {sorted.length === 0 ? (
+          <div style={{ padding: '20px 18px', color: 'var(--ink-soft)', fontSize: 13 }}>
+            Katalog je zatím prázdný. Zkus přidat první přes „+ Přidat místo".
+          </div>
+        ) : (
+          sorted.map((l) => (
+            <div key={l.id} className="record-row" onClick={() => { setLocationsReturnId(l.id); setBaitsInitialKey(null); setShowLocations(true) }}>
+              <div className="record-head"><strong>{l.area ? '🎯' : '📍'} {l.name}</strong></div>
+              {l.revir && <div className="c-sub">{l.revir}</div>}
+            </div>
+          ))
+        )}
+      </>
+    )
+  }
 
   function renderSessionList() {
     return (
@@ -1401,7 +1504,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   <h3>Podmínky</h3>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button className="new-btn" onClick={() => duplicateSession(activeSession)}>📋 Nová jako tahle</button>
-                    {activeSession.area && (
+                    {activeSession.area && (activeSession.session_locations || []).length === 0 && (
                       <button className="new-btn" onClick={() => startSaveLocation(activeSession)}>📌 Uložit místo do katalogu</button>
                     )}
                     {canEdit && <button className="new-btn" onClick={() => openLocationMenu(activeSession)}>📍 Místo</button>}
@@ -1459,11 +1562,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 )}
                 <div className="coord-list">
                   {AREA_TYPES.includes(activeSession.type) ? (
-                    normalizeAreas(activeSession.area).map((pts, i) => {
+                    normalizeSessionAreas(activeSession.area).map((entry, i) => {
+                      const pts = entry.points
                       const c = areaCentroid(pts)
+                      const loc = entry.location_id ? locationsCatalog.find((l) => l.id === entry.location_id) : null
+                      const label = loc ? loc.name : `Oblast ${i + 1}`
                       return (
                         <button key={i} className="coord-chip" type="button" onClick={() => focusOnArea(pts)}>
-                          🎯 Oblast {i + 1}: {c.lat.toFixed(4)}, {c.lng.toFixed(4)}
+                          🎯 {label}: {c.lat.toFixed(4)}, {c.lng.toFixed(4)}
                         </button>
                       )
                     })
@@ -1526,7 +1632,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           <div className="head-actions-wrap">
             <span className="whoami">{myProfile?.display_name}</span>
             <div className="head-actions">
-              <button className="new-btn" onClick={() => setShowLocations(true)} title="Revíry">📍</button>
+              <button
+                className={`new-btn ${locationsView ? 'active-toggle' : ''}`}
+                onClick={() => setLocationsView((v) => { const next = !v; if (next) setMobileSheetOpen(true); return next })}
+                title="Revíry"
+              >📍</button>
               <button className="new-btn" onClick={() => { setBaitsInitialKey(null); setShowBaits(true) }} title="Nástrahy">🪱</button>
               <button className="new-btn" onClick={() => setShowGallery(true)} title="Galerie">🖼</button>
               <button className="new-btn" onClick={() => setShowRecords(true)} title="Rekordy">🏆</button>
@@ -1549,7 +1659,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
       <div className="layout">
         <aside className="sidebar">
-          {renderSessionList()}
+          {locationsView ? renderLocationsList() : renderSessionList()}
         </aside>
 
         <main>
@@ -1595,12 +1705,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             <div className="type-picker" style={{ minWidth: 260 }}>
               <div className="type-picker-title">Vyber místa z katalogu</div>
               {locationsCatalog.length === 0 && <p className="hint-text">Katalog je zatím prázdný.</p>}
-              {locationsCatalog.map((loc) => (
-                <label key={loc.id} className="location-check-row">
-                  <input type="checkbox" checked={pickingCatalogIds.includes(loc.id)} onChange={() => togglePickingCatalogId(loc.id)} />
-                  <span>{loc.area ? '🎯' : '📍'} {loc.name}{loc.revir ? ` (${loc.revir})` : ''}</span>
-                </label>
-              ))}
+              <div className="location-checklist">
+                {locationsCatalog.map((loc) => (
+                  <label key={loc.id} className="location-check-row">
+                    <input type="checkbox" checked={pickingCatalogIds.includes(loc.id)} onChange={() => togglePickingCatalogId(loc.id)} />
+                    <span>{loc.area ? '🎯' : '📍'} {loc.name}{loc.revir ? ` (${loc.revir})` : ''}</span>
+                  </label>
+                ))}
+              </div>
               <button className="btn-primary" style={{ margin: '8px 0 0', width: '100%' }} onClick={proceedAttachLocations} disabled={pickingCatalogIds.length === 0}>Uložit výběr</button>
               <button
                 className="type-cancel"
@@ -1613,12 +1725,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             <div className="type-picker" style={{ minWidth: 260 }}>
               <div className="type-picker-title">Vyber místa z katalogu</div>
               {locationsCatalog.length === 0 && <p className="hint-text">Katalog je zatím prázdný.</p>}
-              {locationsCatalog.map((loc) => (
-                <label key={loc.id} className="location-check-row">
-                  <input type="checkbox" checked={pickingCatalogIds.includes(loc.id)} onChange={() => togglePickingCatalogId(loc.id)} />
-                  <span>{loc.area ? '🎯' : '📍'} {loc.name}{loc.revir ? ` (${loc.revir})` : ''}</span>
-                </label>
-              ))}
+              <div className="location-checklist">
+                {locationsCatalog.map((loc) => (
+                  <label key={loc.id} className="location-check-row">
+                    <input type="checkbox" checked={pickingCatalogIds.includes(loc.id)} onChange={() => togglePickingCatalogId(loc.id)} />
+                    <span>{loc.area ? '🎯' : '📍'} {loc.name}{loc.revir ? ` (${loc.revir})` : ''}</span>
+                  </label>
+                ))}
+              </div>
               <button className="btn-primary" style={{ margin: '8px 0 0', width: '100%' }} onClick={proceedFromCatalogSelection} disabled={pickingCatalogIds.length === 0}>Pokračovat</button>
               <button className="new-btn" style={{ marginTop: 6 }} onClick={() => setLocationPickerStep('choose')}>← Zpět</button>
               <button className="type-cancel" onClick={() => { setLocationPickerStep(null); setPickingCatalogIds([]) }}>Zrušit</button>
@@ -1628,12 +1742,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           {editingAreasSession && !areaDraft && (
             <div className="type-picker" style={{ minWidth: 260 }}>
               <div className="type-picker-title">Oblasti výpravy ({editingAreasSession.areas.length})</div>
-              {editingAreasSession.areas.map((pts, idx) => (
-                <div key={idx} className="rod-edit-row" style={{ marginBottom: 4 }}>
-                  <span className="hint-text" style={{ margin: 0, flex: 1 }}>Oblast {idx + 1} ({pts.length} bodů)</span>
-                  <button className="new-btn danger-btn" onClick={() => removeManagedArea(idx)}>🗑</button>
-                </div>
-              ))}
+              {editingAreasSession.areas.map((entry, idx) => {
+                const loc = entry.location_id ? locationsCatalog.find((l) => l.id === entry.location_id) : null
+                return (
+                  <div key={idx} className="rod-edit-row" style={{ marginBottom: 4 }}>
+                    <span className="hint-text" style={{ margin: 0, flex: 1 }}>{loc ? loc.name : `Oblast ${idx + 1}`} ({entry.points.length} bodů)</span>
+                    <button className="new-btn danger-btn" onClick={() => removeManagedArea(idx)}>🗑</button>
+                  </div>
+                )
+              })}
               {editingAreasSession.areas.length === 0 && (
                 <p className="hint-text">Žádná oblast — přidej aspoň jednu, nebo zruš úpravu.</p>
               )}
@@ -1736,7 +1853,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           )}
 
           <div className="desktop-detail-wrap">
-            {renderDetailStrip()}
+            {!locationsView && renderDetailStrip()}
           </div>
         </main>
       </div>
@@ -1747,12 +1864,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           <span className="peek-chevron">{mobileSheetOpen ? '▾' : '▴'}</span>
         </div>
         <div className="mobile-sheet-body">
-          {viewMode === 'detail' && activeSession && !draftSession ? (
-            <>
-              <button className="new-btn" onClick={() => setViewMode('aggregate')} style={{ margin: '0 18px 8px' }}>← Zpět na seznam</button>
-              {renderDetailStrip()}
-            </>
-          ) : renderSessionList()}
+          {locationsView ? renderLocationsList() : (
+            viewMode === 'detail' && activeSession && !draftSession ? (
+              <>
+                <button className="new-btn" onClick={() => setViewMode('aggregate')} style={{ margin: '0 18px 8px' }}>← Zpět na seznam</button>
+                {renderDetailStrip()}
+              </>
+            ) : renderSessionList()
+          )}
         </div>
       </div>
 
@@ -1885,7 +2004,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onAddBait={addBaitToCatalog}
           onBackfillBaitPhoto={backfillBaitPhoto}
           locationsCatalog={locationsCatalog}
-          onSetCatchRevir={setCatchRevir}
+          onSetCatchLocation={setCatchLocation}
           onRelocate={() => startRelocateCatch(ticketCatch.id)}
           onFocusLocation={() => {
             const c = ticketCatch
@@ -2513,18 +2632,21 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
             {draft.area ? (
               <div style={{ marginBottom: 10 }}>
                 <label className="field-label" style={{ marginTop: 0 }}>Oblasti ({draft.area.length})</label>
-                {draft.area.map((pts, idx) => (
-                  <div key={idx} className="rod-edit-row" style={{ marginBottom: 4 }}>
-                    <span className="hint-text" style={{ margin: 0, flex: 1 }}>Oblast {idx + 1} ({pts.length} bodů)</span>
-                    <button
-                      type="button" className="new-btn danger-btn"
-                      onClick={() => set('area', draft.area.filter((_, i) => i !== idx))}
-                    >🗑</button>
-                  </div>
-                ))}
+                {draft.area.map((entry, idx) => {
+                  const loc = entry.location_id ? locationsCatalog.find((l) => l.id === entry.location_id) : null
+                  return (
+                    <div key={idx} className="rod-edit-row" style={{ marginBottom: 4 }}>
+                      <span className="hint-text" style={{ margin: 0, flex: 1 }}>{loc ? loc.name : `Oblast ${idx + 1}`} ({entry.points.length} bodů)</span>
+                      <button
+                        type="button" className="new-btn danger-btn"
+                        onClick={() => set('area', draft.area.filter((_, i) => i !== idx))}
+                      >🗑</button>
+                    </div>
+                  )
+                })}
                 <button
                   type="button" className="new-btn"
-                  onClick={() => onStartAddArea((newAreas) => set('area', [...(draft.area || []), ...newAreas]))}
+                  onClick={() => onStartAddArea((newAreas) => set('area', [...(draft.area || []), ...newAreas.map((points) => ({ location_id: null, points }))]))}
                 >+ Přidat oblast</button>
               </div>
             ) : (

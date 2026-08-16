@@ -1,0 +1,159 @@
+ČISTÝ SVĚDOMÍ — souhrn stavu k datu přesunu do Projektu
+=========================================================
+
+CO TO JE
+--------
+Sdílený rybářský deník pro pár lidí (partu). React + Vite frontend,
+Supabase (Postgres, Auth, Storage) backend, Vercel hosting.
+Živá appka: cisty-svedomi.vercel.app
+GitHub: github.com/stepi21/cisty-svedomi (uživatel: stepi21)
+
+TECH STACK
+----------
+- React + Vite, Leaflet (OpenStreetMap)
+- Supabase: Postgres + Auth (magic link i heslo) + Storage (fotky)
+- Open-Meteo API pro počasí (zdarma, bez klíče)
+- Vercel (Hobby, zdarma)
+
+STAV DATABÁZE
+-------------
+Migrace 1 (schema.sql) až migrace 12 jsou VŠECHNY spuštěné a appka na ně
+sedí. Přiložené soubory schema.sql.txt a migration_2.sql.txt až
+migration_12.sql.txt obsahují přesné SQL — spouštět v tomto pořadí,
+pokud by se appka stavěla znovu od nuly.
+
+Klíčové tabulky: profiles, groups, group_members, group_invites,
+sessions, rods, catches, baits (katalog nástrah), session_locations
+(propojení výprav s katalogem míst), locations (katalog míst/revírů).
+
+HLAVNÍ FUNKCE (aktuální stav)
+-----------------------------
+- Přihlášení: magic link i heslo (uživatel si heslo nastavuje v Nastavení)
+- Výpravy: bodové (kapr/muška/plavaná/jiné) i oblastní (přívlač, víc
+  ploch najednou), zápis zpětně i "naživo" (tlačítko ▶️ na mapě —
+  auto datum/čas/počasí, červené "Probíhá", tlačítko Ukončit)
+- Katalog nástrah (🪱): sdílený, kdokoli přidá/použije, upravuje jen
+  autor. Rozlišuje dravec/bílá rybu, propojení s pruty/úlovky,
+  přejmenování se propisuje do historie (jen u vlastních záznamů)
+- Katalog míst/revírů (📍 Revíry): sdílený, uloží vyšrafovanou oblast
+  nebo orientační bod, jde vybrat při zakládání nové výpravy HNED PO
+  volbě typu (dřív než klikání na mapu) — buď z katalogu, nebo ručně
+  nakreslit. U kapra appka jen přiblíží mapu a doplní revír/název,
+  pozici prutu se pořád klika ručně.
+- Statistiky, Rekordy, Galerie fotek, Export dat (JSON)
+- Mobilní layout: mapa dominantní přes celou obrazovku, dole
+  vysouvací panel se seznamem výprav (na šířku ≤860px)
+
+ZMĚNY PROTI PŮVODNÍMU STAVU (tato dávka úprav)
+------------------------------------------------
+1. OPRAVA BUGU: "🔄 Aktualizovat podle katalogu" u výpravy používala
+   .map() místo .flatMap() při skládání oblastí víc katalogových míst
+   -> vznikla chybně vnořená struktura -> NaN centroid -> DB chyba
+   (lat nesmí být null). Opraveno na .flatMap() + normalizeAreas().
+2. NOVÁ FUNKCE: retroaktivní přiřazení místa z katalogu k už
+   existující (i staré/historické) výpravě. Tlačítko "📍 Místo" u
+   výpravy (nahradilo staré "Aktualizovat podle katalogu", to je teď
+   jedna z voleb v menu):
+   - pokud výprava nemá navázané žádné místo -> rovnou checklist
+   - pokud má -> menu: "🔄 Aktualizovat podle katalogu" (refresh
+     area/lat/lng z už navázaných míst) NEBO "+ Přidat/změnit místa"
+     (znovu otevře checklist, uloží PŘESNĚ to, co je zaškrtnuté,
+     a přepíše title/revir/area podle pravidla merge -- viz níže)
+   Pravidlo sloučení názvu: místa se stejnou "vodou" (část názvu před
+   " - ") se sloučí do jednoho ("Labe - Vaflák, soutok"), různá voda
+   se vypíše zvlášť ("Labe - soutok, Jizera - Otradovice"). Revíry se
+   sloučí jako unikátní seznam v pořadí prvního výskytu.
+   Funkce: mergeLocationNames(), mergeLocationRevirs() v Dashboard.jsx.
+3. NOVÁ FUNKCE: u jednotlivého úlovku (CatchTicket) tlačítko
+   "📍 Revír" (vidět jen když má výprava navázané katalogové místo).
+   Je-li navázané jen jedno místo, revír úlovku se nastaví rovnou;
+   je-li jich víc, appka se zeptá, na kterém z nich se chytalo, a
+   nastaví se jen ten jeden vybraný revír danému úlovku (žádná
+   automatická detekce podle GPS pozice úlovku -- je to čistě ruční
+   volba uživatele, appka jen zapíše zvolenou hodnotu).
+   Tohle se dělá výhradně ručně, úlovek po úlovku -- žádné hromadné
+   přepsání "podle polohy" zatím není (viz bod 2 níže v nedodělaném).
+
+ZNÁMÉ NEDODĚLANÉ VĚCI (co uživatel chce příště)
+------------------------------------------------
+1. Hromadné nahrazení starých názvů/revírů novými revíry z katalogu
+   napříč víc výpravami najednou (teď se dělá výprava po výpravě,
+   úlovek po úlovku) -- potřeba s náhledem/potvrzením před přepsáním.
+2. Případná automatická detekce, ve které konkrétní vyšrafované
+   oblasti úlovek leží (point-in-polygon), místo ručního výběru revíru
+   u úlovku -- vědomě zatím NEimplementováno, uživatel chtěl mít
+   výběr pod kontrolou.
+3. Menší mezera: "Upravit oblasti" (smazání konkrétního polygonu z
+   výpravy) zatím nemaže odpovídající řádek v session_locations, i
+   když tím z výpravy zmizí poslední polygon patřící danému místu --
+   výprava tak může zůstat "navázaná" na místo, ze kterého už fyzicky
+   nic nezbylo. Neřešeno, drobné a nekritické.
+
+ZMĚNY PROTI PŘEDCHOZÍ DÁVCE (oprava buttonů, oprava párování úlovků,
+vazba polygon<->katalog, přepínač Revíry)
+------------------------------------------------
+1. OPRAVA: v katalogu míst se úlovek dřív ukazoval u KAŽDÉHO místa
+   navázaného na jeho výpravu, i když patřil jen k jednomu z nich.
+   LocationsModal.jsx teď páruje úlovek ke konkrétnímu místu podle
+   catches.location_id, ne podle celé výpravy.
+2. NOVÉ: sessions.area u přívlačových výprav se souborem víc oblastí
+   teď u KAŽDÉHO polygonu nese i location_id katalogového místa, ze
+   kterého vznikl (formát prvku pole se mění z pouhého pole bodů na
+   {location_id, points} -- normalizeSessionAreas() v Dashboard.jsx to
+   čte, umí i starý plochý formát bez location_id). Díky tomu:
+   - "Oblast 1"/"Oblast 2" v seznamu pod výpravou i v popisku puntíku
+     na mapě se zobrazí jako skutečný katalogový název, pokud tam je
+   - klik na puntík na mapě u katalogového místa otevře jeho detail
+     v katalogu (úlovky, výpravy) -- zavřením se appka vrátí přesně
+     tam, kde byla (je to jen overlay modal, nic se nepřepočítává)
+3. NOVÉ: catches.location_id (migrace 13) -- úlovek ví, ke kterému
+   jednomu konkrétnímu katalogovému místu patří. Automaticky se
+   doplní, když má výprava navázané přesně JEDNO katalogové místo
+   (při vytvoření úlovku i při dodatečném přiřazení místa k výpravě
+   přes "📍 Místo"); u víc míst zůstává ruční výběr přes tlačítko
+   "📍 Revír" u úlovku (to se teď zobrazí, jen když je opravdu z čeho
+   vybírat -- 2 a víc navázaných míst).
+4. "📌 Uložit místo do katalogu" se u výpravy schová, pokud už má
+   navázané nějaké katalogové místo (nedávalo smysl ukládat místo,
+   které z katalogu už je).
+5. Checklist míst (u nové výpravy i u dodatečného "+ Přidat/změnit
+   místa") má teď omezenou výšku se scrollováním (.location-checklist)
+   -- tlačítka Uložit/Zrušit zůstávají vždy na dosah i u velkého
+   katalogu. Otevření "📍 Místo" i checklistu teď rovnou sbalí mobilní
+   lištu, ať je vidět mapa a panel.
+6. NOVÝ přepínač "📍 Revíry" v hlavičce (locationsView v Dashboard.jsx):
+   klik přepne postranní panel/mobilní lištu na seznam katalogových
+   míst (+ "Přidat místo") a mapu na zobrazení JEN vyšrafovaných/bodo-
+   vých míst z katalogu -- bez úlovků a výprav. Klik na místo (v
+   seznamu i na mapě) otevře stejný detail jako dosud. Druhý klik na
+   "📍 Revíry" přepínač vypne a appka se vrátí přesně tam, kde byla
+   (výprava/filtr/zoom se celou dobu nemění, jen se překryje/odkryje).
+   Zapnutí je nezávislé na zbytku appky.
+
+DŮLEŽITÉ TECHNICKÉ POUČENÍ Z HISTORIE (nedělat znovu!)
+--------------------------------------------------------
+- NIKDY neměnit globální fetch v supabaseClient.js (např. přidávání
+  cache-busting parametrů) — jednou to omylem rozbilo přihlašování
+  všech zařízení, protože to zasáhlo i Supabase Auth interní volání.
+- Formát "oblastí" u KATALOGOVÝCH MÍST (locations.area) zůstává pole
+  polygonů: [[{lat,lng},...], [...]]. Formát u VÝPRAV (sessions.area)
+  je od migrace 13 jiný: pole objektů {location_id, points: [...]}
+  (viz sekce výše) -- normalizeAreas() je pro ten starý plochý formát
+  (katalog), normalizeSessionAreas() pro ten nový u výprav. Nepočítat
+  s tím, že jsou zaměnitelné.
+  Při SKLÁDÁNÍ víc míst z katalogu dohromady je nutné použít
+  .flatMap(), NE .map() — jinak vznikne chybně vnořená struktura,
+  která při vykreslení na mapě spadne (appka má teď obrannou validaci
+  v normalizeAreas()/normalizeSessionAreas(), co tomu zabrání, ale
+  správně sestavovat data je pořád potřeba).
+- RLS: úpravy/mazání vlastních záznamů (výpravy, úlovky, pruty,
+  nástrahy, místa) — vždy jen autor, server to i vynucuje.
+- Appka je nasazená přes Vercel, buildovaná ze zdrojového kódu na
+  GitHubu — po každé úpravě je potřeba nahrát nový zip (rozbalený)
+  na GitHub a počkat na rebuild.
+
+SOUBORY V TÉTO PŘÍLOZE
+-----------------------
+Všechny .jsx/.js/.css/.sql soubory mají příponu .txt navíc (Projekty
+nepodporují .zip ani přímo .jsx/.sql), obsah je ale beze změny —
+klidně přejmenuj zpátky, pokud si je stáhneš pro editaci mimo appku.
