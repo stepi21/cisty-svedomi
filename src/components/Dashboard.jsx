@@ -62,6 +62,17 @@ function mergeLocationRevirs(locations) {
   return seen.join(', ') || null
 }
 
+// Pokud má výprava/úlovek navázané právě jedno katalogové místo a to místo má
+// ručně potvrzenou/přiřazenou stanici ČHMÚ, použije se ta -- appka pak
+// NEPŘEPOČÍTÁVÁ nejbližší stanici znovu podle souřadnic (to by přepsalo
+// ruční opravu v katalogu).
+function resolveHydroStation(linkedLocationIds, locationsCatalog) {
+  if (!linkedLocationIds || linkedLocationIds.length !== 1) return null
+  const loc = locationsCatalog.find((l) => l.id === linkedLocationIds[0])
+  if (!loc?.hydro_station_id) return null
+  return { objID: loc.hydro_station_id, name: loc.hydro_station_name, stream: loc.hydro_stream_name }
+}
+
 export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [sessions, setSessions] = useState([])
   const [activeId, setActiveId] = useState(null)
@@ -1088,6 +1099,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       wind: s.weather_wind || '', desc: s.weather_desc || '',
       waterLevel: s.water_level_cm ?? null, waterFlow: s.water_flow_m3s ?? null, waterTemp: s.water_temp_c ?? null,
       waterStationName: s.water_station_name || null, waterPrecision: s.water_data_precision || null,
+      linkedLocationIds: (s.session_locations || []).map((sl) => sl.location_id),
       lat: s.lat, lng: s.lng,
     })
   }
@@ -1928,6 +1940,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           baitCatalog={mergedBaitOptions(baitCategoryFor(activeSession.type))}
           baitCategory={baitCategoryFor(activeSession.type)}
           onAddBait={addBaitToCatalog}
+          locationsCatalog={locationsCatalog}
         />
       )}
 
@@ -2000,6 +2013,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onDelete={deleteSession}
           onRelocate={handleRelocateSession}
           onManageAreas={() => startManageAreas(sessions.find((s) => s.id === editingSession.id))}
+          locationsCatalog={locationsCatalog}
         />
       )}
 
@@ -2302,7 +2316,7 @@ function StatsModal({ sessions, members, userColor, onClose }) {
   )
 }
 
-function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onRelocate, onManageAreas }) {
+function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onRelocate, onManageAreas, locationsCatalog = [] }) {
   const [busy, setBusy] = useState(false)
   const [weatherBusy, setWeatherBusy] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
@@ -2319,7 +2333,8 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
     }
     // vodní stav — nezávisle na počasí, tiché selhání (žádná chyba nezobrazená uživateli)
     try {
-      const [station] = await findNearestStations(draft.lat, draft.lng, 1)
+      const linkedStation = resolveHydroStation(draft.linkedLocationIds, locationsCatalog)
+      const station = linkedStation || (await findNearestStations(draft.lat, draft.lng, 1))[0]
       if (station) {
         const water = await fetchWaterConditions(station.objID, draft.date, draft.timeFrom)
         if (water) {
@@ -2647,7 +2662,8 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
       setWeatherError(e.message)
     }
     try {
-      const [station] = await findNearestStations(draft.point.lat, draft.point.lng, 1)
+      const linkedStation = resolveHydroStation(draft.linkedLocationIds, locationsCatalog)
+      const station = linkedStation || (await findNearestStations(draft.point.lat, draft.point.lng, 1))[0]
       if (station) {
         const water = await fetchWaterConditions(station.objID, draft.date, draft.timeFrom)
         if (water) {
@@ -2805,7 +2821,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
   )
 }
 
-function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, onAddBait }) {
+function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, onAddBait, locationsCatalog = [] }) {
   const [busy, setBusy] = useState(false)
   const [weatherBusy, setWeatherBusy] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
@@ -2832,7 +2848,9 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
       setWeatherError(e.message)
     }
     try {
-      const [station] = await findNearestStations(draft.point.lat, draft.point.lng, 1)
+      const linkedIds = (session.session_locations || []).map((sl) => sl.location_id)
+      const linkedStation = resolveHydroStation(linkedIds, locationsCatalog)
+      const station = linkedStation || (await findNearestStations(draft.point.lat, draft.point.lng, 1))[0]
       if (station) {
         const water = await fetchWaterConditions(station.objID, session.session_date, draft.time)
         if (water) {

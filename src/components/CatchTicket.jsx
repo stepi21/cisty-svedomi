@@ -57,7 +57,10 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
       setWeatherError(e.message)
     }
     try {
-      const [station] = await findNearestStations(c.lat, c.lng, 1)
+      const confirmed = linkedLocations.length === 1 && linkedLocations[0].hydro_station_id ? linkedLocations[0] : null
+      const station = confirmed
+        ? { objID: confirmed.hydro_station_id, name: confirmed.hydro_station_name }
+        : (await findNearestStations(c.lat, c.lng, 1))[0]
       if (station) {
         const water = await fetchWaterConditions(station.objID, session?.session_date || c.caught_at?.slice(0, 10), form.time)
         if (water) {
