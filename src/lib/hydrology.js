@@ -136,22 +136,41 @@ async function fetchMonthlyAverage(stationId, dateStr) {
   const year = dateStr.slice(0, 4)
   const month = Number(dateStr.slice(5, 7))
   const path = `hydrology/historical/data/monthly/H_${stationId}_MQ_${year}.json`
-  const res = await chmiFetch(path)
-  if (!res.ok) return null
+  let res
+  try {
+    res = await chmiFetch(path)
+  } catch (err) {
+    console.error(`ČHMÚ — fetch ${path} selhal:`, err)
+    return null
+  }
+  if (!res.ok) {
+    console.warn(`ČHMÚ — ${path} vrátilo HTTP ${res.status} (buď stanice pro ten rok nemá data, nebo je jinak pojmenovaný soubor).`)
+    return null
+  }
   const json = await res.json()
   // Formát měsíčních dat appka zatím nemá ověřený na reálném vzorku (jen
   // odvozený z názvů souborů) — zkusí pár rozumných tvarů, jinak vrátí null
-  // (radši nic, než tichá chyba v datech).
+  // (radši nic, než tichá chyba v datech) a vypíše do konzole syrová data,
+  // ať jde snadno doladit parsování, jakmile uvidíme skutečný tvar.
   const table = json?.data?.data
   const rows = table?.values || json?.values
   const header = table?.header || json?.header
-  if (!rows || !header) return null
+  if (!rows || !header) {
+    console.warn(`ČHMÚ — neočekávaný formát ${path}, syrová data:`, json)
+    return null
+  }
   const cols = header.split(',')
   const monthIdx = cols.findIndex((c) => /^(m|month|mesic|měsíc)$/i.test(c.trim()))
   const valueIdx = cols.findIndex((c) => /^(q|value|hodnota)$/i.test(c.trim()))
-  if (monthIdx === -1 || valueIdx === -1) return null
+  if (monthIdx === -1 || valueIdx === -1) {
+    console.warn(`ČHMÚ — sloupce v ${path} neodpovídají očekávání, header:`, header)
+    return null
+  }
   const row = rows.find((r) => Number(r[monthIdx]) === month)
-  if (!row || row[valueIdx] == null) return null
+  if (!row || row[valueIdx] == null) {
+    console.warn(`ČHMÚ — v ${path} nenalezen měsíc ${month}, dostupné řádky:`, rows)
+    return null
+  }
   return { level_cm: null, flow_m3s: row[valueIdx], temp_c: null }
 }
 
