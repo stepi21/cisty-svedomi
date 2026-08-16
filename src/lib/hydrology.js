@@ -12,8 +12,9 @@
 //                    hranice retenčního okna není z dokumentace jistá, appka
 //                    to zkouší přes fetchNowOrRecent a při chybě/404 padá
 //                    zpátky na měsíční průměr
-//   'monthly_avg' - jen měsíční průměr průtoku (historical/monthly/) —
-//                    vodní stav a teplota vody tam ČHMÚ neposkytuje
+//   'monthly_avg' - jen měsíční průměr průtoku a teploty vody
+//                    (historical/monthly/) — vodní stav tam ČHMÚ
+//                    v měsíčních datech neposkytuje
 
 // POZNÁMKA K CORS (ověřeno v provozu): opendata.chmi.cz neposílá CORS
 // hlavičky, takže přímé volání z prohlížeče appky prohlížeč zablokuje.
@@ -144,34 +145,23 @@ async function fetchMonthlyAverage(stationId, dateStr) {
     return null
   }
   if (!res.ok) {
-    console.warn(`ČHMÚ — ${path} vrátilo HTTP ${res.status} (buď stanice pro ten rok nemá data, nebo je jinak pojmenovaný soubor).`)
+    console.warn(`ČHMÚ — ${path} vrátilo HTTP ${res.status} (stanice pro ten rok nejspíš nemá historická data).`)
     return null
   }
   const json = await res.json()
-  // Formát měsíčních dat appka zatím nemá ověřený na reálném vzorku (jen
-  // odvozený z názvů souborů) — zkusí pár rozumných tvarů, jinak vrátí null
-  // (radši nic, než tichá chyba v datech) a vypíše do konzole syrová data,
-  // ať jde snadno doladit parsování, jakmile uvidíme skutečný tvar.
-  const table = json?.data?.data
-  const rows = table?.values || json?.values
-  const header = table?.header || json?.header
-  if (!rows || !header) {
+  // Stejný tvar jako now/recent (tsList s tsConID/tsData), jen bez obálky
+  // "objList" a s jinými kódy: QM = měsíční průměrný průtok, TM = měsíční
+  // průměrná teplota vody. Vodní stav (H) tu ČHMÚ v měsíčních datech nemá.
+  const tsList = json?.tsList
+  if (!tsList) {
     console.warn(`ČHMÚ — neočekávaný formát ${path}, syrová data:`, json)
     return null
   }
-  const cols = header.split(',')
-  const monthIdx = cols.findIndex((c) => /^(m|month|mesic|měsíc)$/i.test(c.trim()))
-  const valueIdx = cols.findIndex((c) => /^(q|value|hodnota)$/i.test(c.trim()))
-  if (monthIdx === -1 || valueIdx === -1) {
-    console.warn(`ČHMÚ — sloupce v ${path} neodpovídají očekávání, header:`, header)
-    return null
-  }
-  const row = rows.find((r) => Number(r[monthIdx]) === month)
-  if (!row || row[valueIdx] == null) {
-    console.warn(`ČHMÚ — v ${path} nenalezen měsíc ${month}, dostupné řádky:`, rows)
-    return null
-  }
-  return { level_cm: null, flow_m3s: row[valueIdx], temp_c: null }
+  const target = new Date(`${year}-${String(month).padStart(2, '0')}-01T00:00:00Z`)
+  const flow_m3s = closestValue(tsList, 'QM', target)
+  const temp_c = closestValue(tsList, 'TM', target)
+  if (flow_m3s == null && temp_c == null) return null
+  return { level_cm: null, flow_m3s, temp_c }
 }
 
 // Hlavní funkce — pro danou stanici a datum (+ volitelně čas) vrátí vodní
