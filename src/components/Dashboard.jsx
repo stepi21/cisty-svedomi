@@ -8,6 +8,7 @@ import BaitsModal from './BaitsModal.jsx'
 import BaitPicker from './BaitPicker.jsx'
 import LocationsModal from './LocationsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
+import { fetchWaterConditions, fetchLiveConditions, findNearestStations, WATER_PRECISION_LABEL } from '../lib/hydrology.js'
 import { uploadPhoto } from '../lib/storage.js'
 
 const iconCarp = `<svg viewBox="0 0 24 24" fill="none"><path d="M3 12c0-4 5-7 10-7s8 3 8 7-3 7-8 7-10-3-10-7Z" stroke="#2C6E71" stroke-width="1.6"/><circle cx="16" cy="10.5" r="1" fill="#2C6E71"/></svg>`
@@ -1005,6 +1006,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         lat: s.point.lat, lng: s.point.lng, area: s.area,
         weather_temp_c: s.temp || null, weather_pressure_hpa: s.pressure || null,
         weather_wind: s.wind || null, weather_desc: s.desc || null,
+        water_level_cm: s.waterLevel ?? null, water_flow_m3s: s.waterFlow ?? null, water_temp_c: s.waterTemp ?? null,
+        water_station_name: s.waterStationName || null, water_data_precision: s.waterPrecision || null,
         status: s.live ? 'in_progress' : 'completed',
       }).select().single()
     if (sErr) { alert(sErr.message); return }
@@ -1069,6 +1072,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       location_id, revir,
       weather_temp_c: c.weather_temp_c ?? null, weather_pressure_hpa: c.weather_pressure_hpa ?? null,
       weather_wind: c.weather_wind || null, weather_desc: c.weather_desc || null,
+      water_level_cm: c.water_level_cm ?? null, water_flow_m3s: c.water_flow_m3s ?? null, water_temp_c: c.water_temp_c ?? null,
+      water_station_name: c.water_station_name || null, water_data_precision: c.water_data_precision || null,
     })
     if (error) { alert(error.message); return }
     setDraftCatch(null)
@@ -1081,6 +1086,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       timeFrom: s.time_from || '', timeTo: s.time_to || '',
       temp: s.weather_temp_c ?? '', pressure: s.weather_pressure_hpa ?? '',
       wind: s.weather_wind || '', desc: s.weather_desc || '',
+      waterLevel: s.water_level_cm ?? null, waterFlow: s.water_flow_m3s ?? null, waterTemp: s.water_temp_c ?? null,
+      waterStationName: s.water_station_name || null, waterPrecision: s.water_data_precision || null,
       lat: s.lat, lng: s.lng,
     })
   }
@@ -1091,6 +1098,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       title: e.title, session_date: e.date, revir: e.revir || null, target_species: e.target_species || null, time_from: e.timeFrom || null, time_to: e.timeTo || null,
       weather_temp_c: e.temp || null, weather_pressure_hpa: e.pressure || null,
       weather_wind: e.wind || null, weather_desc: e.desc || null,
+      water_level_cm: e.waterLevel ?? null, water_flow_m3s: e.waterFlow ?? null, water_temp_c: e.waterTemp ?? null,
+      water_station_name: e.waterStationName || null, water_data_precision: e.waterPrecision || null,
     }).eq('id', e.id)
     if (error) { alert(error.message); return }
     setEditingSession(null)
@@ -1519,6 +1528,18 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   <div className="w-item"><div className="num">{activeSession.weather_pressure_hpa ?? '—'} hPa</div><div className="lab">tlak</div></div>
                   <div className="w-item"><div className="num">{activeSession.weather_wind || '—'}</div><div className="lab">vítr</div></div>
                 </div>
+                {activeSession.water_station_name && (
+                  <div className="weather-row" style={{ marginTop: 8 }}>
+                    <div className="w-item"><div className="num">💧 {activeSession.water_level_cm ?? '—'} cm</div><div className="lab">vodní stav</div></div>
+                    <div className="w-item"><div className="num">{activeSession.water_flow_m3s ?? '—'} m³/s</div><div className="lab">průtok</div></div>
+                    {activeSession.water_temp_c != null && <div className="w-item"><div className="num">{activeSession.water_temp_c}°C</div><div className="lab">teplota vody</div></div>}
+                  </div>
+                )}
+                {activeSession.water_station_name && (
+                  <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--ink-soft)' }}>
+                    {activeSession.water_station_name}{activeSession.water_data_precision ? ` · ${WATER_PRECISION_LABEL[activeSession.water_data_precision]}` : ''}
+                  </div>
+                )}
                 <div style={{ marginTop: 8, fontSize: 13, color: 'var(--ink-soft)' }}>{activeSession.weather_desc}</div>
                 <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-soft)' }}>🌙 {moonPhaseName(activeSession.session_date)}</div>
               </div>
@@ -2296,6 +2317,22 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
     } catch (e) {
       setWeatherError(e.message)
     }
+    // vodní stav — nezávisle na počasí, tiché selhání (žádná chyba nezobrazená uživateli)
+    try {
+      const [station] = await findNearestStations(draft.lat, draft.lng, 1)
+      if (station) {
+        const water = await fetchWaterConditions(station.objID, draft.date, draft.timeFrom)
+        if (water) {
+          setDraft((d) => ({
+            ...d,
+            waterLevel: water.level_cm, waterFlow: water.flow_m3s, waterTemp: water.temp_c,
+            waterStationName: station.name, waterPrecision: water.precision,
+          }))
+        }
+      }
+    } catch {
+      // ČHMÚ se nepovedlo — appka to prostě nechá prázdné
+    }
     setWeatherBusy(false)
   }
 
@@ -2353,9 +2390,15 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
             )}
 
             <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy}>
-              {weatherBusy ? 'Zjišťuji počasí…' : '🌤 Přepočítat počasí pro nové datum'}
+              {weatherBusy ? 'Zjišťuji…' : '🌤 Přepočítat podmínky pro nové datum'}
             </button>
             {weatherError && <p className="error-text">{weatherError}</p>}
+            {draft.waterStationName && (
+              <p className="hint-text" style={{ marginTop: 6 }}>
+                💧 {draft.waterLevel != null ? `${draft.waterLevel} cm` : '—'} · {draft.waterFlow != null ? `${draft.waterFlow} m³/s` : '—'}
+                {draft.waterTemp != null ? ` · ${draft.waterTemp} °C` : ''} ({draft.waterStationName}{draft.waterPrecision ? `, ${WATER_PRECISION_LABEL[draft.waterPrecision]}` : ''})
+              </p>
+            )}
 
             <div className="input-row" style={{ marginTop: 10 }}>
               <div>
@@ -2603,6 +2646,21 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
     } catch (e) {
       setWeatherError(e.message)
     }
+    try {
+      const [station] = await findNearestStations(draft.point.lat, draft.point.lng, 1)
+      if (station) {
+        const water = await fetchWaterConditions(station.objID, draft.date, draft.timeFrom)
+        if (water) {
+          setDraft((d) => ({
+            ...d,
+            waterLevel: water.level_cm, waterFlow: water.flow_m3s, waterTemp: water.temp_c,
+            waterStationName: station.name, waterPrecision: water.precision,
+          }))
+        }
+      }
+    } catch {
+      // ČHMÚ se nepovedlo — appka to prostě nechá prázdné
+    }
     setWeatherBusy(false)
   }
 
@@ -2681,9 +2739,15 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
             </div>
 
             <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy} style={{ marginTop: 10 }}>
-              {weatherBusy ? 'Zjišťuji počasí…' : '🌤 Doplnit počasí automaticky'}
+              {weatherBusy ? 'Zjišťuji…' : '🌤 Doplnit podmínky automaticky'}
             </button>
             {weatherError && <p className="error-text">{weatherError}</p>}
+            {draft.waterStationName && (
+              <p className="hint-text" style={{ marginTop: 6 }}>
+                💧 {draft.waterLevel != null ? `${draft.waterLevel} cm` : '—'} · {draft.waterFlow != null ? `${draft.waterFlow} m³/s` : '—'}
+                {draft.waterTemp != null ? ` · ${draft.waterTemp} °C` : ''} ({draft.waterStationName}{draft.waterPrecision ? `, ${WATER_PRECISION_LABEL[draft.waterPrecision]}` : ''})
+              </p>
+            )}
             {draft.date && <p className="hint-text" style={{ marginTop: 8 }}>🌙 {moonPhaseName(draft.date)}</p>}
 
             <div className="input-row" style={{ marginTop: 10 }}>
@@ -2767,6 +2831,21 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
     } catch (e) {
       setWeatherError(e.message)
     }
+    try {
+      const [station] = await findNearestStations(draft.point.lat, draft.point.lng, 1)
+      if (station) {
+        const water = await fetchWaterConditions(station.objID, session.session_date, draft.time)
+        if (water) {
+          setDraft((d) => ({
+            ...d,
+            water_level_cm: water.level_cm, water_flow_m3s: water.flow_m3s, water_temp_c: water.temp_c,
+            water_station_name: station.name, water_data_precision: water.precision,
+          }))
+        }
+      }
+    } catch {
+      // ČHMÚ se nepovedlo — appka to prostě nechá prázdné
+    }
     setWeatherBusy(false)
   }
 
@@ -2813,12 +2892,18 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
               </div>
             </div>
             <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy} style={{ marginBottom: 8 }}>
-              {weatherBusy ? 'Zjišťuji…' : '🌤 Dopočítat počasí pro tento čas'}
+              {weatherBusy ? 'Zjišťuji…' : '🌤 Dopočítat podmínky pro tento čas'}
             </button>
             {weatherError && <p className="error-text">{weatherError}</p>}
             {draft.weather_temp_c != null && (
-              <p className="hint-text" style={{ marginBottom: 10 }}>
+              <p className="hint-text" style={{ marginBottom: 6 }}>
                 {draft.weather_temp_c}°C · {draft.weather_pressure_hpa} hPa · {draft.weather_wind} · {draft.weather_desc}
+              </p>
+            )}
+            {draft.water_station_name && (
+              <p className="hint-text" style={{ marginBottom: 10 }}>
+                💧 {draft.water_level_cm != null ? `${draft.water_level_cm} cm` : '—'} · {draft.water_flow_m3s != null ? `${draft.water_flow_m3s} m³/s` : '—'}
+                {draft.water_temp_c != null ? ` · ${draft.water_temp_c} °C` : ''} ({draft.water_station_name}{draft.water_data_precision ? `, ${WATER_PRECISION_LABEL[draft.water_data_precision]}` : ''})
               </p>
             )}
             <label className="field-label">Nástraha</label>

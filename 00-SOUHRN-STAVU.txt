@@ -73,6 +73,34 @@ ZMĚNY PROTI PŮVODNÍMU STAVU (tato dávka úprav)
    volba uživatele, appka jen zapíše zvolenou hodnotu).
    Tohle se dělá výhradně ručně, úlovek po úlovku -- žádné hromadné
    přepsání "podle polohy" zatím není (viz bod 2 níže v nedodělaném).
+8. NOVÁ FUNKCE: vodní stav/průtok/teplota vody z otevřených dat ČHMÚ
+   (opendata.chmi.cz, licence CC BY 4.0, bez klíče). Sloučeno se
+   stávajícím tlačítkem počasí -- přejmenováno na "🌤 Doplnit
+   podmínky", spouští oboje najednou (Open-Meteo + ČHMÚ paralelně).
+   Selže-li ČHMÚ (CORS/výpadek/stanice nenalezena), appka to tiše
+   přeskočí a počasí se uloží normálně -- žádná nová chybová hláška.
+   Přesnost podle stáří data appka volí sama (sloupec
+   water_data_precision): 'live' (dnešek, 10min data), 'recent'
+   (nedávno, denní podrobnost) nebo 'monthly_avg' (starší data --
+   jen měsíční průměr průtoku, vodní stav/teplota vody tam ČHMÚ
+   neposkytuje). Nová knihovna: src/lib/hydrology.js.
+   Zobrazeno u výpravy (detail-strip), u úlovku (conditions-strip)
+   a v katalogu míst (LocationsModal) -- tam ŽIVĚ při otevření
+   detailu (ne uložená hodnota), protože jde o "jak je na revíru
+   TEĎ", ne o historickou hodnotu. U katalogového místa appka najde
+   nejbližší stanici automaticky, nabídne k potvrzení nebo jde
+   vybrat jinou (hydro_station_id na locations).
+   NEOVĚŘENO ŽIVĚ, zkontrolovat po nasazení jako první:
+   a) CORS -- opendata.chmi.cz je statický souborový server, není
+      jisté, že posílá hlavičky povolující volání z prohlížeče
+      appky (na rozdíl od Open-Meteo). Pokud se objeví chyba v
+      konzoli o zablokovaném CORS požadavku, bude potřeba přidat
+      malý proxy (Supabase Edge Function).
+   b) Formát JSON u historical/monthly (roční měsíční průměry) je v
+      kódu jen kvalifikovaný odhad podle názvu souboru -- reálný
+      vzorek appka zatím neměla k dispozici.
+   c) Přesná hranice retenčního okna "recent" (kolik dní/měsíců
+      zpátky opravdu sahá) není z dokumentace jistá.
 
 ZNÁMÉ NEDODĚLANÉ VĚCI (co uživatel chce příště)
 ------------------------------------------------

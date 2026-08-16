@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import L from 'leaflet'
+import { fetchLiveConditions, findNearestStations } from '../lib/hydrology.js'
 
 const fishSVG = (color) => `
   <svg viewBox="0 0 64 34" xmlns="http://www.w3.org/2000/svg">
@@ -59,6 +60,7 @@ export default function LocationsModal({ locations, sessions, userId, initialLoc
             </div>
             {selected.revir && <p className="hint-text">Revír: {selected.revir}</p>}
             <LocationPreviewMap location={selected} />
+            <WaterStatusBlock location={selected} canEdit={canEdit} onUpdate={onUpdate} />
 
             <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 14 }}>
               {catches.length === 0 ? 'Zatím na tomto místě nic nechyceno.' : `${catches.length} chycených ryb na tomto místě`}
@@ -127,6 +129,113 @@ export default function LocationsModal({ locations, sessions, userId, initialLoc
           ))}
         </div>
       </div>
+    </div>
+  )
+}
+
+function WaterStatusBlock({ location, canEdit, onUpdate }) {
+  const [live, setLive] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [stationName, setStationName] = useState(location.hydro_station_name || null)
+  const [stationStream, setStationStream] = useState(location.hydro_stream_name || null)
+  const [pendingStationId, setPendingStationId] = useState(null) // nepotvrzený automatický návrh
+  const [picking, setPicking] = useState(false)
+  const [nearby, setNearby] = useState([])
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      if (location.lat == null || location.lng == null) return
+      setLoading(true)
+      setLive(null)
+      try {
+        let stationId = location.hydro_station_id
+        if (stationId) {
+          if (cancelled) return
+          setStationName(location.hydro_station_name)
+          setStationStream(location.hydro_stream_name)
+          setPendingStationId(null)
+        } else {
+          const [nearest] = await findNearestStations(location.lat, location.lng, 1)
+          if (cancelled) return
+          if (nearest) {
+            stationId = nearest.objID
+            setStationName(nearest.name)
+            setStationStream(nearest.stream)
+            setPendingStationId(nearest.objID)
+          }
+        }
+        if (stationId) {
+          const data = await fetchLiveConditions(stationId)
+          if (!cancelled) setLive(data)
+        }
+      } catch {
+        // ČHMÚ se nepovedlo — appka to prostě nezobrazí
+      }
+      if (!cancelled) setLoading(false)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [location.id, location.hydro_station_id])
+
+  async function confirmSuggested() {
+    if (!pendingStationId) return
+    await onUpdate(location.id, { hydro_station_id: pendingStationId, hydro_station_name: stationName, hydro_stream_name: stationStream })
+    setPendingStationId(null)
+  }
+
+  async function openPicker() {
+    setPicking(true)
+    const list = await findNearestStations(location.lat, location.lng, 6)
+    setNearby(list)
+  }
+
+  async function pickStation(s) {
+    setPicking(false)
+    await onUpdate(location.id, { hydro_station_id: s.objID, hydro_station_name: s.name, hydro_stream_name: s.stream })
+  }
+
+  if (location.lat == null || location.lng == null) return null
+
+  return (
+    <div style={{ marginTop: 10, padding: '10px 12px', background: 'var(--paper)', border: '1px solid var(--paper-line)', borderRadius: 8 }}>
+      <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--ink-soft)', marginBottom: 6 }}>
+        💧 Aktuální vodní stav
+      </div>
+      {loading && <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: 0 }}>Zjišťuji…</p>}
+      {!loading && live && (
+        <div className="weather-row">
+          <div className="w-item"><div className="num">{live.level_cm ?? '—'} cm</div><div className="lab">vodní stav</div></div>
+          <div className="w-item"><div className="num">{live.flow_m3s ?? '—'} m³/s</div><div className="lab">průtok</div></div>
+          {live.temp_c != null && <div className="w-item"><div className="num">{live.temp_c}°C</div><div className="lab">teplota vody</div></div>}
+        </div>
+      )}
+      {!loading && !live && <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: 0 }}>Pro tohle místo se nepodařilo najít data ČHMÚ.</p>}
+      {stationName && (
+        <p style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 6, marginBottom: 0 }}>
+          stanice {stationName}{stationStream ? ` (${stationStream})` : ''}
+        </p>
+      )}
+      {canEdit && pendingStationId && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <button type="button" className="new-btn" onClick={confirmSuggested}>✓ Potvrdit tuhle stanici</button>
+          <button type="button" className="new-btn" onClick={openPicker}>Vybrat jinou</button>
+        </div>
+      )}
+      {canEdit && !pendingStationId && (
+        <button type="button" className="new-btn" onClick={openPicker} style={{ marginTop: 8 }}>Změnit stanici</button>
+      )}
+      {picking && (
+        <div style={{ marginTop: 8 }}>
+          {nearby.length === 0 && <p style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Hledám nejbližší stanice…</p>}
+          {nearby.map((s) => (
+            <div key={s.objID} className="bait-picker-item" onClick={() => pickStation(s)}>
+              <span>{s.name} ({s.stream}) — {s.distanceKm.toFixed(1)} km</span>
+            </div>
+          ))}
+          <button type="button" className="type-cancel" onClick={() => setPicking(false)}>Zrušit</button>
+        </div>
+      )}
     </div>
   )
 }
