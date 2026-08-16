@@ -115,6 +115,21 @@ function closestValue(tsList, conID, targetDate) {
   return closest.value ?? null
 }
 
+// Měsíční data mají tsData v jiném (kompaktním tabulkovém) tvaru, ověřeno
+// naživo: { data: { header: "DT,VAL", values: [["2025-01-01T00:00:00Z", 91.7], ...] } }
+function closestMonthlyValue(tsList, conID, targetDate) {
+  const ts = tsList.find((t) => t.tsConID === conID)
+  const rows = ts?.tsData?.data?.values
+  if (!rows?.length) return null
+  let closest = rows[0]
+  let bestDiff = Infinity
+  for (const row of rows) {
+    const diff = Math.abs(new Date(row[0]) - targetDate)
+    if (diff < bestDiff) { bestDiff = diff; closest = row }
+  }
+  return closest[1] ?? null
+}
+
 async function fetchStationSeries(stationId, dateStr, isToday) {
   const path = isToday
     ? `hydrology/now/data/${stationId}.json`
@@ -158,8 +173,8 @@ async function fetchMonthlyAverage(stationId, dateStr) {
     return null
   }
   const target = new Date(`${year}-${String(month).padStart(2, '0')}-01T00:00:00Z`)
-  const flow_m3s = closestValue(tsList, 'QM', target)
-  const temp_c = closestValue(tsList, 'TM', target)
+  const flow_m3s = closestMonthlyValue(tsList, 'QM', target)
+  const temp_c = closestMonthlyValue(tsList, 'TM', target)
   if (flow_m3s == null && temp_c == null) return null
   return { level_cm: null, flow_m3s, temp_c }
 }
