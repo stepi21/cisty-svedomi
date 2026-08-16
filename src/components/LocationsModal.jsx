@@ -141,6 +141,8 @@ function WaterStatusBlock({ location, canEdit, onUpdate }) {
   const [pendingStationId, setPendingStationId] = useState(null) // nepotvrzený automatický návrh
   const [picking, setPicking] = useState(false)
   const [nearby, setNearby] = useState([])
+  const [pickerBusy, setPickerBusy] = useState(false)
+  const [pickerError, setPickerError] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -186,8 +188,18 @@ function WaterStatusBlock({ location, canEdit, onUpdate }) {
 
   async function openPicker() {
     setPicking(true)
-    const list = await findNearestStations(location.lat, location.lng, 6)
-    setNearby(list)
+    setPickerBusy(true)
+    setPickerError(null)
+    setNearby([])
+    try {
+      const list = await findNearestStations(location.lat, location.lng, 6)
+      setNearby(list)
+      if (list.length === 0) setPickerError('ČHMÚ nevrátilo žádné stanice.')
+    } catch (err) {
+      console.error('ČHMÚ — nepodařilo se načíst seznam stanic:', err)
+      setPickerError('Nepodařilo se spojit s ČHMÚ (viz konzole prohlížeče, F12).')
+    }
+    setPickerBusy(false)
   }
 
   async function pickStation(s) {
@@ -227,8 +239,9 @@ function WaterStatusBlock({ location, canEdit, onUpdate }) {
       )}
       {picking && (
         <div style={{ marginTop: 8 }}>
-          {nearby.length === 0 && <p style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Hledám nejbližší stanice…</p>}
-          {nearby.map((s) => (
+          {pickerBusy && <p style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Hledám nejbližší stanice…</p>}
+          {!pickerBusy && pickerError && <p className="error-text" style={{ fontSize: 12.5 }}>{pickerError}</p>}
+          {!pickerBusy && nearby.map((s) => (
             <div key={s.objID} className="bait-picker-item" onClick={() => pickStation(s)}>
               <span>{s.name} ({s.stream}) — {s.distanceKm.toFixed(1)} km</span>
             </div>

@@ -36,11 +36,26 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 async function loadStationList() {
   if (stationListPromise) return stationListPromise
   stationListPromise = (async () => {
-    const res = await fetch(META_URL)
-    if (!res.ok) throw new Error('Nepodařilo se načíst seznam stanic ČHMÚ.')
+    let res
+    try {
+      res = await fetch(META_URL)
+    } catch (err) {
+      console.error('ČHMÚ — fetch meta1.json selhal (typicky CORS nebo síť):', err)
+      stationListPromise = null
+      throw err
+    }
+    if (!res.ok) {
+      console.error('ČHMÚ — meta1.json vrátilo HTTP', res.status)
+      stationListPromise = null
+      throw new Error('Nepodařilo se načíst seznam stanic ČHMÚ.')
+    }
     const json = await res.json()
     const table = json?.data?.data
-    if (!table?.header || !table?.values) throw new Error('Neočekávaný formát metadat ČHMÚ.')
+    if (!table?.header || !table?.values) {
+      console.error('ČHMÚ — neočekávaný formát meta1.json:', json)
+      stationListPromise = null
+      throw new Error('Neočekávaný formát metadat ČHMÚ.')
+    }
     const cols = table.header.split(',')
     const iObjID = cols.indexOf('objID')
     const iName = cols.indexOf('STATION_NAME')
@@ -88,7 +103,13 @@ async function fetchStationSeries(stationId, dateStr, isToday) {
   const url = isToday
     ? `https://opendata.chmi.cz/hydrology/now/data/${stationId}.json`
     : `https://opendata.chmi.cz/hydrology/recent/data/${dateStr.replace(/-/g, '')}_${stationId}.json`
-  const res = await fetch(url)
+  let res
+  try {
+    res = await fetch(url)
+  } catch (err) {
+    console.error(`ČHMÚ — fetch ${url} selhal (typicky CORS nebo síť):`, err)
+    throw err
+  }
   if (!res.ok) return null
   const json = await res.json()
   const obj = json?.objList?.[0]
