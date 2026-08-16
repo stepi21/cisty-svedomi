@@ -2345,8 +2345,8 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
           }))
         }
       }
-    } catch {
-      // ČHMÚ se nepovedlo — appka to prostě nechá prázdné
+    } catch (err) {
+      console.warn('ČHMÚ se nepovedlo (appka to nechá prázdné):', err)
     }
     setWeatherBusy(false)
   }
@@ -2674,8 +2674,8 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
           }))
         }
       }
-    } catch {
-      // ČHMÚ se nepovedlo — appka to prostě nechá prázdné
+    } catch (err) {
+      console.warn('ČHMÚ se nepovedlo (appka to nechá prázdné):', err)
     }
     setWeatherBusy(false)
   }
@@ -2861,8 +2861,8 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
           }))
         }
       }
-    } catch {
-      // ČHMÚ se nepovedlo — appka to prostě nechá prázdné
+    } catch (err) {
+      console.warn('ČHMÚ se nepovedlo (appka to nechá prázdné):', err)
     }
     setWeatherBusy(false)
   }

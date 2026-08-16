@@ -172,10 +172,12 @@ export async function fetchWaterConditions(stationId, dateStr, timeStr) {
   const today = new Date().toISOString().slice(0, 10)
   const isToday = dateStr === today
   const target = timeStr ? new Date(`${dateStr}T${timeStr}:00`) : null
+  console.info(`ČHMÚ: fetchWaterConditions(stanice=${stationId}, datum=${dateStr}, dnes=${isToday})`)
 
   try {
     if (isToday) {
       const tsList = await fetchStationSeries(stationId, dateStr, true)
+      console.info('ČHMÚ: "now" výsledek tsList =', tsList)
       if (tsList) {
         return {
           level_cm: closestValue(tsList, 'H', target),
@@ -186,6 +188,7 @@ export async function fetchWaterConditions(stationId, dateStr, timeStr) {
       }
     } else {
       const tsList = await fetchStationSeries(stationId, dateStr, false)
+      console.info('ČHMÚ: "recent" výsledek tsList =', tsList)
       if (tsList) {
         return {
           level_cm: closestValue(tsList, 'H', target),
@@ -195,16 +198,19 @@ export async function fetchWaterConditions(stationId, dateStr, timeStr) {
         }
       }
     }
-  } catch {
-    // padá dál na měsíční průměr
+  } catch (err) {
+    console.warn('ČHMÚ: "now/recent" selhalo, padám na měsíční průměr:', err)
   }
 
+  console.info('ČHMÚ: zkouším měsíční průměr (historical/monthly)...')
   try {
     const monthly = await fetchMonthlyAverage(stationId, dateStr)
+    console.info('ČHMÚ: měsíční průměr výsledek =', monthly)
     if (monthly) return { ...monthly, precision: 'monthly_avg' }
-  } catch {
-    // appka nic nenašla — vrátí se null, volající to nechá prázdné
+  } catch (err) {
+    console.warn('ČHMÚ: měsíční průměr selhal:', err)
   }
+  console.info('ČHMÚ: nic se nenašlo, vracím null.')
   return null
 }
 
