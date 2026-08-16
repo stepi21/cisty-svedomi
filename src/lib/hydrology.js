@@ -15,7 +15,22 @@
 //   'monthly_avg' - jen měsíční průměr průtoku (historical/monthly/) —
 //                    vodní stav a teplota vody tam ČHMÚ neposkytuje
 
-const META_URL = 'https://opendata.chmi.cz/hydrology/now/metadata/meta1.json'
+// POZNÁMKA K CORS (ověřeno v provozu): opendata.chmi.cz neposílá CORS
+// hlavičky, takže přímé volání z prohlížeče appky prohlížeč zablokuje.
+// Proto appka místo toho volá vlastní Supabase Edge Function "chmi-proxy"
+// (viz supabase/functions/chmi-proxy/index.ts), která na pozadí (server-
+// server, bez CORS) přeposílá požadavek na ČHMÚ a vrátí appce výsledek
+// s hlavičkami, které prohlížeč pustí.
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+const PROXY_URL = `${SUPABASE_URL}/functions/v1/chmi-proxy`
+
+async function chmiFetch(path) {
+  return fetch(`${PROXY_URL}?path=${encodeURIComponent(path)}`, {
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+  })
+}
 
 let stationListPromise = null
 
@@ -38,9 +53,9 @@ async function loadStationList() {
   stationListPromise = (async () => {
     let res
     try {
-      res = await fetch(META_URL)
+      res = await chmiFetch('hydrology/now/metadata/meta1.json')
     } catch (err) {
-      console.error('ČHMÚ — fetch meta1.json selhal (typicky CORS nebo síť):', err)
+      console.error('ČHMÚ — fetch meta1.json selhal:', err)
       stationListPromise = null
       throw err
     }
@@ -100,14 +115,14 @@ function closestValue(tsList, conID, targetDate) {
 }
 
 async function fetchStationSeries(stationId, dateStr, isToday) {
-  const url = isToday
-    ? `https://opendata.chmi.cz/hydrology/now/data/${stationId}.json`
-    : `https://opendata.chmi.cz/hydrology/recent/data/${dateStr.replace(/-/g, '')}_${stationId}.json`
+  const path = isToday
+    ? `hydrology/now/data/${stationId}.json`
+    : `hydrology/recent/data/${dateStr.replace(/-/g, '')}_${stationId}.json`
   let res
   try {
-    res = await fetch(url)
+    res = await chmiFetch(path)
   } catch (err) {
-    console.error(`ČHMÚ — fetch ${url} selhal (typicky CORS nebo síť):`, err)
+    console.error(`ČHMÚ — fetch ${path} selhal:`, err)
     throw err
   }
   if (!res.ok) return null
@@ -120,8 +135,8 @@ async function fetchStationSeries(stationId, dateStr, isToday) {
 async function fetchMonthlyAverage(stationId, dateStr) {
   const year = dateStr.slice(0, 4)
   const month = Number(dateStr.slice(5, 7))
-  const url = `https://opendata.chmi.cz/hydrology/historical/data/monthly/H_${stationId}_MQ_${year}.json`
-  const res = await fetch(url)
+  const path = `hydrology/historical/data/monthly/H_${stationId}_MQ_${year}.json`
+  const res = await chmiFetch(path)
   if (!res.ok) return null
   const json = await res.json()
   // Formát měsíčních dat appka zatím nemá ověřený na reálném vzorku (jen
