@@ -1284,6 +1284,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setCollapsedGroups(allKeys)
   }
 
+  // Přepnutí panelu v hlavičce (Výpravy/Revíry/Nástrahy/Úlovky) -- vždycky
+  // vyčistí hledání, ať nezůstane text z jednoho seznamu omylem ve druhém.
+  // "null" (Výpravy) není přepínací -- vždycky vede domů, ne toggle sama na sebe.
+  function switchPanel(panel) {
+    setActivePanel((p) => (panel === null ? null : (p === panel ? null : panel)))
+    setSearchQuery('')
+    setMobileSheetOpen(true)
+  }
+
   // Rychlý skok zpátky na nejnovější výpravu (appka je řadí sestupně podle data,
   // takže sessions[0] je vždycky ta nejnovější) -- ať se z hlubší historie/
   // statistik/galerie dá rychle vrátit "nahoru", bez ručního hledání roku/měsíce.
@@ -1968,18 +1977,23 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         <div className="head-secondary-row">
           <div className="head-actions-primary">
             <button
+              className={`new-btn ${activePanel === null ? 'active-toggle' : ''}`}
+              onClick={() => switchPanel(null)}
+              title="Výpravy"
+            >🎣 Výpravy</button>
+            <button
               className={`new-btn ${activePanel === 'locations' ? 'active-toggle' : ''}`}
-              onClick={() => setActivePanel((p) => { const next = p === 'locations' ? null : 'locations'; if (next) setMobileSheetOpen(true); return next })}
+              onClick={() => switchPanel('locations')}
               title="Revíry"
             >📍 Revíry</button>
             <button
               className={`new-btn ${activePanel === 'baits' ? 'active-toggle' : ''}`}
-              onClick={() => setActivePanel((p) => { const next = p === 'baits' ? null : 'baits'; if (next) setMobileSheetOpen(true); return next })}
+              onClick={() => switchPanel('baits')}
               title="Nástrahy"
             >🪱 Nástrahy</button>
             <button
               className={`new-btn ${activePanel === 'catches' ? 'active-toggle' : ''}`}
-              onClick={() => setActivePanel((p) => { const next = p === 'catches' ? null : 'catches'; if (next) setMobileSheetOpen(true); return next })}
+              onClick={() => switchPanel('catches')}
               title="Úlovky"
             >🐟 Úlovky</button>
           </div>
@@ -2369,6 +2383,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             setTicketCatch(null)
             setMobileSheetOpen(false)
             if (!s) { mapInstance.current?.setView([c.lat, c.lng], 16); return }
+            setActivePanel(null)
             if (activeId === s.id && viewMode === 'detail') {
               mapInstance.current?.setView([c.lat, c.lng], 16)
             } else {
@@ -2379,7 +2394,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           }}
           onOpenSession={() => {
             const s = sessionForCatch(ticketCatch)
-            if (s) { setTicketCatch(null); setMobileSheetOpen(false); setActiveId(s.id); setViewMode('detail') }
+            if (s) { setTicketCatch(null); setMobileSheetOpen(false); setActivePanel(null); setActiveId(s.id); setViewMode('detail') }
           }}
           onClose={() => {
             setTicketCatch(null)
