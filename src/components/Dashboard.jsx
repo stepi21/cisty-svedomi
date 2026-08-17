@@ -1569,10 +1569,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           <span>Revíry</span>
           <button className="new-btn" onClick={startAddLocationArea}>+ Přidat místo</button>
         </div>
-        <div style={{ padding: '0 18px 10px' }}>
+        <div style={{ padding: '0 18px 10px', position: 'relative' }}>
+          <span style={{ position: 'absolute', left: 28, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-soft)', display: 'flex', pointerEvents: 'none' }}>
+            <IconSearch size={15} />
+          </span>
           <input
             className="text-input"
-            placeholder="🔎 Hledat revír (název, číslo)…"
+            style={{ paddingLeft: 34 }}
+            placeholder="Hledat revír (název, číslo)…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -1614,10 +1618,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           <span>Nástrahy</span>
           <button className="new-btn" onClick={() => { setBaitsInitialKey(null); setBaitsStartAdding(true); setShowBaits(true) }}>+ Přidat nástrahu</button>
         </div>
-        <div style={{ padding: '0 18px 10px' }}>
+        <div style={{ padding: '0 18px 10px', position: 'relative' }}>
+          <span style={{ position: 'absolute', left: 28, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-soft)', display: 'flex', pointerEvents: 'none' }}>
+            <IconSearch size={15} />
+          </span>
           <input
             className="text-input"
-            placeholder="🔎 Hledat nástrahu…"
+            style={{ paddingLeft: 34 }}
+            placeholder="Hledat nástrahu…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -1677,10 +1685,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             </button>
           ))}
         </div>
-        <div style={{ padding: '0 18px 10px' }}>
+        <div style={{ padding: '0 18px 10px', position: 'relative' }}>
+          <span style={{ position: 'absolute', left: 28, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-soft)', display: 'flex', pointerEvents: 'none' }}>
+            <IconSearch size={15} />
+          </span>
           <input
             className="text-input"
-            placeholder="🔎 Hledat úlovek (druh, nástraha, revír)…"
+            style={{ paddingLeft: 34 }}
+            placeholder="Hledat úlovek (druh, nástraha, revír)…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -1719,14 +1731,18 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             <span>Výpravy</span>
             <button className="new-btn" onClick={startNewSession}>+ nová výprava</button>
           </div>
-          <div style={{ padding: '0 18px 10px' }}>
-            <input
-              className="text-input"
-              placeholder="🔎 Hledat (název, revír, druh, nástraha)…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+          <div style={{ padding: '0 18px 10px', position: 'relative' }}>
+          <span style={{ position: 'absolute', left: 28, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-soft)', display: 'flex', pointerEvents: 'none' }}>
+            <IconSearch size={15} />
+          </span>
+          <input
+            className="text-input"
+            style={{ paddingLeft: 34 }}
+            placeholder="Hledat (název, revír, druh, nástraha)…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
           <div className="sb-toolbar">
             <button className="new-btn" onClick={expandAll}>Rozbalit vše</button>
             <button className="new-btn" onClick={collapseAll}>Sbalit vše</button>
