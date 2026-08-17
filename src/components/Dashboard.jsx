@@ -119,6 +119,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [ticketCatch, setTicketCatch] = useState(null)
+  const ticketCatchRef = useRef(null)
+  useEffect(() => { ticketCatchRef.current = ticketCatch }, [ticketCatch])
   const pendingTicketCatchIdRef = useRef(null)
   const [inviteInfo, setInviteInfo] = useState(null)
 
@@ -288,6 +290,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           if (found) { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(found); break }
         }
         pendingTicketCatchIdRef.current = null
+      } else if (ticketCatchRef.current) {
+        // Oprava: appka po uložení úlovku obnovila data appky (sessions), ale
+        // OTEVŘENÝ úlovkový lístek zůstával na staré verzi objektu -- appka pak
+        // ukazovala "neuloženo", i když se do databáze vše uložilo správně.
+        const targetId = ticketCatchRef.current.id
+        for (const s of data) {
+          const found = (s.catches || []).find((c) => c.id === targetId)
+          if (found) { setTicketCatch(found); break }
+        }
       }
     }
     setLoading(false)
@@ -1048,11 +1059,39 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   // --- obecné "přidej mi jednu nebo víc oblastí" — použitelné jak v rozepsaném formuláři, tak u už uložené výpravy ---
   const pendingAreaAppendRef = useRef(null)
+  const [addAreaStep, setAddAreaStep] = useState(null) // null | 'choose' | 'catalog' -- mezikrok "jak přidat další oblast?"
+  const [addAreaCatalogIds, setAddAreaCatalogIds] = useState([])
 
-  function startAddAreaPoint(onComplete) {
+  function startAddAreaPoint(onComplete, offerCatalog = false) {
     pendingAreaAppendRef.current = onComplete
+    setMobileSheetOpen(false) // ať je na mobilu vidět mapa, appka to dřív nechávala schované za lištou
+    if (offerCatalog) {
+      setAddAreaStep('choose')
+    } else {
+      setAreaDraft({ areas: [], current: [] })
+      setPlacementTarget('area-point-append')
+    }
+  }
+
+  function startAddAreaManualFromChoice() {
+    setAddAreaStep(null)
     setAreaDraft({ areas: [], current: [] })
     setPlacementTarget('area-point-append')
+  }
+
+  function toggleAddAreaCatalogId(id) {
+    setAddAreaCatalogIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
+  }
+
+  function proceedAddAreaFromCatalog() {
+    const picked = locationsCatalog.filter((l) => addAreaCatalogIds.includes(l.id) && l.area)
+    setAddAreaStep(null)
+    setAddAreaCatalogIds([])
+    if (picked.length === 0) return
+    const shaped = picked.flatMap((l) => normalizeAreas(l.area).map((points) => ({ location_id: l.id, points })))
+    const cb = pendingAreaAppendRef.current
+    pendingAreaAppendRef.current = null
+    cb?.(shaped)
   }
 
   function finishAppendArea() {
@@ -1066,6 +1105,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   function startAddCatch() {
+    const rods = activeSession?.rods || []
+    if (rods.length === 1) {
+      // jediný prut ve výpravě -- appka ho rovnou přiřadí, ať se nemusí zbytečně
+      // potvrzovat "na jaké pozici?", když stejně není z čeho vybírat
+      chooseCatchOnRod(rods[0])
+      setMobileSheetOpen(false)
+      return
+    }
     setCatchChoosing(true)
     setMobileSheetOpen(false)
   }
@@ -1214,6 +1261,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         water_stations: e.waterStations || null,
       }).eq('id', e.id)
       if (error) { alert(error.message); return }
+      // Kaskáda počasí i na úlovky z téhle výpravy -- appka dřív nechávala úlovky
+      // na starých hodnotách (např. starý směr větru), i když se výprava přepočítala.
+      // Vodní stav se sem záměrně nepropisuje -- úlovek může mít vlastní přesnější
+      // stanici (viz "📍 Revír" u výpravy s víc revíry).
+      await supabase.from('catches').update({
+        weather_temp_c: e.temp || null, weather_pressure_hpa: e.pressure || null, weather_pressure_trend: e.pressureTrend ?? null,
+        weather_wind: e.wind || null, weather_desc: e.desc || null,
+      }).eq('session_id', e.id)
       setEditingSession(null)
       await loadSessions()
       showToast('✓ Uloženo')
@@ -1354,8 +1409,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setEditingAreasSession((prev) => ({ ...prev, areas: prev.areas.filter((_, i) => i !== idx) }))
   }
 
+  // Manuální kreslení appce dřív vracelo vždycky obyčejné pole bodů; teď může
+  // přijít i rovnou "obarvené" katalogovým místem (viz proceedAddAreaFromCatalog).
+  // Tahle funkce sjednotí obojí do stejného tvaru {location_id, points}.
+  function normalizeAppendedAreas(newAreas) {
+    return newAreas.map((entry) => (entry && entry.points ? entry : { location_id: null, points: entry }))
+  }
+
   function addAreasToManaged(newAreas) {
-    setEditingAreasSession((prev) => ({ ...prev, areas: [...prev.areas, ...newAreas.map((points) => ({ location_id: null, points }))] }))
+    setEditingAreasSession((prev) => ({ ...prev, areas: [...prev.areas, ...normalizeAppendedAreas(newAreas)] }))
   }
 
   async function saveManagedAreas() {
@@ -1500,6 +1562,24 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         const key = c.bait.trim().toLowerCase()
         if (map[key]) return
         map[key] = { id: key, name: c.bait.trim(), photo_url: c.bait_photo_url || null, category: c.category }
+      })
+    })
+    return Object.values(map).sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  // Užší varianta mergedBaitOptions -- při zápisu úlovku appka dřív nabízela
+  // celý katalog (i nástrahy z úplně jiných výprav/kategorií). Tohle vrátí jen
+  // nástrahy skutečně zapsané u prutů TÉTO konkrétní výpravy.
+  function sessionBaitOptions(session) {
+    const map = {}
+    ;(session?.rods || []).forEach((r) => {
+      const entries = []
+      ;(r.baits || []).forEach((b) => { if (b.name) entries.push({ name: b.name.trim(), photo_url: b.photo_url || null }) })
+      if ((!r.baits || r.baits.length === 0) && r.bait) entries.push({ name: r.bait.trim(), photo_url: r.bait_photo_url || null })
+      entries.forEach(({ name, photo_url }) => {
+        const key = name.toLowerCase()
+        if (!key || map[key]) return
+        map[key] = { id: key, name, photo_url }
       })
     })
     return Object.values(map).sort((a, b) => a.name.localeCompare(b.name))
@@ -2091,6 +2171,33 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             </div>
           )}
 
+          {addAreaStep === 'choose' && (
+            <div className="type-picker">
+              <div className="type-picker-title">Jak přidat oblast?</div>
+              <button className="type-btn" onClick={() => setAddAreaStep('catalog')}><IconRevir size={14} /> Z katalogu</button>
+              <button className="type-btn" onClick={startAddAreaManualFromChoice}><IconEdit size={13} /> Naklikat novou na mapě</button>
+              <button className="type-cancel" onClick={() => { setAddAreaStep(null); pendingAreaAppendRef.current = null }}>Zrušit</button>
+            </div>
+          )}
+
+          {addAreaStep === 'catalog' && (
+            <div className="type-picker" style={{ minWidth: 260 }}>
+              <div className="type-picker-title">Vyber místa z katalogu</div>
+              {locationsCatalog.filter((l) => l.area).length === 0 && <p className="hint-text">Katalog zatím nemá žádnou vyšrafovanou oblast.</p>}
+              <div className="location-checklist">
+                {locationsCatalog.filter((l) => l.area).map((loc) => (
+                  <label key={loc.id} className="location-check-row">
+                    <input type="checkbox" checked={addAreaCatalogIds.includes(loc.id)} onChange={() => toggleAddAreaCatalogId(loc.id)} />
+                    <span>{loc.name}{loc.revir ? ` (${loc.revir})` : ''}</span>
+                  </label>
+                ))}
+              </div>
+              <button className="btn-primary" style={{ margin: '8px 0 0', width: '100%' }} onClick={proceedAddAreaFromCatalog} disabled={addAreaCatalogIds.length === 0}>Přidat</button>
+              <button className="new-btn" style={{ marginTop: 6 }} onClick={() => setAddAreaStep('choose')}>← Zpět</button>
+              <button className="type-cancel" onClick={() => { setAddAreaStep(null); setAddAreaCatalogIds([]); pendingAreaAppendRef.current = null }}>Zrušit</button>
+            </div>
+          )}
+
           {locationActionMenuFor && (
             <div className="type-picker">
               <div className="type-picker-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}><IconRevir size={16} color="#fff" /> Místo výpravy</div>
@@ -2159,7 +2266,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               {editingAreasSession.areas.length === 0 && (
                 <p className="hint-text">Žádná oblast — přidej aspoň jednu, nebo zruš úpravu.</p>
               )}
-              <button className="new-btn" onClick={() => startAddAreaPoint((newAreas) => addAreasToManaged(newAreas))} style={{ marginTop: 6 }}>+ Přidat oblast</button>
+              <button className="new-btn" onClick={() => startAddAreaPoint((newAreas) => addAreasToManaged(newAreas), true)} style={{ marginTop: 6 }}>+ Přidat oblast</button>
               <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
                 <button className="new-btn" onClick={() => setEditingAreasSession(null)}>Zrušit</button>
                 <button className="btn-primary" style={{ margin: 0 }} onClick={saveManagedAreas} disabled={editingAreasSession.areas.length === 0}>Uložit</button>
@@ -2312,7 +2419,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onClose={() => setDraftCatch(null)}
           baitPhotoMap={baitPhotoLookup()}
           baitListId={baitListId(activeSession.type)}
-          baitCatalog={mergedBaitOptions(baitCategoryFor(activeSession.type))}
+          baitCatalog={sessionBaitOptions(activeSession)}
           baitCategory={baitCategoryFor(activeSession.type)}
           onAddBait={addBaitToCatalog}
           locationsCatalog={locationsCatalog}
@@ -3173,7 +3280,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
                 })}
                 <button
                   type="button" className="new-btn"
-                  onClick={() => onStartAddArea((newAreas) => set('area', [...(draft.area || []), ...newAreas.map((points) => ({ location_id: null, points }))]))}
+                  onClick={() => onStartAddArea((newAreas) => set('area', [...(draft.area || []), ...newAreas.map((entry) => (entry && entry.points ? entry : { location_id: null, points: entry }))]), true)}
                 >+ Přidat oblast</button>
               </div>
             ) : (
