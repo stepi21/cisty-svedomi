@@ -78,6 +78,14 @@ async function loadStationList() {
     const iStream = cols.indexOf('STREAM_NAME')
     const iLat = cols.indexOf('GEOGR1')
     const iLng = cols.indexOf('GEOGR2')
+    const iDryH = cols.indexOf('DRYH')
+    const iSpa1H = cols.indexOf('SPA1H')
+    const iSpa2H = cols.indexOf('SPA2H')
+    const iSpa3H = cols.indexOf('SPA3H')
+    const iDryQ = cols.indexOf('DRYQ')
+    const iSpa1Q = cols.indexOf('SPA1Q')
+    const iSpa2Q = cols.indexOf('SPA2Q')
+    const iSpa3Q = cols.indexOf('SPA3Q')
     return table.values
       .map((row) => ({
         objID: row[iObjID],
@@ -85,6 +93,10 @@ async function loadStationList() {
         stream: row[iStream],
         lat: row[iLat],
         lng: row[iLng],
+        thresholds: {
+          dryH: row[iDryH], spa1H: row[iSpa1H], spa2H: row[iSpa2H], spa3H: row[iSpa3H],
+          dryQ: row[iDryQ], spa1Q: row[iSpa1Q], spa2Q: row[iSpa2Q], spa3Q: row[iSpa3Q],
+        },
       }))
       .filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number')
   })()
@@ -100,6 +112,42 @@ export async function findNearestStations(lat, lng, count = 5) {
     .map((s) => ({ ...s, distanceKm: haversineKm(lat, lng, s.lat, s.lng) }))
     .sort((a, b) => a.distanceKm - b.distanceKm)
     .slice(0, count)
+}
+
+async function getStationThresholds(stationId) {
+  const stations = await loadStationList()
+  return stations.find((s) => s.objID === stationId)?.thresholds || null
+}
+
+// Zařadí aktuální vodní stav/průtok podle prahů stanice do stupně povodňové
+// aktivity (nebo sucha). Přednost dostává vodní stav (H), pokud ho stanice
+// měří a máme ho k dispozici; jinak průtok (Q). Vrací null, když appka
+// nemá dost údajů na to o tom cokoliv říct.
+function classifySpaLevel(level_cm, flow_m3s, thresholds) {
+  if (!thresholds) return null
+  if (level_cm != null && (thresholds.spa1H != null || thresholds.dryH != null)) {
+    if (thresholds.spa3H != null && level_cm >= thresholds.spa3H) return 3
+    if (thresholds.spa2H != null && level_cm >= thresholds.spa2H) return 2
+    if (thresholds.spa1H != null && level_cm >= thresholds.spa1H) return 1
+    if (thresholds.dryH != null && level_cm <= thresholds.dryH) return -1
+    return 0
+  }
+  if (flow_m3s != null && (thresholds.spa1Q != null || thresholds.dryQ != null)) {
+    if (thresholds.spa3Q != null && flow_m3s >= thresholds.spa3Q) return 3
+    if (thresholds.spa2Q != null && flow_m3s >= thresholds.spa2Q) return 2
+    if (thresholds.spa1Q != null && flow_m3s >= thresholds.spa1Q) return 1
+    if (thresholds.dryQ != null && flow_m3s <= thresholds.dryQ) return -1
+    return 0
+  }
+  return null
+}
+
+export const SPA_LEVEL_INFO = {
+  '-1': { icon: '🟤', label: 'sucho' },
+  0: { icon: '🟢', label: 'normální stav' },
+  1: { icon: '🟡', label: '1. stupeň povodňové aktivity' },
+  2: { icon: '🟠', label: '2. stupeň povodňové aktivity' },
+  3: { icon: '🔴', label: '3. stupeň povodňové aktivity' },
 }
 
 function closestValue(tsList, conID, targetDate) {
@@ -194,10 +242,13 @@ export async function fetchWaterConditions(stationId, dateStr, timeStr) {
       const tsList = await fetchStationSeries(stationId, dateStr, true)
       console.info('ČHMÚ: "now" výsledek tsList =', tsList)
       if (tsList) {
+        const level_cm = closestValue(tsList, 'H', target)
+        const flow_m3s = closestValue(tsList, 'Q', target)
+        const thresholds = await getStationThresholds(stationId)
         return {
-          level_cm: closestValue(tsList, 'H', target),
-          flow_m3s: closestValue(tsList, 'Q', target),
+          level_cm, flow_m3s,
           temp_c: closestValue(tsList, 'TH', target),
+          spa_level: classifySpaLevel(level_cm, flow_m3s, thresholds),
           precision: 'live',
         }
       }
@@ -205,10 +256,13 @@ export async function fetchWaterConditions(stationId, dateStr, timeStr) {
       const tsList = await fetchStationSeries(stationId, dateStr, false)
       console.info('ČHMÚ: "recent" výsledek tsList =', tsList)
       if (tsList) {
+        const level_cm = closestValue(tsList, 'H', target)
+        const flow_m3s = closestValue(tsList, 'Q', target)
+        const thresholds = await getStationThresholds(stationId)
         return {
-          level_cm: closestValue(tsList, 'H', target),
-          flow_m3s: closestValue(tsList, 'Q', target),
+          level_cm, flow_m3s,
           temp_c: closestValue(tsList, 'TH', target),
+          spa_level: classifySpaLevel(level_cm, flow_m3s, thresholds),
           precision: 'recent',
         }
       }
@@ -221,7 +275,10 @@ export async function fetchWaterConditions(stationId, dateStr, timeStr) {
   try {
     const monthly = await fetchMonthlyAverage(stationId, dateStr)
     console.info('ČHMÚ: měsíční průměr výsledek =', monthly)
-    if (monthly) return { ...monthly, precision: 'monthly_avg' }
+    if (monthly) {
+      const thresholds = await getStationThresholds(stationId)
+      return { ...monthly, spa_level: classifySpaLevel(monthly.level_cm, monthly.flow_m3s, thresholds), precision: 'monthly_avg' }
+    }
   } catch (err) {
     console.warn('ČHMÚ: měsíční průměr selhal:', err)
   }
@@ -236,10 +293,13 @@ export async function fetchLiveConditions(stationId) {
   try {
     const tsList = await fetchStationSeries(stationId, null, true)
     if (!tsList) return null
+    const level_cm = closestValue(tsList, 'H')
+    const flow_m3s = closestValue(tsList, 'Q')
+    const thresholds = await getStationThresholds(stationId)
     return {
-      level_cm: closestValue(tsList, 'H'),
-      flow_m3s: closestValue(tsList, 'Q'),
+      level_cm, flow_m3s,
       temp_c: closestValue(tsList, 'TH'),
+      spa_level: classifySpaLevel(level_cm, flow_m3s, thresholds),
     }
   } catch {
     return null

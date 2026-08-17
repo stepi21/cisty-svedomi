@@ -8,7 +8,7 @@ import BaitsModal from './BaitsModal.jsx'
 import BaitPicker from './BaitPicker.jsx'
 import LocationsModal from './LocationsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
-import { fetchWaterConditions, fetchLiveConditions, findNearestStations, WATER_PRECISION_LABEL } from '../lib/hydrology.js'
+import { fetchWaterConditions, fetchLiveConditions, findNearestStations, WATER_PRECISION_LABEL, SPA_LEVEL_INFO } from '../lib/hydrology.js'
 import { uploadPhoto } from '../lib/storage.js'
 
 const iconCarp = `<svg viewBox="0 0 24 24" fill="none"><path d="M3 12c0-4 5-7 10-7s8 3 8 7-3 7-8 7-10-3-10-7Z" stroke="#2C6E71" stroke-width="1.6"/><circle cx="16" cy="10.5" r="1" fill="#2C6E71"/></svg>`
@@ -133,6 +133,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [editingAreasSession, setEditingAreasSession] = useState(null) // {id, areas:[]} — správa oblastí u uložené výpravy
   const [editingAreasLocation, setEditingAreasLocation] = useState(null) // {id, areas:[]} — správa oblastí u místa v katalogu
   const [locationsView, setLocationsView] = useState(false) // přepínač "📍 Revíry" — dočasně nahradí sidebar/mapu katalogem míst, nic jiného se nemění
+  const [showMoreMenu, setShowMoreMenu] = useState(false) // "☰ Více" — méně časté akce schované z hlavičky
 
   const placementTargetRef = useRef(null)
   useEffect(() => { placementTargetRef.current = placementTarget }, [placementTarget])
@@ -1046,10 +1047,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         group_id: groupId, user_id: userId, type: s.type, title: s.title, revir: s.revir || null, target_species: s.target_species || null,
         session_date: s.date, time_from: s.timeFrom || null, time_to: s.timeTo || null,
         lat: s.point.lat, lng: s.point.lng, area: s.area,
-        weather_temp_c: s.temp || null, weather_pressure_hpa: s.pressure || null,
+        weather_temp_c: s.temp || null, weather_pressure_hpa: s.pressure || null, weather_pressure_trend: s.pressureTrend ?? null,
         weather_wind: s.wind || null, weather_desc: s.desc || null,
         water_level_cm: s.waterLevel ?? null, water_flow_m3s: s.waterFlow ?? null, water_temp_c: s.waterTemp ?? null,
-        water_station_name: s.waterStationName || null, water_data_precision: s.waterPrecision || null,
+        water_station_name: s.waterStationName || null, water_data_precision: s.waterPrecision || null, water_spa_level: s.waterSpaLevel ?? null,
         water_stations: s.waterStations || null,
         status: s.live ? 'in_progress' : 'completed',
       }).select().single()
@@ -1113,10 +1114,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       species: c.species, category: c.category, length_cm: c.length || null, weight_kg: c.weight || null,
       bait: c.bait, caught_at: caughtAt, lat: c.point.lat, lng: c.point.lng, photo_url, bait_photo_url,
       location_id, revir,
-      weather_temp_c: c.weather_temp_c ?? null, weather_pressure_hpa: c.weather_pressure_hpa ?? null,
+      weather_temp_c: c.weather_temp_c ?? null, weather_pressure_hpa: c.weather_pressure_hpa ?? null, weather_pressure_trend: c.weather_pressure_trend ?? null,
       weather_wind: c.weather_wind || null, weather_desc: c.weather_desc || null,
       water_level_cm: c.water_level_cm ?? null, water_flow_m3s: c.water_flow_m3s ?? null, water_temp_c: c.water_temp_c ?? null,
-      water_station_name: c.water_station_name || null, water_data_precision: c.water_data_precision || null,
+      water_station_name: c.water_station_name || null, water_data_precision: c.water_data_precision || null, water_spa_level: c.water_spa_level ?? null,
     })
     if (error) { alert(error.message); return }
     setDraftCatch(null)
@@ -1127,10 +1128,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setEditingSession({
       id: s.id, type: s.type, title: s.title, date: s.session_date, revir: s.revir || '', target_species: s.target_species || '',
       timeFrom: s.time_from || '', timeTo: s.time_to || '',
-      temp: s.weather_temp_c ?? '', pressure: s.weather_pressure_hpa ?? '',
+      temp: s.weather_temp_c ?? '', pressure: s.weather_pressure_hpa ?? '', pressureTrend: s.weather_pressure_trend ?? null,
       wind: s.weather_wind || '', desc: s.weather_desc || '',
       waterLevel: s.water_level_cm ?? null, waterFlow: s.water_flow_m3s ?? null, waterTemp: s.water_temp_c ?? null,
-      waterStationName: s.water_station_name || null, waterPrecision: s.water_data_precision || null,
+      waterStationName: s.water_station_name || null, waterPrecision: s.water_data_precision || null, waterSpaLevel: s.water_spa_level ?? null,
       waterStations: s.water_stations || null,
       linkedLocationIds: (s.session_locations || []).map((sl) => sl.location_id),
       lat: s.lat, lng: s.lng,
@@ -1141,10 +1142,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const e = editingSession
     const { error } = await supabase.from('sessions').update({
       title: e.title, session_date: e.date, revir: e.revir || null, target_species: e.target_species || null, time_from: e.timeFrom || null, time_to: e.timeTo || null,
-      weather_temp_c: e.temp || null, weather_pressure_hpa: e.pressure || null,
+      weather_temp_c: e.temp || null, weather_pressure_hpa: e.pressure || null, weather_pressure_trend: e.pressureTrend ?? null,
       weather_wind: e.wind || null, weather_desc: e.desc || null,
       water_level_cm: e.waterLevel ?? null, water_flow_m3s: e.waterFlow ?? null, water_temp_c: e.waterTemp ?? null,
-      water_station_name: e.waterStationName || null, water_data_precision: e.waterPrecision || null,
+      water_station_name: e.waterStationName || null, water_data_precision: e.waterPrecision || null, water_spa_level: e.waterSpaLevel ?? null,
       water_stations: e.waterStations || null,
     }).eq('id', e.id)
     if (error) { alert(error.message); return }
@@ -1573,7 +1574,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 </div>
                 <div className="weather-row" style={{ marginTop: 8 }}>
                   <div className="w-item"><div className="num">{activeSession.weather_temp_c ?? '—'}°C</div><div className="lab">teplota</div></div>
-                  <div className="w-item"><div className="num">{activeSession.weather_pressure_hpa ?? '—'} hPa</div><div className="lab">tlak</div></div>
+                  <div className="w-item"><div className="num">{activeSession.weather_pressure_hpa ?? '—'} hPa{activeSession.weather_pressure_trend > 0 ? ' ↗️' : activeSession.weather_pressure_trend < 0 ? ' ↘️' : ''}</div><div className="lab">tlak</div></div>
                   <div className="w-item"><div className="num">{activeSession.weather_wind || '—'}</div><div className="lab">vítr</div></div>
                 </div>
                 {activeSession.water_stations?.length > 0 ? (
@@ -1586,6 +1587,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                       </div>
                       <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--ink-soft)' }}>
                         {ws.station_name}{ws.precision ? ` · ${WATER_PRECISION_LABEL[ws.precision]}` : ''}
+                        {ws.spa_level != null && SPA_LEVEL_INFO[ws.spa_level] && ` · ${SPA_LEVEL_INFO[ws.spa_level].icon} ${SPA_LEVEL_INFO[ws.spa_level].label}`}
                       </div>
                     </div>
                   ))
@@ -1598,6 +1600,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                     </div>
                     <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--ink-soft)' }}>
                       {activeSession.water_station_name}{activeSession.water_data_precision ? ` · ${WATER_PRECISION_LABEL[activeSession.water_data_precision]}` : ''}
+                      {activeSession.water_spa_level != null && SPA_LEVEL_INFO[activeSession.water_spa_level] && ` · ${SPA_LEVEL_INFO[activeSession.water_spa_level].icon} ${SPA_LEVEL_INFO[activeSession.water_spa_level].label}`}
                     </div>
                   </>
                 )}
@@ -1720,12 +1723,19 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 title="Revíry"
               >📍</button>
               <button className="new-btn" onClick={() => { setBaitsInitialKey(null); setShowBaits(true) }} title="Nástrahy">🪱</button>
-              <button className="new-btn" onClick={() => setShowGallery(true)} title="Galerie">🖼</button>
-              <button className="new-btn" onClick={() => setShowRecords(true)} title="Rekordy">🏆</button>
-              <button className="new-btn" onClick={() => setShowHelp(true)} title="Návod">❓</button>
-              <button className="new-btn" onClick={exportData} title="Export dat">⬇️</button>
-              <button className="new-btn" onClick={() => setShowStats(true)} title="Statistiky">📊</button>
-              <button className="new-btn" onClick={() => setShowSettings(true)} title="Nastavení">⚙️</button>
+              <div style={{ position: 'relative' }}>
+                <button className="new-btn" onClick={() => setShowMoreMenu((v) => !v)} title="Více">☰ Více</button>
+                {showMoreMenu && (
+                  <div className="type-picker" style={{ position: 'absolute', top: '100%', left: 0, transform: 'none', marginTop: 4, minWidth: 160, zIndex: 500 }}>
+                    <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowGallery(true) }}>🖼 Galerie</button>
+                    <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowRecords(true) }}>🏆 Rekordy</button>
+                    <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowStats(true) }}>📊 Statistiky</button>
+                    <button className="type-btn" onClick={() => { setShowMoreMenu(false); exportData() }}>⬇️ Export dat</button>
+                    <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowHelp(true) }}>❓ Návod</button>
+                    <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowSettings(true) }}>⚙️ Nastavení</button>
+                  </div>
+                )}
+              </div>
               <button className="new-btn" onClick={createInvite}>+ pozvat parťáka</button>
               <button className="new-btn" onClick={onSignOut}>Odhlásit</button>
             </div>
@@ -2265,10 +2275,12 @@ function StatsModal({ sessions, members, userColor, onClose }) {
   })
   const targetRows = Object.values(targetStats)
 
-  // --- vzorce: fáze měsíce a tlak vs úlovky ---
+  // --- vzorce: fáze měsíce, tlak a vodní stav (SPA stupeň) vs úlovky ---
   const byMoonPhase = {}
   const byPressureBucket = {}
+  const bySpaLevel = {}
   const pressureOrder = ['<1000 hPa', '1000–1010 hPa', '1010–1020 hPa', '1020+ hPa']
+  const spaOrder = [-1, 0, 1, 2, 3]
   sessions.forEach((s) => {
     const catchCount = (s.catches || []).length
     if (catchCount === 0) return
@@ -2279,9 +2291,13 @@ function StatsModal({ sessions, members, userColor, onClose }) {
       const bucket = p < 1000 ? '<1000 hPa' : p < 1010 ? '1000–1010 hPa' : p < 1020 ? '1010–1020 hPa' : '1020+ hPa'
       byPressureBucket[bucket] = (byPressureBucket[bucket] || 0) + catchCount
     }
+    // u výprav složených z víc stanic bereme první -- je to jen orientační přehled, ne přesná analýza
+    const spa = s.water_stations?.length > 0 ? s.water_stations[0].spa_level : s.water_spa_level
+    if (spa != null) bySpaLevel[spa] = (bySpaLevel[spa] || 0) + catchCount
   })
   const moonRows = Object.entries(byMoonPhase).sort((a, b) => b[1] - a[1])
   const pressureRows = pressureOrder.filter((k) => byPressureBucket[k]).map((k) => [k, byPressureBucket[k]])
+  const spaRows = spaOrder.filter((k) => bySpaLevel[k]).map((k) => [k, bySpaLevel[k]])
 
   return (
     <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -2341,7 +2357,7 @@ function StatsModal({ sessions, members, userColor, onClose }) {
             )}
           </div>
 
-          {(moonRows.length > 0 || pressureRows.length > 0) && (
+          {(moonRows.length > 0 || pressureRows.length > 0 || spaRows.length > 0) && (
             <div className="stats-row" style={{ borderBottom: 'none' }}>
               <div className="stats-row-head"><strong>📈 Kdy se daří</strong></div>
               {moonRows.length > 0 && (
@@ -2360,6 +2376,16 @@ function StatsModal({ sessions, members, userColor, onClose }) {
                   <div className="stats-species" style={{ marginTop: 4 }}>
                     {pressureRows.map(([bucket, n]) => (
                       <span className="bait-chip" key={bucket}>📊 {bucket} — {n}×</span>
+                    ))}
+                  </div>
+                </>
+              )}
+              {spaRows.length > 0 && (
+                <>
+                  <div className="stats-total" style={{ marginTop: 10 }}>Podle vodního stavu</div>
+                  <div className="stats-species" style={{ marginTop: 4 }}>
+                    {spaRows.map(([level, n]) => (
+                      <span className="bait-chip" key={level}>{SPA_LEVEL_INFO[level]?.icon} {SPA_LEVEL_INFO[level]?.label} — {n}×</span>
                     ))}
                   </div>
                 </>
@@ -2384,7 +2410,7 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
     setWeatherBusy(true); setWeatherError(null)
     try {
       const w = await fetchWeather(draft.lat, draft.lng, draft.date, draft.timeFrom)
-      setDraft((d) => ({ ...d, temp: w.temp, pressure: w.pressure, wind: w.wind, desc: w.desc }))
+      setDraft((d) => ({ ...d, temp: w.temp, pressure: w.pressure, pressureTrend: w.pressureTrend, wind: w.wind, desc: w.desc }))
     } catch (e) {
       setWeatherError(e.message)
     }
@@ -2394,14 +2420,14 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
       const targets = stations.length > 0 ? stations : await findNearestStations(draft.lat, draft.lng, 1)
       const results = (await Promise.all(targets.map(async (station) => {
         const water = await fetchWaterConditions(station.objID, draft.date, draft.timeFrom)
-        return water ? { station_id: station.objID, station_name: station.name, level_cm: water.level_cm, flow_m3s: water.flow_m3s, temp_c: water.temp_c, precision: water.precision } : null
+        return water ? { station_id: station.objID, station_name: station.name, level_cm: water.level_cm, flow_m3s: water.flow_m3s, temp_c: water.temp_c, spa_level: water.spa_level, precision: water.precision } : null
       }))).filter(Boolean)
       if (results.length > 0) {
         setDraft((d) => ({
           ...d,
           waterStations: results,
           waterLevel: results[0].level_cm, waterFlow: results[0].flow_m3s, waterTemp: results[0].temp_c,
-          waterStationName: results[0].station_name, waterPrecision: results[0].precision,
+          waterStationName: results[0].station_name, waterPrecision: results[0].precision, waterSpaLevel: results[0].spa_level,
         }))
       }
     } catch (err) {
@@ -2472,12 +2498,14 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
                 <p key={ws.station_id} className="hint-text" style={{ marginTop: 6 }}>
                   💧 {ws.level_cm != null ? `${ws.level_cm} cm` : '—'} · {ws.flow_m3s != null ? `${ws.flow_m3s} m³/s` : '—'}
                   {ws.temp_c != null ? ` · ${ws.temp_c} °C` : ''} ({ws.station_name}{ws.precision ? `, ${WATER_PRECISION_LABEL[ws.precision]}` : ''})
+                  {ws.spa_level != null && SPA_LEVEL_INFO[ws.spa_level] ? ` · ${SPA_LEVEL_INFO[ws.spa_level].icon} ${SPA_LEVEL_INFO[ws.spa_level].label}` : ''}
                 </p>
               ))
             ) : draft.waterStationName && (
               <p className="hint-text" style={{ marginTop: 6 }}>
                 💧 {draft.waterLevel != null ? `${draft.waterLevel} cm` : '—'} · {draft.waterFlow != null ? `${draft.waterFlow} m³/s` : '—'}
                 {draft.waterTemp != null ? ` · ${draft.waterTemp} °C` : ''} ({draft.waterStationName}{draft.waterPrecision ? `, ${WATER_PRECISION_LABEL[draft.waterPrecision]}` : ''})
+                {draft.waterSpaLevel != null && SPA_LEVEL_INFO[draft.waterSpaLevel] ? ` · ${SPA_LEVEL_INFO[draft.waterSpaLevel].icon} ${SPA_LEVEL_INFO[draft.waterSpaLevel].label}` : ''}
               </p>
             )}
 
@@ -2723,7 +2751,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
     setWeatherBusy(true); setWeatherError(null)
     try {
       const w = await fetchWeather(draft.point.lat, draft.point.lng, draft.date, draft.timeFrom)
-      setDraft((d) => ({ ...d, temp: w.temp, pressure: w.pressure, wind: w.wind, desc: w.desc }))
+      setDraft((d) => ({ ...d, temp: w.temp, pressure: w.pressure, pressureTrend: w.pressureTrend, wind: w.wind, desc: w.desc }))
     } catch (e) {
       setWeatherError(e.message)
     }
@@ -2732,14 +2760,14 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
       const targets = stations.length > 0 ? stations : await findNearestStations(draft.point.lat, draft.point.lng, 1)
       const results = (await Promise.all(targets.map(async (station) => {
         const water = await fetchWaterConditions(station.objID, draft.date, draft.timeFrom)
-        return water ? { station_id: station.objID, station_name: station.name, level_cm: water.level_cm, flow_m3s: water.flow_m3s, temp_c: water.temp_c, precision: water.precision } : null
+        return water ? { station_id: station.objID, station_name: station.name, level_cm: water.level_cm, flow_m3s: water.flow_m3s, temp_c: water.temp_c, spa_level: water.spa_level, precision: water.precision } : null
       }))).filter(Boolean)
       if (results.length > 0) {
         setDraft((d) => ({
           ...d,
           waterStations: results,
           waterLevel: results[0].level_cm, waterFlow: results[0].flow_m3s, waterTemp: results[0].temp_c,
-          waterStationName: results[0].station_name, waterPrecision: results[0].precision,
+          waterStationName: results[0].station_name, waterPrecision: results[0].precision, waterSpaLevel: results[0].spa_level,
         }))
       }
     } catch (err) {
@@ -2831,12 +2859,14 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
                 <p key={ws.station_id} className="hint-text" style={{ marginTop: 6 }}>
                   💧 {ws.level_cm != null ? `${ws.level_cm} cm` : '—'} · {ws.flow_m3s != null ? `${ws.flow_m3s} m³/s` : '—'}
                   {ws.temp_c != null ? ` · ${ws.temp_c} °C` : ''} ({ws.station_name}{ws.precision ? `, ${WATER_PRECISION_LABEL[ws.precision]}` : ''})
+                  {ws.spa_level != null && SPA_LEVEL_INFO[ws.spa_level] ? ` · ${SPA_LEVEL_INFO[ws.spa_level].icon} ${SPA_LEVEL_INFO[ws.spa_level].label}` : ''}
                 </p>
               ))
             ) : draft.waterStationName && (
               <p className="hint-text" style={{ marginTop: 6 }}>
                 💧 {draft.waterLevel != null ? `${draft.waterLevel} cm` : '—'} · {draft.waterFlow != null ? `${draft.waterFlow} m³/s` : '—'}
                 {draft.waterTemp != null ? ` · ${draft.waterTemp} °C` : ''} ({draft.waterStationName}{draft.waterPrecision ? `, ${WATER_PRECISION_LABEL[draft.waterPrecision]}` : ''})
+                {draft.waterSpaLevel != null && SPA_LEVEL_INFO[draft.waterSpaLevel] ? ` · ${SPA_LEVEL_INFO[draft.waterSpaLevel].icon} ${SPA_LEVEL_INFO[draft.waterSpaLevel].label}` : ''}
               </p>
             )}
             {draft.date && <p className="hint-text" style={{ marginTop: 8 }}>🌙 {moonPhaseName(draft.date)}</p>}
@@ -2918,7 +2948,7 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
     setWeatherBusy(true); setWeatherError(null)
     try {
       const w = await fetchWeather(draft.point.lat, draft.point.lng, session.session_date, draft.time)
-      setDraft((d) => ({ ...d, weather_temp_c: w.temp, weather_pressure_hpa: w.pressure, weather_wind: w.wind, weather_desc: w.desc }))
+      setDraft((d) => ({ ...d, weather_temp_c: w.temp, weather_pressure_hpa: w.pressure, weather_pressure_trend: w.pressureTrend, weather_wind: w.wind, weather_desc: w.desc }))
     } catch (e) {
       setWeatherError(e.message)
     }
@@ -2932,7 +2962,7 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
           setDraft((d) => ({
             ...d,
             water_level_cm: water.level_cm, water_flow_m3s: water.flow_m3s, water_temp_c: water.temp_c,
-            water_station_name: station.name, water_data_precision: water.precision,
+            water_station_name: station.name, water_data_precision: water.precision, water_spa_level: water.spa_level,
           }))
         }
       }

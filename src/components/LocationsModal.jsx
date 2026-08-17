@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import L from 'leaflet'
-import { fetchLiveConditions, findNearestStations } from '../lib/hydrology.js'
+import { fetchLiveConditions, findNearestStations, SPA_LEVEL_INFO } from '../lib/hydrology.js'
 
 const fishSVG = (color) => `
   <svg viewBox="0 0 64 34" xmlns="http://www.w3.org/2000/svg">
@@ -226,6 +226,11 @@ function WaterStatusBlock({ location, canEdit, onUpdate }) {
           <div className="w-item"><div className="num">{live.flow_m3s ?? '—'} m³/s</div><div className="lab">průtok</div></div>
           {live.temp_c != null && <div className="w-item"><div className="num">{live.temp_c}°C</div><div className="lab">teplota vody</div></div>}
         </div>
+      )}
+      {!loading && live && live.spa_level != null && SPA_LEVEL_INFO[live.spa_level] && (
+        <p style={{ fontSize: 12.5, marginTop: 6, marginBottom: 0 }}>
+          {SPA_LEVEL_INFO[live.spa_level].icon} {SPA_LEVEL_INFO[live.spa_level].label}
+        </p>
       )}
       {!loading && !live && <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: 0 }}>Pro tohle místo se nepodařilo najít data ČHMÚ.</p>}
       {stationName && (

@@ -101,6 +101,50 @@ ZMĚNY PROTI PŮVODNÍMU STAVU (tato dávka úprav)
       vzorek appka zatím neměla k dispozici.
    c) Přesná hranice retenčního okna "recent" (kolik dní/měsíců
       zpátky opravdu sahá) není z dokumentace jistá.
+   AKTUALIZACE -- body a) a b) VYŘEŠENY a ověřené naživo:
+   - CORS opravdu blokoval přímé volání (potvrzeno v konzoli) -->
+     appka teď volá přes Supabase Edge Function
+     supabase/functions/chmi-proxy/index.ts (nasazuje se zvlášť přes
+     Supabase Dashboard -> Edge Functions, ne přes zip appky).
+   - Formát historical/monthly ověřen naživo: STEJNÝ tvar jako
+     now/recent (tsList s tsConID/tsData), jen bez obálky "objList" a
+     s kódy QM (měsíční průtok) / TM (měsíční teplota vody) místo
+     Q/TH. Uvnitř tsData je to ale JINÝ dílčí formát než u now/recent
+     -- kompaktní tabulka {data:{header:"DT,VAL", values:[[dt,val],...]}}
+     místo pole objektů {dt,value}. Vodní stav (H) v měsíčních datech
+     ČHMÚ neposkytuje, jen průtok a teplotu vody.
+   - Bod c) (přesná hranice "recent") pořád nejistá, ale appka se s
+     tím vyrovnává gracefully (při chybějícím datu padá na měsíční
+     průměr, nic nespadne).
+9. NOVÁ FUNKCE: víc měrných stanic u jedné výpravy. Výprava složená
+   z víc katalogových míst může mít KAŽDÉ místo navázané na jinou
+   stanici ČHMÚ (jiný revír/tok) -- appka teď najde a zobrazí
+   všechny odlišné stanice najednou (ne jen jednu nejbližší podle
+   souřadnic celé výpravy). Nový sloupec sessions.water_stations
+   (JSON pole), funkce resolveHydroStations() (množné číslo) v
+   Dashboard.jsx. Úlovek navíc přednostně použije SVOJI vlastní
+   navázanou revír (catches.location_id, přes tlačítko "📍 Revír"),
+   ne obecné pravidlo výpravy -- viz resolveHydroStation (jednotné
+   číslo) použité v CatchTicket.jsx.
+10. NOVÁ FUNKCE: stupeň povodňové aktivity/sucha (SPA). ČHMÚ meta1.json
+    obsahuje u každé stanice prahy (DRYH/SPA1H-3H pro vodní stav,
+    DRYQ/SPA1Q-3Q pro průtok) -- appka je teď stahuje a klasifikuje
+    aktuální hodnotu do odznaku 🟤 sucho / 🟢 normální / 🟡🟠🔴 1.-3.
+    stupeň. Nový sloupec water_spa_level na sessions i catches
+    (u víc-stanicových výprav je to součástí water_stations JSON,
+    žádný extra sloupec). Funkce classifySpaLevel() + mapa
+    SPA_LEVEL_INFO v src/lib/hydrology.js. Zobrazeno u výpravy,
+    úlovku i živě v katalogu revírů. Promítnuto i do statistik
+    ("📈 Kdy se daří" -> nový řádek "Podle vodního stavu").
+11. NOVÁ FUNKCE: trend tlaku (roste/klesá). lib/weather.js teď při
+    dotazu stáhne i předešlý den a spočítá rozdíl tlaku oproti stejné
+    hodině -- zobrazeno jako šipka ↗️/↘️ vedle tlaku u výpravy i
+    úlovku. Nový sloupec weather_pressure_trend na sessions i catches.
+12. ZJEDNODUŠENÍ: hlavička appky měla 9 ikon v řadě (nabité na
+    mobilu) -- "📍 Revíry" (přepínač) a "🪱 Nástrahy" (nejčastěji
+    používané) zůstávají viditelné natrvalo, zbytek (Galerie,
+    Rekordy, Statistiky, Export, Návod, Nastavení) je teď schovaný
+    v rozbalovacím menu "☰ Více".
 
 ZNÁMÉ NEDODĚLANÉ VĚCI (co uživatel chce příště)
 ------------------------------------------------

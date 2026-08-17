@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { uploadPhoto } from '../lib/storage.js'
 import { moonPhaseName, fetchWeather } from '../lib/weather.js'
-import { fetchWaterConditions, findNearestStations, WATER_PRECISION_LABEL } from '../lib/hydrology.js'
+import { fetchWaterConditions, findNearestStations, WATER_PRECISION_LABEL, SPA_LEVEL_INFO } from '../lib/hydrology.js'
 import BaitPicker from './BaitPicker.jsx'
 
 const CATEGORY_COLOR = { dravec: '#5C7A85', bila: '#C4A572' }
@@ -41,9 +41,11 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
     time: c.caught_at ? toLocalTimeInput(c.caught_at) : '',
     photoFile: null, baitPhotoFile: null, bait_photo_url: c.bait_photo_url || null,
     weather_temp_c: c.weather_temp_c ?? null, weather_pressure_hpa: c.weather_pressure_hpa ?? null,
+    weather_pressure_trend: c.weather_pressure_trend ?? null,
     weather_wind: c.weather_wind || null, weather_desc: c.weather_desc || null,
     water_level_cm: c.water_level_cm ?? null, water_flow_m3s: c.water_flow_m3s ?? null, water_temp_c: c.water_temp_c ?? null,
     water_station_name: c.water_station_name || null, water_data_precision: c.water_data_precision || null,
+    water_spa_level: c.water_spa_level ?? null,
   })
   const color = CATEGORY_COLOR[c.category]
 
@@ -52,7 +54,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
     setWeatherBusy(true); setWeatherError(null)
     try {
       const w = await fetchWeather(c.lat, c.lng, session?.session_date || c.caught_at?.slice(0, 10), form.time)
-      setForm((f) => ({ ...f, weather_temp_c: w.temp, weather_pressure_hpa: w.pressure, weather_wind: w.wind, weather_desc: w.desc }))
+      setForm((f) => ({ ...f, weather_temp_c: w.temp, weather_pressure_hpa: w.pressure, weather_pressure_trend: w.pressureTrend, weather_wind: w.wind, weather_desc: w.desc }))
     } catch (e) {
       setWeatherError(e.message)
     }
@@ -74,7 +76,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
           setForm((f) => ({
             ...f,
             water_level_cm: water.level_cm, water_flow_m3s: water.flow_m3s, water_temp_c: water.temp_c,
-            water_station_name: station.name, water_data_precision: water.precision,
+            water_station_name: station.name, water_data_precision: water.precision, water_spa_level: water.spa_level,
           }))
         }
       }
@@ -119,10 +121,10 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
       species: form.species, category: form.category, revir: form.revir || null,
       length_cm: form.length_cm || null, weight_kg: form.weight_kg || null,
       bait: form.bait, photo_url, bait_photo_url, caught_at,
-      weather_temp_c: form.weather_temp_c, weather_pressure_hpa: form.weather_pressure_hpa,
+      weather_temp_c: form.weather_temp_c, weather_pressure_hpa: form.weather_pressure_hpa, weather_pressure_trend: form.weather_pressure_trend,
       weather_wind: form.weather_wind, weather_desc: form.weather_desc,
       water_level_cm: form.water_level_cm, water_flow_m3s: form.water_flow_m3s, water_temp_c: form.water_temp_c,
-      water_station_name: form.water_station_name, water_data_precision: form.water_data_precision,
+      water_station_name: form.water_station_name, water_data_precision: form.water_data_precision, water_spa_level: form.water_spa_level,
     }).eq('id', c.id)
     setBusy(false)
     if (error) { alert(error.message); return }
@@ -202,13 +204,20 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                 <div className="conditions-strip">
                   <span className="cond-chip">📅 {session?.session_date || c.caught_at?.slice(0, 10)}</span>
                   <span className="cond-chip">🌡 {c.weather_temp_c ?? session?.weather_temp_c ?? '—'}°C</span>
-                  <span className="cond-chip">📊 {c.weather_pressure_hpa ?? session?.weather_pressure_hpa ?? '—'} hPa</span>
+                  <span className="cond-chip">
+                    📊 {c.weather_pressure_hpa ?? session?.weather_pressure_hpa ?? '—'} hPa
+                    {(() => { const t = c.weather_pressure_trend ?? session?.weather_pressure_trend; return t > 0 ? ' ↗️' : t < 0 ? ' ↘️' : '' })()}
+                  </span>
                   <span className="cond-chip">💨 {c.weather_wind || session?.weather_wind || '—'}</span>
                   <span className="cond-chip">🌙 {moonPhaseName(session?.session_date || c.caught_at?.slice(0, 10))}</span>
                   {(c.water_station_name || session?.water_station_name) && (
                     <span className="cond-chip">
                       💧 {c.water_level_cm ?? session?.water_level_cm ?? '—'} cm · {c.water_flow_m3s ?? session?.water_flow_m3s ?? '—'} m³/s
                       {(c.water_temp_c ?? session?.water_temp_c) != null ? ` · ${c.water_temp_c ?? session?.water_temp_c} °C` : ''}
+                      {(() => {
+                        const lvl = c.water_spa_level ?? session?.water_spa_level
+                        return lvl != null && SPA_LEVEL_INFO[lvl] ? ` · ${SPA_LEVEL_INFO[lvl].icon}` : ''
+                      })()}
                     </span>
                   )}
                 </div>

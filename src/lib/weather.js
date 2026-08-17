@@ -24,6 +24,12 @@ export function moonPhaseName(dateStr) {
   return names[idx]
 }
 
+function shiftDate(dateStr, days) {
+  const d = new Date(`${dateStr}T00:00:00`)
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
 export async function fetchWeather(lat, lng, dateStr, timeStr) {
   if (lat == null || lng == null || !dateStr) {
     throw new Error('Chybí pozice nebo datum.')
@@ -37,12 +43,13 @@ export async function fetchWeather(lat, lng, dateStr, timeStr) {
     ? 'https://archive-api.open-meteo.com/v1/archive'
     : 'https://api.open-meteo.com/v1/forecast'
 
+  const prevDateStr = shiftDate(dateStr, -1)
   const params = new URLSearchParams({
     latitude: String(lat),
     longitude: String(lng),
     hourly: 'temperature_2m,surface_pressure,wind_speed_10m,weather_code',
     timezone: 'Europe/Prague',
-    start_date: dateStr,
+    start_date: prevDateStr,
     end_date: dateStr,
   })
 
@@ -56,12 +63,22 @@ export async function fetchWeather(lat, lng, dateStr, timeStr) {
   const hourPrefix = time.slice(0, 2)
   const targetLabel = `${dateStr}T${hourPrefix}:00`
   let idx = data.hourly.time.indexOf(targetLabel)
-  if (idx === -1) idx = 0
+  if (idx === -1) idx = data.hourly.time.length - 1
+
+  const prevLabel = `${prevDateStr}T${hourPrefix}:00`
+  const prevIdx = data.hourly.time.indexOf(prevLabel)
 
   const code = data.hourly.weather_code[idx]
+  const pressure = Math.round(data.hourly.surface_pressure[idx])
+  let pressureTrend = null
+  if (prevIdx !== -1 && data.hourly.surface_pressure[prevIdx] != null) {
+    pressureTrend = Math.round((pressure - data.hourly.surface_pressure[prevIdx]) * 10) / 10
+  }
+
   return {
     temp: Math.round(data.hourly.temperature_2m[idx]),
-    pressure: Math.round(data.hourly.surface_pressure[idx]),
+    pressure,
+    pressureTrend, // kladné = tlak roste, záporné = klesá, null = nešlo porovnat (chybí předchozí den)
     wind: `${Math.round(data.hourly.wind_speed_10m[idx])} km/h`,
     desc: WEATHER_DESC[code] ?? 'neznámo',
   }
