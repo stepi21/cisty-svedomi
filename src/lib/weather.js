@@ -30,6 +30,16 @@ function shiftDate(dateStr, days) {
   return d.toISOString().slice(0, 10)
 }
 
+// Převede stupně (0-360, meteorologická konvence -- odkud vítr vane) na
+// zkratku světové strany, stejně jak appka odjakživa čeká v ručním zadávání
+// (placeholder "3 m/s SV").
+function degToCompass(deg) {
+  if (deg == null) return ''
+  const dirs = ['S', 'SV', 'V', 'JV', 'J', 'JZ', 'Z', 'SZ']
+  const idx = Math.round(deg / 45) % 8
+  return dirs[idx]
+}
+
 export async function fetchWeather(lat, lng, dateStr, timeStr) {
   if (lat == null || lng == null || !dateStr) {
     throw new Error('Chybí pozice nebo datum.')
@@ -47,7 +57,7 @@ export async function fetchWeather(lat, lng, dateStr, timeStr) {
   const params = new URLSearchParams({
     latitude: String(lat),
     longitude: String(lng),
-    hourly: 'temperature_2m,surface_pressure,wind_speed_10m,weather_code',
+    hourly: 'temperature_2m,surface_pressure,wind_speed_10m,wind_direction_10m,weather_code',
     timezone: 'Europe/Prague',
     start_date: prevDateStr,
     end_date: dateStr,
@@ -75,11 +85,15 @@ export async function fetchWeather(lat, lng, dateStr, timeStr) {
     pressureTrend = Math.round((pressure - data.hourly.surface_pressure[prevIdx]) * 10) / 10
   }
 
+  const windDeg = data.hourly.wind_direction_10m ? data.hourly.wind_direction_10m[idx] : null
+  const windSpeed = Math.round(data.hourly.wind_speed_10m[idx])
+  const windDirLabel = degToCompass(windDeg)
+
   return {
     temp: Math.round(data.hourly.temperature_2m[idx]),
     pressure,
     pressureTrend, // kladné = tlak roste, záporné = klesá, null = nešlo porovnat (chybí předchozí den)
-    wind: `${Math.round(data.hourly.wind_speed_10m[idx])} km/h`,
+    wind: windDirLabel ? `${windSpeed} km/h ${windDirLabel}` : `${windSpeed} km/h`,
     desc: WEATHER_DESC[code] ?? 'neznámo',
   }
 }
