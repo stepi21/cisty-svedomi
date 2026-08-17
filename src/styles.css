@@ -90,6 +90,7 @@ header h1 .accent{ color:var(--amber); }
 .head-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
 .whoami{ font-family:'IBM Plex Mono', monospace; font-size:var(--fs-sm); color:#B9CFCB; align-self:center; }
 .head-actions .new-btn, .head-actions-primary .new-btn, .head-actions-secondary .new-btn{ color:#E7EFEC; border-color:rgba(255,255,255,.3); }
+.head-actions-primary .new-btn{ display:inline-flex; align-items:center; gap:6px; }
 .invite-banner{
   margin-top:10px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.25);
   padding:8px 14px; border-radius:8px; font-size:var(--fs-base); position:relative;
@@ -341,9 +342,13 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
 .type-picker{
   position:absolute; top:16px; left:50%; transform:translateX(-50%); z-index:400;
   background:var(--white); border:1px solid var(--paper-line); border-radius:12px;
-  padding:14px; box-shadow:0 15px 35px rgba(18,59,82,.25); display:flex; flex-direction:column; gap:6px; min-width:220px;
+  padding:0 14px 12px; box-shadow:0 15px 35px rgba(18,59,82,.25); display:flex; flex-direction:column; gap:6px; min-width:220px;
+  overflow:hidden;
 }
-.type-picker-title{ font-family:'IBM Plex Mono', monospace; font-size:var(--fs-xs); text-transform:uppercase; color:var(--ink-soft); margin-bottom:4px; }
+.type-picker-title{
+  font-family:'Fraunces', serif; font-weight:600; font-size:var(--fs-md2); color:var(--white);
+  background:var(--water-deep); padding:10px 14px 9px; margin:0 -14px 8px; border-radius:11px 11px 0 0;
+}
 .type-btn{
   text-align:left; padding:8px 10px; border:1px solid var(--paper-line); border-radius:8px;
   background:var(--paper); cursor:pointer; font-size:var(--fs-base); color:var(--ink);
@@ -398,7 +403,7 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
 .bait-picker-modal{ z-index:1000; }
 .bait-picker-modal-list{ max-height:50vh; overflow-y:auto; }
 .location-checklist{ max-height:42vh; overflow-y:auto; margin-bottom:4px; }
-.new-btn.active-toggle{ background:var(--water-deep); color:var(--white); border-color:var(--water-deep); }
+.new-btn.active-toggle{ background:rgba(217,160,84,.18); color:var(--amber); border-color:var(--amber); }
 .bait-picker-item{
   display:flex; align-items:center; gap:8px; padding:10px 8px; border-radius:6px;
   cursor:pointer; font-size:var(--fs-md); border-bottom:1px solid #EFEBDF;

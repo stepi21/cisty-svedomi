@@ -5,6 +5,7 @@ import CatchTicket from './CatchTicket.jsx'
 import HelpModal from './HelpModal.jsx'
 import GalleryModal from './GalleryModal.jsx'
 import BaitsModal, { computeBaitsList } from './BaitsModal.jsx'
+import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu } from '../lib/icons.jsx'
 import BaitPicker from './BaitPicker.jsx'
 import LocationsModal from './LocationsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
@@ -140,6 +141,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [activePanel, setActivePanel] = useState(null) // null | 'locations' | 'baits' | 'catches' — jen jeden panel může být aktivní najednou
   const [baitsStartAdding, setBaitsStartAdding] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false) // "☰ Více" — méně časté akce schované z hlavičky
+  const moreMenuRef = useRef(null)
+  useEffect(() => {
+    if (!showMoreMenu) return
+    function handleClickOutside(e) {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) setShowMoreMenu(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showMoreMenu])
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
   const [toast, setToast] = useState(null) // krátké potvrzení "✓ Uloženo" po akci
   const [searchQuery, setSearchQuery] = useState('') // hledání ve výpravách (název, revír, druh, nástraha)
@@ -1576,7 +1586,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             return (
               <div key={l.id} className="record-row" onClick={() => { setLocationsReturnId(l.id); setBaitsInitialKey(null); setShowLocations(true) }}>
                 <div className="record-head">
-                  <strong>{l.area ? '🎯' : '📍'} {l.name}</strong>
+                  <strong style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <IconRevir size={16} color="var(--water-deep)" dotColor="var(--paper)" /> {l.name}
+                  </strong>
                   {l.revir && <span className="revir-chip">{l.revir}</span>}
                 </div>
                 <div className="c-sub" style={{ marginTop: 4 }}>{linkedSessions.length} výprav · {catchCount} úlovků</div>
@@ -1622,7 +1634,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                   {b.photo_url
                     ? <img src={b.photo_url} alt="" className="bait-thumb" style={{ marginLeft: 0, flex: 'none' }} />
-                    : <span style={{ flex: 'none' }}>{b.category === 'dravec' ? '🐟' : '🐠'}</span>}
+                    : <span style={{ flex: 'none', display: 'flex' }}><IconNastraha size={18} color={b.category === 'dravec' ? 'var(--water-deep)' : 'var(--amber-deep)'} /></span>}
                   <strong style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.label}</strong>
                 </span>
                 <span className="record-length">{b.catches.length}×</span>
@@ -1956,11 +1968,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       <header>
         <div className="head-row">
           <h1>Čistý<span className="accent">svědomí</span></h1>
-          <div style={{ position: 'relative' }}>
-            <button className="new-btn hamburger-btn" onClick={() => setShowMoreMenu((v) => !v)} title="Více">☰</button>
+          <div style={{ position: 'relative' }} ref={moreMenuRef}>
+            <button className="new-btn hamburger-btn" onClick={() => setShowMoreMenu((v) => !v)} title="Více">
+              <IconMenu size={19} color="var(--water-deep)" />
+            </button>
             {showMoreMenu && (
               <div className="type-picker" style={{ position: 'absolute', top: '100%', right: 0, left: 'auto', transform: 'none', marginTop: 6, minWidth: 190, zIndex: 500 }}>
-                <div className="whoami" style={{ padding: '2px 4px 6px' }}>{myProfile?.display_name}</div>
+                <div className="type-picker-title">{myProfile?.display_name}</div>
                 <button className="type-btn" onClick={() => { setShowMoreMenu(false); createInvite() }}>+ pozvat parťáka</button>
                 <button className="type-btn" onClick={() => { setShowMoreMenu(false); onSignOut() }}>Odhlásit</button>
                 <div style={{ height: 1, background: 'var(--paper-line)', margin: '6px 0' }} />
@@ -1980,22 +1994,22 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               className={`new-btn ${activePanel === null ? 'active-toggle' : ''}`}
               onClick={() => switchPanel(null)}
               title="Výpravy"
-            >🎣 Výpravy</button>
+            ><IconVyprava size={15} /> Výpravy</button>
             <button
               className={`new-btn ${activePanel === 'locations' ? 'active-toggle' : ''}`}
               onClick={() => switchPanel('locations')}
               title="Revíry"
-            >📍 Revíry</button>
+            ><IconRevir size={15} dotColor="var(--water-deep)" /> Revíry</button>
             <button
               className={`new-btn ${activePanel === 'baits' ? 'active-toggle' : ''}`}
               onClick={() => switchPanel('baits')}
               title="Nástrahy"
-            >🪱 Nástrahy</button>
+            ><IconNastraha size={15} /> Nástrahy</button>
             <button
               className={`new-btn ${activePanel === 'catches' ? 'active-toggle' : ''}`}
               onClick={() => switchPanel('catches')}
               title="Úlovky"
-            >🐟 Úlovky</button>
+            ><IconUlovek size={15} eyeColor="var(--water-deep)" /> Úlovky</button>
           </div>
         </div>
         {inviteInfo && (
