@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { uploadPhoto } from '../lib/storage.js'
+import { IconClose } from '../lib/icons.jsx'
+import { IconEdit, IconTrash, IconCamera } from '../lib/icons.jsx'
 
 const fishSVG = (color) => `
   <svg viewBox="0 0 64 34" xmlns="http://www.w3.org/2000/svg">
@@ -136,7 +138,7 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
       <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
         <div className="ticket" style={{ maxWidth: 440 }}>
           <div className="ticket-top">
-            <button className="ticket-close" onClick={onClose}>✕</button>
+            <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
             <div className="eyebrow">Nástraha</div>
             <h2>{selected.label}</h2>
           </div>
@@ -145,10 +147,10 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
               <button className="new-btn" onClick={onClose}>← Zpět na nástrahy</button>
               {(selected.catalogEntry ? canEditCatalog : true) && (
-                <button className="new-btn" onClick={() => setEditingCatalogId(selected.key)}>✏️ Upravit</button>
+                <button className="new-btn" onClick={() => setEditingCatalogId(selected.key)}><IconEdit size={13} /> Upravit</button>
               )}
               {(selected.catalogEntry ? canEditCatalog : true) && (
-                <button className="new-btn danger-btn" onClick={handleDelete}>🗑 Smazat</button>
+                <button className="new-btn danger-btn" onClick={handleDelete}><IconTrash size={13} /> Smazat</button>
               )}
             </div>
             {selected.photo_url ? (
@@ -226,7 +228,7 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
     <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="ticket" style={{ maxWidth: 380 }}>
         <div className="ticket-top">
-          <button className="ticket-close" onClick={onClose}>✕</button>
+          <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
           <div className="eyebrow">Nástrahy</div>
           <h2>Nic není vybráno</h2>
         </div>
@@ -264,7 +266,7 @@ function AddBaitForm({ groupId, userId, onCancel, onSaved }) {
     <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="ticket" style={{ maxWidth: 380 }}>
         <div className="ticket-top">
-          <button className="ticket-close" onClick={onCancel}>✕</button>
+          <button className="ticket-close" onClick={onCancel}><IconClose size={16} /></button>
           <div className="eyebrow">Nová nástraha</div>
           <h2>Přidat do katalogu</h2>
         </div>
@@ -280,7 +282,7 @@ function AddBaitForm({ groupId, userId, onCancel, onSaved }) {
             </select>
             <label className="field-label">Foto (nepovinné)</label>
             <label className="photo-label" style={{ display: 'inline-block', marginTop: 4 }}>
-              📷 {photoFile ? photoFile.name : 'vybrat foto'}
+              <IconCamera size={13} />{' '}{photoFile ? photoFile.name : 'vybrat foto'}
               <input type="file" accept="image/*" hidden onChange={(e) => setPhotoFile(e.target.files[0])} />
             </label>
             {error && <p className="error-text">{error}</p>}
@@ -333,7 +335,7 @@ function EditBaitForm({ bait, groupId, userId, onRenamePropagate, onBackfillBait
     <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="ticket" style={{ maxWidth: 380 }}>
         <div className="ticket-top">
-          <button className="ticket-close" onClick={onCancel}>✕</button>
+          <button className="ticket-close" onClick={onCancel}><IconClose size={16} /></button>
           <div className="eyebrow">Úprava</div>
           <h2>{bait.label}</h2>
         </div>
@@ -355,7 +357,7 @@ function EditBaitForm({ bait, groupId, userId, onRenamePropagate, onBackfillBait
             </select>
             <label className="field-label">Foto</label>
             <label className="photo-label" style={{ display: 'inline-block', marginTop: 4 }}>
-              📷 {photoFile ? photoFile.name : (bait.photo_url ? 'změnit foto' : 'vybrat foto')}
+              <IconCamera size={13} />{' '}{photoFile ? photoFile.name : (bait.photo_url ? 'změnit foto' : 'vybrat foto')}
               <input type="file" accept="image/*" hidden onChange={(e) => setPhotoFile(e.target.files[0])} />
             </label>
             {bait.photo_url && !photoFile && <img src={bait.photo_url} alt="" className="bait-thumb" />}

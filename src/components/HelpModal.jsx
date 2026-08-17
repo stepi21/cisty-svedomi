@@ -1,9 +1,10 @@
+import { IconClose } from '../lib/icons.jsx'
 export default function HelpModal({ onClose }) {
   return (
     <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="ticket help-ticket">
         <div className="ticket-top">
-          <button className="ticket-close" onClick={onClose}>✕</button>
+          <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
           <div className="eyebrow">Návod</div>
           <h2>Jak appka funguje</h2>
         </div>

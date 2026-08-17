@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import L from 'leaflet'
 import { fetchLiveConditions, findNearestStations, SPA_LEVEL_INFO } from '../lib/hydrology.js'
+import { IconClose, IconEdit, IconTrash, IconMapEdit, IconZoom, IconDroplet, IconCheck, IconRevir } from '../lib/icons.jsx'
 
 const fishSVG = (color) => `
   <svg viewBox="0 0 64 34" xmlns="http://www.w3.org/2000/svg">
@@ -41,7 +42,7 @@ export default function LocationsModal({ locations, sessions, userId, initialLoc
       <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
         <div className="ticket" style={{ maxWidth: 440 }}>
           <div className="ticket-top">
-            <button className="ticket-close" onClick={onClose}>✕</button>
+            <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
             <div className="eyebrow">Místo</div>
             <h2>{selected.name}</h2>
           </div>
@@ -49,20 +50,20 @@ export default function LocationsModal({ locations, sessions, userId, initialLoc
           <div className="ticket-body">
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
               <button className="new-btn" onClick={() => setSelectedId(null)}>← Zpět na místa</button>
-              {canEdit && <button className="new-btn" onClick={() => setEditing(true)}>✏️ Upravit</button>}
-              {canEdit && <button className="new-btn" onClick={() => onManageAreas(selected)}>🗺 Upravit oblasti</button>}
+              {canEdit && <button className="new-btn" onClick={() => setEditing(true)}><IconEdit size={13} /> Upravit</button>}
+              {canEdit && <button className="new-btn" onClick={() => onManageAreas(selected)}><IconMapEdit size={13} /> Upravit oblasti</button>}
               {canEdit && (
                 <button
                   className="new-btn danger-btn"
                   onClick={() => { if (window.confirm(`Smazat místo "${selected.name}" z katalogu?`)) { onDelete(selected.id); setSelectedId(null) } }}
-                >🗑 Smazat</button>
+                ><IconTrash size={13} /> Smazat</button>
               )}
             </div>
             {selected.revir && <p className="hint-text">Revír: {selected.revir}</p>}
             <LocationPreviewMap location={selected} />
             {onFocusLocation && (selected.area || (selected.lat != null && selected.lng != null)) && (
               <button type="button" className="new-btn" style={{ marginTop: 8 }} onClick={() => onFocusLocation(selected)}>
-                🔍 Zobrazit na hlavní mapě
+                <IconZoom size={13} /> Zobrazit na hlavní mapě
               </button>
             )}
             <WaterStatusBlock location={selected} canEdit={canEdit} onUpdate={onUpdate} />
@@ -114,9 +115,9 @@ export default function LocationsModal({ locations, sessions, userId, initialLoc
     <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="ticket" style={{ maxWidth: 400 }}>
         <div className="ticket-top">
-          <button className="ticket-close" onClick={onClose}>✕</button>
+          <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
           <div className="eyebrow">Přehled</div>
-          <h2>📍 Revíry</h2>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconRevir size={20} color="var(--water-deep)" /> Revíry</h2>
         </div>
         <div className="perforation"></div>
         <div className="ticket-body">
@@ -216,8 +217,8 @@ function WaterStatusBlock({ location, canEdit, onUpdate }) {
 
   return (
     <div style={{ marginTop: 10, padding: '10px 12px', background: 'var(--paper)', border: '1px solid var(--paper-line)', borderRadius: 8 }}>
-      <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--ink-soft)', marginBottom: 6 }}>
-        💧 Aktuální vodní stav
+      <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--ink-soft)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+        <IconDroplet size={13} color="var(--water-mid)" /> Aktuální vodní stav
       </div>
       {loading && <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: 0 }}>Zjišťuji…</p>}
       {!loading && live && (
@@ -240,7 +241,7 @@ function WaterStatusBlock({ location, canEdit, onUpdate }) {
       )}
       {canEdit && pendingStationId && (
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <button type="button" className="new-btn" onClick={confirmSuggested}>✓ Potvrdit tuhle stanici</button>
+          <button type="button" className="new-btn" onClick={confirmSuggested}><IconCheck size={13} /> Potvrdit tuhle stanici</button>
           <button type="button" className="new-btn" onClick={openPicker}>Vybrat jinou</button>
         </div>
       )}
@@ -306,7 +307,7 @@ function EditLocationForm({ location, onCancel, onSaved }) {
     <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="ticket" style={{ maxWidth: 380 }}>
         <div className="ticket-top">
-          <button className="ticket-close" onClick={onCancel}>✕</button>
+          <button className="ticket-close" onClick={onCancel}><IconClose size={16} /></button>
           <div className="eyebrow">Úprava</div>
           <h2>{location.name}</h2>
         </div>

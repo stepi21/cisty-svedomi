@@ -1,3 +1,4 @@
+import { IconClose, IconGallery, IconUlovek, IconNastraha } from '../lib/icons.jsx'
 export default function GalleryModal({ sessions, onClose, onOpenCatch, onOpenBait }) {
   const seen = new Set()
   const photos = []
@@ -29,9 +30,9 @@ export default function GalleryModal({ sessions, onClose, onOpenCatch, onOpenBai
     <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="ticket" style={{ maxWidth: 560 }}>
         <div className="ticket-top">
-          <button className="ticket-close" onClick={onClose}>✕</button>
+          <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
           <div className="eyebrow">Galerie</div>
-          <h2>🖼 Fotky party</h2>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconGallery size={20} color="var(--amber)" /> Fotky party</h2>
         </div>
         <div className="perforation"></div>
         <div className="ticket-body">
@@ -47,7 +48,9 @@ export default function GalleryModal({ sessions, onClose, onOpenCatch, onOpenBai
                   title={p.label}
                 >
                   <img src={p.url} alt={p.label} />
-                  <span className={`gallery-tag ${p.type}`}>{p.type === 'catch' ? '🐟' : '🪱'}</span>
+                  <span className={`gallery-tag ${p.type}`}>
+                    {p.type === 'catch' ? <IconUlovek size={13} color="var(--water-deep)" /> : <IconNastraha size={13} color="var(--amber-deep)" />}
+                  </span>
                 </div>
               ))}
             </div>

@@ -5,7 +5,7 @@ import CatchTicket from './CatchTicket.jsx'
 import HelpModal from './HelpModal.jsx'
 import GalleryModal from './GalleryModal.jsx'
 import BaitsModal, { computeBaitsList } from './BaitsModal.jsx'
-import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu } from '../lib/icons.jsx'
+import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconGallery, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconPlay, IconLocate, IconMoonPhase } from '../lib/icons.jsx'
 import BaitPicker from './BaitPicker.jsx'
 import LocationsModal from './LocationsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
@@ -1541,9 +1541,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   })
 
   function peekLabel() {
-    if (activePanel === 'locations') return `📍 Revíry · ${locationsCatalog.length}`
-    if (activePanel === 'baits') return `🪱 Nástrahy`
-    if (activePanel === 'catches') return `🐟 Úlovky`
+    if (activePanel === 'locations') return <><IconRevir size={15} color="var(--water-deep)" dotColor="#fff" /> Revíry · {locationsCatalog.length}</>
+    if (activePanel === 'baits') return <><IconNastraha size={15} color="var(--water-deep)" /> Nástrahy</>
+    if (activePanel === 'catches') return <><IconUlovek size={15} color="var(--water-deep)" /> Úlovky</>
     if (viewMode === 'detail' && activeSession) return activeSession.title
     const parts = []
     if (activeCategory !== 'all') parts.push(activeCategory === 'dravec' ? 'Dravci' : 'Bílá ryba')
@@ -1782,9 +1782,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                               <div className="s-title">{s.title}</div>
                               <div className="s-sub">{s.session_date} · {s.time_from}–{s.time_to} · {userName(s.user_id)}{s.revir ? ` · ${s.revir}` : ''}</div>
                               <div className="s-tags">
-                                {s.status === 'in_progress' && <span className="s-tag live-tag">🔴 Probíhá</span>}
+                                {s.status === 'in_progress' && <span className="s-tag live-tag"><IconLive size={9} color="#fff" /> Probíhá</span>}
                                 <span className="s-tag">{s.type}</span>
-                                {s.target_species && <span className="s-tag target">🎯 {s.target_species}</span>}
+                                {s.target_species && <span className="s-tag target"><IconTarget size={11} color="currentColor" /> {s.target_species}</span>}
                                 <span className="s-tag catch">{filteredCatches(s).length} úlovky</span>
                               </div>
                             </div>
@@ -1807,7 +1807,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             <div className="detail-strip">
               {activeSession.status === 'in_progress' && (
                 <div className="live-banner" style={{ gridColumn: '1 / -1' }}>
-                  <span>🔴 Výprava právě probíhá</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconLive size={14} /> Výprava právě probíhá</span>
                   {canEdit && <button className="new-btn" onClick={() => endLiveSession(activeSession)}>Ukončit výpravu</button>}
                 </div>
               )}
@@ -1815,16 +1815,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
                   <h3>Podmínky</h3>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    <button className="new-btn" onClick={() => duplicateSession(activeSession)}>📋 Nová jako tahle</button>
+                    <button className="new-btn" onClick={() => duplicateSession(activeSession)}><IconDuplicate size={13} /> Nová jako tahle</button>
                     {activeSession.area && (activeSession.session_locations || []).length === 0 && (
-                      <button className="new-btn" onClick={() => startSaveLocation(activeSession)}>📌 Uložit místo do katalogu</button>
+                      <button className="new-btn" onClick={() => startSaveLocation(activeSession)}><IconBookmark size={13} /> Uložit místo do katalogu</button>
                     )}
-                    {canEdit && <button className="new-btn" onClick={() => openLocationMenu(activeSession)}>📍 Místo</button>}
-                    {canEdit && <button className="new-btn" onClick={() => startEditSession(activeSession)}>✏️ Upravit výpravu</button>}
+                    {canEdit && <button className="new-btn" onClick={() => openLocationMenu(activeSession)}><IconRevir size={13} /> Místo</button>}
+                    {canEdit && <button className="new-btn" onClick={() => startEditSession(activeSession)}><IconEdit size={13} /> Upravit výpravu</button>}
                   </div>
                 </div>
-                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 4 }}>
-                  📅 {activeSession.session_date}{activeSession.time_from ? ` · ${activeSession.time_from}–${activeSession.time_to || '?'}` : ''}
+                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 'var(--fs-sm2)', color: 'var(--ink-soft)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <IconCalendar size={13} /> {activeSession.session_date}{activeSession.time_from ? ` · ${activeSession.time_from}–${activeSession.time_to || '?'}` : ''}
                 </div>
                 <div className="weather-row" style={{ marginTop: 8 }}>
                   <div className="w-item"><div className="num">{activeSession.weather_temp_c ?? '—'}°C</div><div className="lab">teplota</div></div>
@@ -1835,7 +1835,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   activeSession.water_stations.map((ws) => (
                     <div key={ws.station_id}>
                       <div className="weather-row" style={{ marginTop: 8 }}>
-                        <div className="w-item"><div className="num">💧 {ws.level_cm ?? '—'} cm</div><div className="lab">vodní stav</div></div>
+                        <div className="w-item"><div className="num"><IconDroplet size={13} color="var(--water-mid)" /> {ws.level_cm ?? '—'} cm</div><div className="lab">vodní stav</div></div>
                         <div className="w-item"><div className="num">{ws.flow_m3s ?? '—'} m³/s</div><div className="lab">průtok</div></div>
                         {ws.temp_c != null && <div className="w-item"><div className="num">{ws.temp_c}°C</div><div className="lab">teplota vody</div></div>}
                       </div>
@@ -1848,7 +1848,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 ) : activeSession.water_station_name && (
                   <>
                     <div className="weather-row" style={{ marginTop: 8 }}>
-                      <div className="w-item"><div className="num">💧 {activeSession.water_level_cm ?? '—'} cm</div><div className="lab">vodní stav</div></div>
+                      <div className="w-item"><div className="num" style={{ display: 'flex', alignItems: 'center', gap: 4 }}><IconDroplet size={13} color="var(--water-mid)" /> {activeSession.water_level_cm ?? '—'} cm</div><div className="lab">vodní stav</div></div>
                       <div className="w-item"><div className="num">{activeSession.water_flow_m3s ?? '—'} m³/s</div><div className="lab">průtok</div></div>
                       {activeSession.water_temp_c != null && <div className="w-item"><div className="num">{activeSession.water_temp_c}°C</div><div className="lab">teplota vody</div></div>}
                     </div>
@@ -1859,7 +1859,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   </>
                 )}
                 <div style={{ marginTop: 8, fontSize: 13, color: 'var(--ink-soft)' }}>{activeSession.weather_desc}</div>
-                <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-soft)' }}>🌙 {moonPhaseName(activeSession.session_date)}</div>
+                <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-soft)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {(() => { const phase = moonPhaseName(activeSession.session_date); return <><IconMoonPhase phase={phase} size={14} /> {phase}</> })()}
+                </div>
               </div>
               <div className="det-block">
                 <h3>Pruty a nástrahy</h3>
@@ -1892,7 +1894,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                         ))}
                         {(!r.baits || r.baits.length === 0) && !r.bait && <span className="rod-bait">—</span>}
                       </div>
-                      {canEdit && <button className="new-btn" onClick={() => setEditingRodId(r.id)}>✏️</button>}
+                      {canEdit && <button className="new-btn" onClick={() => setEditingRodId(r.id)}><IconEdit size={13} /></button>}
                     </div>
                   )
                 ))}
@@ -1908,14 +1910,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                       const label = loc ? loc.name : `Oblast ${i + 1}`
                       return (
                         <button key={i} className="coord-chip" type="button" onClick={() => focusOnArea(pts)}>
-                          🎯 {label}: {c.lat.toFixed(4)}, {c.lng.toFixed(4)}
+                          <IconRevir size={13} color="var(--water-mid)" dotColor="var(--paper)" /> {label}: {c.lat.toFixed(4)}, {c.lng.toFixed(4)}
                         </button>
                       )
                     })
                   ) : (
                     (activeSession.rods || []).map((r) => (
                       <button key={r.id} className="coord-chip" type="button" onClick={() => focusOnPoint(r.lat, r.lng)}>
-                        🎯 {r.name}: {r.lat?.toFixed(4)}, {r.lng?.toFixed(4)}
+                        <IconRevir size={13} color="var(--water-mid)" dotColor="var(--paper)" /> {r.name}: {r.lat?.toFixed(4)}, {r.lng?.toFixed(4)}
                       </button>
                     ))
                   )}
@@ -1935,7 +1937,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                       <div className="catch-row" key={c.id} onClick={() => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c) }}>
                         <div className="fish-mini" dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />
                         <div>
-                          <div className="c-name">{c.species} {matchesTarget && <span title="Odpovídá cíli výpravy">🎯</span>}</div>
+                          <div className="c-name">{c.species} {matchesTarget && <span title="Odpovídá cíli výpravy" style={{ display: 'inline-flex' }}><IconTarget size={12} color="var(--amber-deep)" /></span>}</div>
                           <div className="c-sub">{c.length_cm} cm · {c.weight_kg} kg</div>
                         </div>
                       </div>
@@ -1978,12 +1980,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 <button className="type-btn" onClick={() => { setShowMoreMenu(false); createInvite() }}>+ pozvat parťáka</button>
                 <button className="type-btn" onClick={() => { setShowMoreMenu(false); onSignOut() }}>Odhlásit</button>
                 <div style={{ height: 1, background: 'var(--paper-line)', margin: '6px 0' }} />
-                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowGallery(true) }}>🖼 Galerie</button>
-                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowRecords(true) }}>🏆 Rekordy</button>
-                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowStats(true) }}>📊 Statistiky</button>
-                <button className="type-btn" onClick={() => { setShowMoreMenu(false); exportData() }}>⬇️ Export dat</button>
-                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowHelp(true) }}>❓ Návod</button>
-                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowSettings(true) }}>⚙️ Nastavení</button>
+                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowGallery(true) }}><IconGallery size={15} color="var(--water-deep)" /> Galerie</button>
+                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowRecords(true) }}><IconTrophy size={15} color="var(--amber)" /> Rekordy</button>
+                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowStats(true) }}><IconChart size={15} color="var(--water-deep)" /> Statistiky</button>
+                <button className="type-btn" onClick={() => { setShowMoreMenu(false); exportData() }}><IconDownload size={15} color="var(--water-deep)" /> Export dat</button>
+                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowHelp(true) }}><IconHelp size={15} color="var(--water-deep)" /> Návod</button>
+                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowSettings(true) }}><IconSettings size={15} color="var(--water-deep)" /> Nastavení</button>
               </div>
             )}
           </div>
@@ -2015,11 +2017,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         {inviteInfo && (
           <div className="invite-banner">
             Kód pro kamaráda: <strong>{inviteInfo.code}</strong> (platný 7 dní) — ať ho zadá po přihlášení do appky na obrazovce "Mám kód pozvánky".
-            <button className="ticket-close" onClick={() => setInviteInfo(null)}>✕</button>
+            <button className="ticket-close" onClick={() => setInviteInfo(null)}><IconClose size={16} /></button>
           </div>
         )}
         {!isOnline && (
-          <div className="offline-banner">📡 Nejsi připojený k internetu — rozepsaná data zůstávají vyplněná, zkus uložit až se signál vrátí.</div>
+          <div className="offline-banner" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconOffline size={15} /> Nejsi připojený k internetu — rozepsaná data zůstávají vyplněná, zkus uložit až se signál vrátí.</div>
         )}
       </header>
 
@@ -2034,8 +2036,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
         <main>
           <div ref={mapRef} id="map" style={{ cursor: isPlacingSomething ? 'crosshair' : '' }} />
-          <button className="my-location-btn" onClick={goToMyLocation} title="Moje pozice">📍<span className="btn-label"> Moje pozice</span></button>
-          <button className="live-session-btn" onClick={startNewSessionLive} title="Výprava teď">▶️<span className="btn-label"> Výprava teď</span></button>
+          <button className="my-location-btn" onClick={goToMyLocation} title="Moje pozice"><IconLocate size={15} /><span className="btn-label"> Moje pozice</span></button>
+          <button className="live-session-btn" onClick={startNewSessionLive} title="Výprava teď"><IconPlay size={15} /><span className="btn-label"> Výprava teď</span></button>
 
           {pickingType && (
             <div className="type-picker">
@@ -2050,19 +2052,19 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           {locationPickerStep === 'choose' && (
             <div className="type-picker">
               <div className="type-picker-title">Jak zadat místo?</div>
-              <button className="type-btn" onClick={() => setLocationPickerStep('catalog')}>📍 Z katalogu</button>
-              <button className="type-btn" onClick={startDrawNew}>🖊 Naklikat nové na mapě</button>
+              <button className="type-btn" onClick={() => setLocationPickerStep('catalog')}><IconRevir size={14} /> Z katalogu</button>
+              <button className="type-btn" onClick={startDrawNew}><IconEdit size={13} /> Naklikat nové na mapě</button>
               <button className="type-cancel" onClick={() => setLocationPickerStep(null)}>Zrušit</button>
             </div>
           )}
 
           {locationActionMenuFor && (
             <div className="type-picker">
-              <div className="type-picker-title">📍 Místo výpravy</div>
+              <div className="type-picker-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}><IconRevir size={16} color="#fff" /> Místo výpravy</div>
               <button
                 className="type-btn"
                 onClick={() => { const s = locationActionMenuFor; setLocationActionMenuFor(null); updateSessionFromLocations(s) }}
-              >🔄 Aktualizovat podle katalogu</button>
+              ><IconRefresh size={13} /> Aktualizovat podle katalogu</button>
               <button
                 className="type-btn"
                 onClick={() => { const s = locationActionMenuFor; setLocationActionMenuFor(null); startAttachLocationsToSession(s) }}
@@ -2079,7 +2081,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 {locationsCatalog.map((loc) => (
                   <label key={loc.id} className="location-check-row">
                     <input type="checkbox" checked={pickingCatalogIds.includes(loc.id)} onChange={() => togglePickingCatalogId(loc.id)} />
-                    <span>{loc.area ? '🎯' : '📍'} {loc.name}{loc.revir ? ` (${loc.revir})` : ''}</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconRevir size={13} color="var(--water-deep)" /> {loc.name}{loc.revir ? ` (${loc.revir})` : ''}</span>
                   </label>
                 ))}
               </div>
@@ -2099,7 +2101,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 {locationsCatalog.map((loc) => (
                   <label key={loc.id} className="location-check-row">
                     <input type="checkbox" checked={pickingCatalogIds.includes(loc.id)} onChange={() => togglePickingCatalogId(loc.id)} />
-                    <span>{loc.area ? '🎯' : '📍'} {loc.name}{loc.revir ? ` (${loc.revir})` : ''}</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconRevir size={13} color="var(--water-deep)" /> {loc.name}{loc.revir ? ` (${loc.revir})` : ''}</span>
                   </label>
                 ))}
               </div>
@@ -2117,7 +2119,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 return (
                   <div key={idx} className="rod-edit-row" style={{ marginBottom: 4 }}>
                     <span className="hint-text" style={{ margin: 0, flex: 1 }}>{loc ? loc.name : `Oblast ${idx + 1}`} ({entry.points.length} bodů)</span>
-                    <button className="new-btn danger-btn" onClick={() => removeManagedArea(idx)}>🗑</button>
+                    <button className="new-btn danger-btn" onClick={() => removeManagedArea(idx)}><IconTrash size={13} /></button>
                   </div>
                 )
               })}
@@ -2138,7 +2140,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               {editingAreasLocation.areas.map((pts, idx) => (
                 <div key={idx} className="rod-edit-row" style={{ marginBottom: 4 }}>
                   <span className="hint-text" style={{ margin: 0, flex: 1 }}>Oblast {idx + 1} ({pts.length} bodů)</span>
-                  <button className="new-btn danger-btn" onClick={() => removeManagedLocationArea(idx)}>🗑</button>
+                  <button className="new-btn danger-btn" onClick={() => removeManagedLocationArea(idx)}><IconTrash size={13} /></button>
                 </div>
               ))}
               {editingAreasLocation.areas.length === 0 && (
@@ -2160,7 +2162,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   Na pozici: {r.name}{r.bait ? ` (${r.bait})` : ''}
                 </button>
               ))}
-              <button className="type-btn" onClick={chooseCatchOnMap}>📍 Kliknout na jinou pozici mapy</button>
+              <button className="type-btn" onClick={chooseCatchOnMap}><IconRevir size={14} /> Kliknout na jinou pozici mapy</button>
               <button className="type-cancel" onClick={() => setCatchChoosing(false)}>Zrušit</button>
             </div>
           )}
@@ -2168,14 +2170,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           {placementTarget === 'relocate-session-point' && (
             <div className="place-hint">
               Klikni na mapu, kam přesunout výpravu.
-              <button className="ticket-close" onClick={() => setPlacementTarget(null)}>✕</button>
+              <button className="ticket-close" onClick={() => setPlacementTarget(null)}><IconClose size={16} /></button>
             </div>
           )}
 
           {placementTarget === 'new-location-point' && (
             <div className="place-hint">
               Klikni na mapu — orientační bod pro nové místo.
-              <button className="ticket-close" onClick={() => setPlacementTarget(null)}>✕</button>
+              <button className="ticket-close" onClick={() => setPlacementTarget(null)}><IconClose size={16} /></button>
             </div>
           )}
 
@@ -2193,7 +2195,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           {(placementTarget === 'catch-point' || placementTarget === 'relocate-catch') && (
             <div className="place-hint">
               {placementTarget === 'relocate-catch' ? 'Klikni na mapu, kam přesunout úlovek.' : 'Klikni na mapu, kde jsi rybu chytil.'}
-              <button className="ticket-close" onClick={() => setPlacementTarget(null)}>✕</button>
+              <button className="ticket-close" onClick={() => setPlacementTarget(null)}><IconClose size={16} /></button>
             </div>
           )}
 
@@ -2218,7 +2220,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           {placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')) && (
             <div className="place-hint">
               Klikni na mapu pro pozici prutu.
-              <button className="ticket-close" onClick={() => setPlacementTarget(null)}>✕</button>
+              <button className="ticket-close" onClick={() => setPlacementTarget(null)}><IconClose size={16} /></button>
             </div>
           )}
 
@@ -2230,7 +2232,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
       <div className={`mobile-sheet ${mobileSheetOpen ? 'expanded' : ''}`}>
         <div className="mobile-peek-bar" onClick={() => setMobileSheetOpen((v) => !v)}>
-          <span>{peekLabel()}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{peekLabel()}</span>
           <span className="peek-chevron">{mobileSheetOpen ? '▾' : '▴'}</span>
         </div>
         <div className="mobile-sheet-body">
@@ -2440,9 +2442,9 @@ function SaveLocationForm({ source, onCancel, onSave }) {
     <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="ticket" style={{ maxWidth: 380 }}>
         <div className="ticket-top">
-          <button className="ticket-close" onClick={onCancel}>✕</button>
+          <button className="ticket-close" onClick={onCancel}><IconClose size={16} /></button>
           <div className="eyebrow">Katalog míst</div>
-          <h2>📌 Uložit toto místo</h2>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconBookmark size={20} /> Uložit toto místo</h2>
         </div>
         <div className="perforation"></div>
         <div className="ticket-body">
@@ -2484,9 +2486,9 @@ function RecordsModal({ sessions, userName, userColor, onClose, onOpenCatch }) {
     <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="ticket" style={{ maxWidth: 480 }}>
         <div className="ticket-top">
-          <button className="ticket-close" onClick={onClose}>✕</button>
+          <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
           <div className="eyebrow">Rekordy</div>
-          <h2>🏆 Rekordy party</h2>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconTrophy size={20} /> Rekordy party</h2>
         </div>
         <div className="perforation"></div>
         <div className="ticket-body">
@@ -2596,7 +2598,7 @@ function StatsModal({ sessions, members, userColor, onClose }) {
     <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="ticket" style={{ maxWidth: 480 }}>
         <div className="ticket-top">
-          <button className="ticket-close" onClick={onClose}>✕</button>
+          <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
           <div className="eyebrow">Přehled</div>
           <h2>Statistiky party</h2>
         </div>
@@ -2622,7 +2624,7 @@ function StatsModal({ sessions, members, userColor, onClose }) {
                   <div className="stats-species" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4, marginTop: 6 }}>
                     {Object.values(targetStatsByUser[m.id]).map((t) => (
                       <span key={t.label} className="bait-chip" style={{ width: '100%' }}>
-                        🎯 {t.label}: {t.successes} z {t.attempts} ({Math.round((t.successes / t.attempts) * 100)}%)
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><IconTarget size={13} color="var(--amber-deep)" /> {t.label}: {t.successes} z {t.attempts} ({Math.round((t.successes / t.attempts) * 100)}%)</span>
                       </span>
                     ))}
                   </div>
@@ -2643,7 +2645,7 @@ function StatsModal({ sessions, members, userColor, onClose }) {
               <div className="stats-species" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4, marginTop: 6 }}>
                 {targetRows.map((t) => (
                   <span key={t.label} className="bait-chip" style={{ width: '100%' }}>
-                    🎯 {t.label}: {t.successes} z {t.attempts} ({Math.round((t.successes / t.attempts) * 100)}%)
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><IconTarget size={13} color="var(--amber-deep)" /> {t.label}: {t.successes} z {t.attempts} ({Math.round((t.successes / t.attempts) * 100)}%)</span>
                   </span>
                 ))}
               </div>
@@ -2652,13 +2654,13 @@ function StatsModal({ sessions, members, userColor, onClose }) {
 
           {(moonRows.length > 0 || pressureRows.length > 0 || trendRows.length > 0 || spaRows.length > 0) && (
             <div className="stats-row" style={{ borderBottom: 'none' }}>
-              <div className="stats-row-head"><strong>📈 Kdy se daří</strong></div>
+              <div className="stats-row-head"><strong style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconTrend size={15} /> Kdy se daří</strong></div>
               {moonRows.length > 0 && (
                 <>
                   <div className="stats-total" style={{ marginTop: 8 }}>Podle fáze měsíce</div>
                   <div className="stats-species" style={{ marginTop: 4 }}>
                     {moonRows.map(([phase, n]) => (
-                      <span className="bait-chip" key={phase}>🌙 {phase} — {n}×</span>
+                      <span className="bait-chip" key={phase}><IconMoonPhase phase={phase} size={13} /> {phase} — {n}×</span>
                     ))}
                   </div>
                 </>
@@ -2668,7 +2670,7 @@ function StatsModal({ sessions, members, userColor, onClose }) {
                   <div className="stats-total" style={{ marginTop: 10 }}>Podle tlaku</div>
                   <div className="stats-species" style={{ marginTop: 4 }}>
                     {pressureRows.map(([bucket, n]) => (
-                      <span className="bait-chip" key={bucket}>📊 {bucket} — {n}×</span>
+                      <span className="bait-chip" key={bucket}><IconGauge size={13} /> {bucket} — {n}×</span>
                     ))}
                   </div>
                 </>
@@ -2752,7 +2754,7 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
     <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="ticket" style={{ maxWidth: 400 }}>
         <div className="ticket-top">
-          <button className="ticket-close" onClick={onClose}>✕</button>
+          <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
           <div className="eyebrow">Úprava výpravy</div>
           <h2>{draft.title || 'Výprava'}</h2>
         </div>
@@ -2783,14 +2785,14 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
                 <input className="text-input" type="time" value={draft.timeTo} onChange={(e) => set('timeTo', e.target.value)} />
               </div>
             </div>
-            <p className="hint-text">🌙 {moonPhaseName(draft.date)}</p>
+            <p className="hint-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><IconMoonPhase phase={moonPhaseName(draft.date)} size={13} /> {moonPhaseName(draft.date)}</p>
             {AREA_TYPES.includes(draft.type) ? (
               <button type="button" className="new-btn" onClick={onManageAreas} style={{ marginBottom: 10 }}>
-                🗺 Upravit oblasti (přidat / smazat)
+                <IconMapEdit size={13} /> Upravit oblasti (přidat / smazat)
               </button>
             ) : (
               <button type="button" className="new-btn" onClick={onRelocate} style={{ marginBottom: 10 }}>
-                🗺 Změnit bod nahození na mapě
+                <IconMapEdit size={13} /> Změnit bod nahození na mapě
               </button>
             )}
 
@@ -2801,14 +2803,14 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
             {draft.waterStations?.length > 0 ? (
               draft.waterStations.map((ws) => (
                 <p key={ws.station_id} className="hint-text" style={{ marginTop: 6 }}>
-                  💧 {ws.level_cm != null ? `${ws.level_cm} cm` : '—'} · {ws.flow_m3s != null ? `${ws.flow_m3s} m³/s` : '—'}
+                  <IconDroplet size={13} color="var(--water-mid)" /> {ws.level_cm != null ? `${ws.level_cm} cm` : '—'} · {ws.flow_m3s != null ? `${ws.flow_m3s} m³/s` : '—'}
                   {ws.temp_c != null ? ` · ${ws.temp_c} °C` : ''} ({ws.station_name}{ws.precision ? `, ${WATER_PRECISION_LABEL[ws.precision]}` : ''})
                   {ws.spa_level != null && SPA_LEVEL_INFO[ws.spa_level] ? ` · ${SPA_LEVEL_INFO[ws.spa_level].icon} ${SPA_LEVEL_INFO[ws.spa_level].label}` : ''}
                 </p>
               ))
             ) : draft.waterStationName && (
               <p className="hint-text" style={{ marginTop: 6 }}>
-                💧 {draft.waterLevel != null ? `${draft.waterLevel} cm` : '—'} · {draft.waterFlow != null ? `${draft.waterFlow} m³/s` : '—'}
+                <IconDroplet size={13} color="var(--water-mid)" /> {draft.waterLevel != null ? `${draft.waterLevel} cm` : '—'} · {draft.waterFlow != null ? `${draft.waterFlow} m³/s` : '—'}
                 {draft.waterTemp != null ? ` · ${draft.waterTemp} °C` : ''} ({draft.waterStationName}{draft.waterPrecision ? `, ${WATER_PRECISION_LABEL[draft.waterPrecision]}` : ''})
                 {draft.waterSpaLevel != null && SPA_LEVEL_INFO[draft.waterSpaLevel] ? ` · ${SPA_LEVEL_INFO[draft.waterSpaLevel].icon} ${SPA_LEVEL_INFO[draft.waterSpaLevel].label}` : ''}
               </p>
@@ -2833,7 +2835,7 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
 
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
               <button className="btn-primary" style={{ margin: 0, flex: 1 }} type="submit" disabled={busy}>{busy ? 'Ukládám…' : 'Uložit změny'}</button>
-              <button type="button" className="new-btn danger-btn" onClick={onDelete}>🗑 Smazat výpravu</button>
+              <button type="button" className="new-btn danger-btn" onClick={onDelete}><IconTrash size={13} /> Smazat výpravu</button>
             </div>
           </form>
         </div>
@@ -2884,7 +2886,7 @@ function SettingsModal({ userId, profile, onClose, onSaved }) {
     <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="ticket" style={{ maxWidth: 360 }}>
         <div className="ticket-top">
-          <button className="ticket-close" onClick={onClose}>✕</button>
+          <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
           <div className="eyebrow">Nastavení</div>
           <h2>Tvůj profil</h2>
         </div>
@@ -2985,16 +2987,16 @@ function RodEditRow({ rod, color, baitPhotoMap = {}, baitListId = 'known-baits-a
             placeholder="nástraha"
           />
           <label className="photo-label">
-            📷 {b.photoFile ? b.photoFile.name : (b.photo_url ? 'změnit' : 'foto')}
+            <IconCamera size={13} />{' '}{b.photoFile ? b.photoFile.name : (b.photo_url ? 'změnit' : 'foto')}
             <input type="file" accept="image/*" hidden onChange={(e) => updateBait(i, 'photoFile', e.target.files[0])} />
           </label>
           {b.photo_url && !b.photoFile && <img src={b.photo_url} alt="" className="bait-thumb" />}
-          {baits.length > 1 && <button type="button" className="ticket-close" style={{ position: 'static', color: 'var(--ink-soft)' }} onClick={() => removeBait(i)}>✕</button>}
+          {baits.length > 1 && <button type="button" className="ticket-close" style={{ position: 'static', color: 'var(--ink-soft)' }} onClick={() => removeBait(i)}><IconClose size={16} /></button>}
         </div>
       ))}
       <button type="button" className="new-btn" onClick={addBait} style={{ marginTop: 4 }}>+ další nástraha</button>
       <div className="rod-edit-row" style={{ marginTop: 8 }}>
-        <button type="button" className="new-btn" onClick={onArmPosition}>📍 změnit pozici na mapě</button>
+        <button type="button" className="new-btn" onClick={onArmPosition}><IconRevir size={13} /> změnit pozici na mapě</button>
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <button className="new-btn" onClick={onCancel}>Zrušit</button>
@@ -3097,7 +3099,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
     <div className="side-panel">
       <div className="ticket" style={{ maxWidth: 400 }}>
         <div className="ticket-top">
-          <button className="ticket-close" onClick={onClose}>✕</button>
+          <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
           <div className="eyebrow">Nová výprava</div>
           <h2>Zápis do deníku</h2>
         </div>
@@ -3115,7 +3117,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
                       <button
                         type="button" className="new-btn danger-btn"
                         onClick={() => set('area', draft.area.filter((_, i) => i !== idx))}
-                      >🗑</button>
+                      ><IconTrash size={13} /></button>
                     </div>
                   )
                 })}
@@ -3128,7 +3130,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
               <p className="hint-text">Pozice: {draft.point.lat.toFixed(4)}, {draft.point.lng.toFixed(4)}</p>
             )}
             {draft.area && (
-              <button type="button" className="new-btn" onClick={() => onSaveLocation(draft)} style={{ marginBottom: 10 }}>📌 Uložit toto místo do katalogu</button>
+              <button type="button" className="new-btn" onClick={() => onSaveLocation(draft)} style={{ marginBottom: 10 }}><IconBookmark size={13} /> Uložit toto místo do katalogu</button>
             )}
             <label className="field-label">Název výpravy</label>
             <input className="text-input" required value={draft.title} onChange={(e) => set('title', e.target.value)} placeholder="např. Orlík — zátoka pod hrází" />
@@ -3162,19 +3164,19 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
             {draft.waterStations?.length > 0 ? (
               draft.waterStations.map((ws) => (
                 <p key={ws.station_id} className="hint-text" style={{ marginTop: 6 }}>
-                  💧 {ws.level_cm != null ? `${ws.level_cm} cm` : '—'} · {ws.flow_m3s != null ? `${ws.flow_m3s} m³/s` : '—'}
+                  <IconDroplet size={13} color="var(--water-mid)" /> {ws.level_cm != null ? `${ws.level_cm} cm` : '—'} · {ws.flow_m3s != null ? `${ws.flow_m3s} m³/s` : '—'}
                   {ws.temp_c != null ? ` · ${ws.temp_c} °C` : ''} ({ws.station_name}{ws.precision ? `, ${WATER_PRECISION_LABEL[ws.precision]}` : ''})
                   {ws.spa_level != null && SPA_LEVEL_INFO[ws.spa_level] ? ` · ${SPA_LEVEL_INFO[ws.spa_level].icon} ${SPA_LEVEL_INFO[ws.spa_level].label}` : ''}
                 </p>
               ))
             ) : draft.waterStationName && (
               <p className="hint-text" style={{ marginTop: 6 }}>
-                💧 {draft.waterLevel != null ? `${draft.waterLevel} cm` : '—'} · {draft.waterFlow != null ? `${draft.waterFlow} m³/s` : '—'}
+                <IconDroplet size={13} color="var(--water-mid)" /> {draft.waterLevel != null ? `${draft.waterLevel} cm` : '—'} · {draft.waterFlow != null ? `${draft.waterFlow} m³/s` : '—'}
                 {draft.waterTemp != null ? ` · ${draft.waterTemp} °C` : ''} ({draft.waterStationName}{draft.waterPrecision ? `, ${WATER_PRECISION_LABEL[draft.waterPrecision]}` : ''})
                 {draft.waterSpaLevel != null && SPA_LEVEL_INFO[draft.waterSpaLevel] ? ` · ${SPA_LEVEL_INFO[draft.waterSpaLevel].icon} ${SPA_LEVEL_INFO[draft.waterSpaLevel].label}` : ''}
               </p>
             )}
-            {draft.date && <p className="hint-text" style={{ marginTop: 8 }}>🌙 {moonPhaseName(draft.date)}</p>}
+            {draft.date && <p className="hint-text" style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}><IconMoonPhase phase={moonPhaseName(draft.date)} size={13} /> {moonPhaseName(draft.date)}</p>}
 
             <div className="input-row" style={{ marginTop: 10 }}>
               <div>
@@ -3208,16 +3210,16 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
                       placeholder="nástraha"
                     />
                     <label className="photo-label">
-                      📷 {b.photoFile ? b.photoFile.name : (b.photo_url ? 'nalezeno z historie' : 'foto')}
+                      <IconCamera size={13} />{' '}{b.photoFile ? b.photoFile.name : (b.photo_url ? 'nalezeno z historie' : 'foto')}
                       <input type="file" accept="image/*" hidden onChange={(e) => updateBait(i, bi, 'photoFile', e.target.files[0])} />
                     </label>
                     {b.photo_url && !b.photoFile && <img src={b.photo_url} alt="" className="bait-thumb" />}
-                    {r.baits.length > 1 && <button type="button" className="ticket-close" style={{ position: 'static', color: 'var(--ink-soft)' }} onClick={() => removeBait(i, bi)}>✕</button>}
+                    {r.baits.length > 1 && <button type="button" className="ticket-close" style={{ position: 'static', color: 'var(--ink-soft)' }} onClick={() => removeBait(i, bi)}><IconClose size={16} /></button>}
                   </div>
                 ))}
                 <button type="button" className="new-btn" onClick={() => addBait(i)} style={{ marginTop: 4 }}>+ další nástraha</button>
                 <div className="rod-edit-row" style={{ marginTop: 8 }}>
-                  <button type="button" className="new-btn" onClick={() => onArmRod(i)}>📍 pozice na mapě: {r.lat.toFixed(4)}, {r.lng.toFixed(4)}</button>
+                  <button type="button" className="new-btn" onClick={() => onArmRod(i)}><IconRevir size={13} /> pozice na mapě: {r.lat.toFixed(4)}, {r.lng.toFixed(4)}</button>
                 </div>
               </div>
             ))}
@@ -3293,7 +3295,7 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
     <div className="side-panel">
       <div className="ticket" style={{ maxWidth: 380 }}>
         <div className="ticket-top">
-          <button className="ticket-close" onClick={onClose}>✕</button>
+          <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
           <div className="eyebrow">Nový úlovek</div>
           <h2>Zapsat rybu</h2>
         </div>
@@ -3335,7 +3337,7 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
             )}
             {draft.water_station_name && (
               <p className="hint-text" style={{ marginBottom: 10 }}>
-                💧 {draft.water_level_cm != null ? `${draft.water_level_cm} cm` : '—'} · {draft.water_flow_m3s != null ? `${draft.water_flow_m3s} m³/s` : '—'}
+                <IconDroplet size={13} color="var(--water-mid)" /> {draft.water_level_cm != null ? `${draft.water_level_cm} cm` : '—'} · {draft.water_flow_m3s != null ? `${draft.water_flow_m3s} m³/s` : '—'}
                 {draft.water_temp_c != null ? ` · ${draft.water_temp_c} °C` : ''} ({draft.water_station_name}{draft.water_data_precision ? `, ${WATER_PRECISION_LABEL[draft.water_data_precision]}` : ''})
               </p>
             )}
@@ -3349,13 +3351,13 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
               placeholder="boilie tuňák 20mm"
             />
             <label className="photo-label" style={{ display: 'inline-block', marginTop: 4, marginRight: 8 }}>
-              📷 {draft.baitPhotoFile ? draft.baitPhotoFile.name : (draft.bait_photo_url ? 'nalezeno z historie' : 'foto nástrahy')}
+              <IconCamera size={13} />{' '}{draft.baitPhotoFile ? draft.baitPhotoFile.name : (draft.bait_photo_url ? 'nalezeno z historie' : 'foto nástrahy')}
               <input type="file" accept="image/*" hidden onChange={(e) => set('baitPhotoFile', e.target.files[0])} />
             </label>
             {draft.bait_photo_url && !draft.baitPhotoFile && <img src={draft.bait_photo_url} alt="" className="bait-thumb" />}
             <label className="field-label">Foto úlovku</label>
             <label className="photo-label" style={{ display: 'inline-block', marginTop: 4 }}>
-              📷 {draft.photoFile ? draft.photoFile.name : 'vybrat foto'}
+              <IconCamera size={13} />{' '}{draft.photoFile ? draft.photoFile.name : 'vybrat foto'}
               <input type="file" accept="image/*" hidden onChange={(e) => set('photoFile', e.target.files[0])} />
             </label>
             <br />

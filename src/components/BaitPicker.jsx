@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { IconClose } from '../lib/icons.jsx'
 
 export default function BaitPicker({ value, category, catalog, onChange, onAddBait, placeholder }) {
   const [open, setOpen] = useState(false)
@@ -40,7 +41,7 @@ export default function BaitPicker({ value, category, catalog, onChange, onAddBa
         <div className="modal-bg show bait-picker-modal" onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
           <div className="ticket" style={{ maxWidth: 360 }}>
             <div className="ticket-top">
-              <button type="button" className="ticket-close" onClick={() => setOpen(false)}>✕</button>
+              <button type="button" className="ticket-close" onClick={() => setOpen(false)}><IconClose size={16} /></button>
               <div className="eyebrow">Nástraha</div>
               <h2>{addingNew ? 'Nová nástraha' : 'Vyber nástrahu'}</h2>
             </div>

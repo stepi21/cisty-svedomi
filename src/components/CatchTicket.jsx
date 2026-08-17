@@ -4,6 +4,7 @@ import { uploadPhoto } from '../lib/storage.js'
 import { moonPhaseName, fetchWeather } from '../lib/weather.js'
 import { fetchWaterConditions, findNearestStations, WATER_PRECISION_LABEL, SPA_LEVEL_INFO } from '../lib/hydrology.js'
 import BaitPicker from './BaitPicker.jsx'
+import { IconClose, IconEdit, IconTrash, IconCamera, IconRevir, IconCalendar, IconThermometer, IconGauge, IconWind, IconMoonPhase, IconDroplet } from '../lib/icons.jsx'
 
 const CATEGORY_COLOR = { dravec: '#5C7A85', bila: '#C4A572' }
 
@@ -157,7 +158,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
         <div className="modal-bg show bait-picker-modal" onClick={(e) => e.target === e.currentTarget && setPickingRevir(false)}>
           <div className="ticket" style={{ maxWidth: 320 }}>
             <div className="ticket-top">
-              <button type="button" className="ticket-close" onClick={() => setPickingRevir(false)}>✕</button>
+              <button type="button" className="ticket-close" onClick={() => setPickingRevir(false)}><IconClose size={16} /></button>
               <div className="eyebrow">Revír</div>
               <h2>Na kterém revíru?</h2>
             </div>
@@ -174,7 +175,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
       )}
       <div className="ticket">
         <div className="ticket-top">
-          <button className="ticket-close" onClick={onClose}>✕</button>
+          <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
           <div className="eyebrow">Úlovkový lístek</div>
           <h2>{c.species}</h2>
           {catcherName && <div className="catcher-sub">Chytil: {catcherName}</div>}
@@ -202,7 +203,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
               <div className="ticket-line"><span className="lab">Čas úlovku</span><span className="val">{c.caught_at ? new Date(c.caught_at).toLocaleTimeString('cs-CZ') : '—'}</span></div>
               <div className="ticket-line">
                 <span className="lab">Lokace</span>
-                <span className="val link-val" onClick={onFocusLocation}>📍 {c.lat?.toFixed(4)}, {c.lng?.toFixed(4)}</span>
+                <span className="val link-val" onClick={onFocusLocation} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><IconRevir size={13} color="var(--water-mid)" /> {c.lat?.toFixed(4)}, {c.lng?.toFixed(4)}</span>
               </div>
               {session && (
                 <div className="ticket-line">
@@ -212,17 +213,17 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
               )}
               {(c.weather_temp_c != null || session) && (
                 <div className="conditions-strip">
-                  <span className="cond-chip">📅 {session?.session_date || c.caught_at?.slice(0, 10)}</span>
-                  <span className="cond-chip">🌡 {c.weather_temp_c ?? session?.weather_temp_c ?? '—'}°C</span>
+                  <span className="cond-chip"><IconCalendar size={12} /> {session?.session_date || c.caught_at?.slice(0, 10)}</span>
+                  <span className="cond-chip"><IconThermometer size={12} /> {c.weather_temp_c ?? session?.weather_temp_c ?? '—'}°C</span>
                   <span className="cond-chip">
-                    📊 {c.weather_pressure_hpa ?? session?.weather_pressure_hpa ?? '—'} hPa
+                    <IconGauge size={12} /> {c.weather_pressure_hpa ?? session?.weather_pressure_hpa ?? '—'} hPa
                     {(() => { const t = c.weather_pressure_trend ?? session?.weather_pressure_trend; return t > 0 ? ' ↗️' : t < 0 ? ' ↘️' : '' })()}
                   </span>
-                  <span className="cond-chip">💨 {c.weather_wind || session?.weather_wind || '—'}</span>
-                  <span className="cond-chip">🌙 {moonPhaseName(session?.session_date || c.caught_at?.slice(0, 10))}</span>
+                  <span className="cond-chip"><IconWind size={12} /> {c.weather_wind || session?.weather_wind || '—'}</span>
+                  <span className="cond-chip">{(() => { const phase = moonPhaseName(session?.session_date || c.caught_at?.slice(0, 10)); return <><IconMoonPhase phase={phase} size={13} /> {phase}</> })()}</span>
                   {(c.water_station_name || session?.water_station_name) && (
                     <span className="cond-chip">
-                      💧 {c.water_level_cm ?? session?.water_level_cm ?? '—'} cm · {c.water_flow_m3s ?? session?.water_flow_m3s ?? '—'} m³/s
+                      <IconDroplet size={12} color="var(--water-mid)" /> {c.water_level_cm ?? session?.water_level_cm ?? '—'} cm · {c.water_flow_m3s ?? session?.water_flow_m3s ?? '—'} m³/s
                       {(c.water_temp_c ?? session?.water_temp_c) != null ? ` · ${c.water_temp_c ?? session?.water_temp_c} °C` : ''}
                       {(() => {
                         const lvl = c.water_spa_level ?? session?.water_spa_level
@@ -236,9 +237,9 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                 {c.weather_temp_c != null ? 'Počasí přesně pro čas úlovku.' : 'Počasí z výpravy — nemusí přesně odpovídat času tohoto úlovku.'}
               </p>
               <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                {canEdit && <button className="new-btn" onClick={() => setEditing(true)}>✏️ Upravit</button>}
-                {canEdit && linkedLocations.length >= 2 && <button className="new-btn" onClick={() => setPickingRevir(true)}>📍 Revír</button>}
-                {canEdit && <button className="new-btn danger-btn" onClick={handleDelete} disabled={busy}>🗑 Smazat</button>}
+                {canEdit && <button className="new-btn" onClick={() => setEditing(true)}><IconEdit size={13} /> Upravit</button>}
+                {canEdit && linkedLocations.length >= 2 && <button className="new-btn" onClick={() => setPickingRevir(true)}><IconRevir size={13} /> Revír</button>}
+                {canEdit && <button className="new-btn danger-btn" onClick={handleDelete} disabled={busy}><IconTrash size={13} /> Smazat</button>}
               </div>
             </>
           ) : (
@@ -275,14 +276,14 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                 onAddBait={onAddBait}
               />
               <label className="photo-label" style={{ display: 'inline-block', marginTop: 4 }}>
-                📷 {form.baitPhotoFile ? form.baitPhotoFile.name : (form.bait_photo_url ? 'nalezeno / uloženo' : 'foto nástrahy')}
+                <IconCamera size={13} />{' '}{form.baitPhotoFile ? form.baitPhotoFile.name : (form.bait_photo_url ? 'nalezeno / uloženo' : 'foto nástrahy')}
                 <input type="file" accept="image/*" hidden onChange={(e) => setForm({ ...form, baitPhotoFile: e.target.files[0] })} />
               </label>
               {form.bait_photo_url && !form.baitPhotoFile && <img src={form.bait_photo_url} alt="" className="bait-thumb" />}
               <br />
               <label className="field-label">Foto úlovku</label>
               <label className="photo-label" style={{ display: 'inline-block', marginTop: 4 }}>
-                📷 {form.photoFile ? form.photoFile.name : (c.photo_url ? 'změnit foto' : 'vybrat foto')}
+                <IconCamera size={13} />{' '}{form.photoFile ? form.photoFile.name : (c.photo_url ? 'změnit foto' : 'vybrat foto')}
                 <input type="file" accept="image/*" hidden onChange={(e) => setForm({ ...form, photoFile: e.target.files[0] })} />
               </label>
               <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy} style={{ marginTop: 8 }}>
@@ -294,11 +295,11 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
               )}
               {form.water_station_name && (
                 <p className="hint-text" style={{ marginTop: 4 }}>
-                  💧 {form.water_level_cm ?? '—'} cm · {form.water_flow_m3s ?? '—'} m³/s{form.water_temp_c != null ? ` · ${form.water_temp_c} °C` : ''}
+                  <IconDroplet size={13} color="var(--water-mid)" /> {form.water_level_cm ?? '—'} cm · {form.water_flow_m3s ?? '—'} m³/s{form.water_temp_c != null ? ` · ${form.water_temp_c} °C` : ''}
                   {' '}({form.water_station_name}{form.water_data_precision ? `, ${WATER_PRECISION_LABEL[form.water_data_precision]}` : ''})
                 </p>
               )}
-              <button type="button" className="new-btn" onClick={onRelocate} style={{ marginTop: 4 }}>📍 Změnit pozici úlovku na mapě</button>
+              <button type="button" className="new-btn" onClick={onRelocate} style={{ marginTop: 4 }}><IconRevir size={13} /> Změnit pozici úlovku na mapě</button>
               <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
                 <button className="new-btn" type="button" onClick={() => setEditing(false)}>Zrušit</button>
                 <button className="btn-primary" style={{ margin: 0 }} type="submit" disabled={busy}>{busy ? 'Ukládám…' : 'Uložit změny'}</button>
