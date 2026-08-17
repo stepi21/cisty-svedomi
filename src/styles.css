@@ -57,14 +57,21 @@ body{
 
 /* ---------- app shell ---------- */
 .app{ display:flex; flex-direction:column; min-height:100vh; }
-header{ background:var(--water-deep); color:var(--white); padding:18px 24px; }
-.head-row{ display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+header{ background:var(--water-deep); color:var(--white); padding:16px 20px; }
+.head-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
 header h1{ font-family:'Fraunces', serif; font-weight:600; font-size:26px; margin:0; }
 header h1 .accent{ color:var(--amber); }
+.hamburger-btn{ font-size:19px; padding:6px 11px; line-height:1; flex:none; }
+.head-secondary-row{
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
+  margin-top:12px;
+}
+.head-actions-primary{ display:flex; gap:8px; align-items:center; }
+.head-actions-secondary{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
 .head-actions-wrap{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
 .head-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
-.whoami{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:#B9CFCB; }
-.head-actions .new-btn{ color:#E7EFEC; border-color:rgba(255,255,255,.3); }
+.whoami{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:#B9CFCB; align-self:center; }
+.head-actions .new-btn, .head-actions-primary .new-btn, .head-actions-secondary .new-btn, .hamburger-btn{ color:#E7EFEC; border-color:rgba(255,255,255,.3); }
 .invite-banner{
   margin-top:10px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.25);
   padding:8px 14px; border-radius:8px; font-size:13px; position:relative;

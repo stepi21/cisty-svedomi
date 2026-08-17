@@ -1714,31 +1714,33 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       <header>
         <div className="head-row">
           <h1>Čistý<span className="accent">svědomí</span></h1>
-          <div className="head-actions-wrap">
-            <span className="whoami">{myProfile?.display_name}</span>
-            <div className="head-actions">
-              <button
-                className={`new-btn ${locationsView ? 'active-toggle' : ''}`}
-                onClick={() => setLocationsView((v) => { const next = !v; if (next) setMobileSheetOpen(true); return next })}
-                title="Revíry"
-              >📍</button>
-              <button className="new-btn" onClick={() => { setBaitsInitialKey(null); setShowBaits(true) }} title="Nástrahy">🪱</button>
-              <div style={{ position: 'relative' }}>
-                <button className="new-btn" onClick={() => setShowMoreMenu((v) => !v)} title="Více">☰ Více</button>
-                {showMoreMenu && (
-                  <div className="type-picker" style={{ position: 'absolute', top: '100%', left: 0, transform: 'none', marginTop: 4, minWidth: 160, zIndex: 500 }}>
-                    <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowGallery(true) }}>🖼 Galerie</button>
-                    <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowRecords(true) }}>🏆 Rekordy</button>
-                    <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowStats(true) }}>📊 Statistiky</button>
-                    <button className="type-btn" onClick={() => { setShowMoreMenu(false); exportData() }}>⬇️ Export dat</button>
-                    <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowHelp(true) }}>❓ Návod</button>
-                    <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowSettings(true) }}>⚙️ Nastavení</button>
-                  </div>
-                )}
+          <div style={{ position: 'relative' }}>
+            <button className="new-btn hamburger-btn" onClick={() => setShowMoreMenu((v) => !v)} title="Více">☰</button>
+            {showMoreMenu && (
+              <div className="type-picker" style={{ position: 'absolute', top: '100%', right: 0, left: 'auto', transform: 'none', marginTop: 6, minWidth: 170, zIndex: 500 }}>
+                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowGallery(true) }}>🖼 Galerie</button>
+                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowRecords(true) }}>🏆 Rekordy</button>
+                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowStats(true) }}>📊 Statistiky</button>
+                <button className="type-btn" onClick={() => { setShowMoreMenu(false); exportData() }}>⬇️ Export dat</button>
+                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowHelp(true) }}>❓ Návod</button>
+                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowSettings(true) }}>⚙️ Nastavení</button>
               </div>
-              <button className="new-btn" onClick={createInvite}>+ pozvat parťáka</button>
-              <button className="new-btn" onClick={onSignOut}>Odhlásit</button>
-            </div>
+            )}
+          </div>
+        </div>
+        <div className="head-secondary-row">
+          <div className="head-actions-primary">
+            <button
+              className={`new-btn ${locationsView ? 'active-toggle' : ''}`}
+              onClick={() => setLocationsView((v) => { const next = !v; if (next) setMobileSheetOpen(true); return next })}
+              title="Revíry"
+            >📍 Revíry</button>
+            <button className="new-btn" onClick={() => { setBaitsInitialKey(null); setShowBaits(true) }} title="Nástrahy">🪱 Nástrahy</button>
+          </div>
+          <div className="head-actions-secondary">
+            <span className="whoami">{myProfile?.display_name}</span>
+            <button className="new-btn" onClick={createInvite}>+ pozvat parťáka</button>
+            <button className="new-btn" onClick={onSignOut}>Odhlásit</button>
           </div>
         </div>
         {inviteInfo && (
@@ -2275,11 +2277,13 @@ function StatsModal({ sessions, members, userColor, onClose }) {
   })
   const targetRows = Object.values(targetStats)
 
-  // --- vzorce: fáze měsíce, tlak a vodní stav (SPA stupeň) vs úlovky ---
+  // --- vzorce: fáze měsíce, tlak (úroveň i trend) a vodní stav (SPA stupeň) vs úlovky ---
   const byMoonPhase = {}
   const byPressureBucket = {}
+  const byPressureTrend = {}
   const bySpaLevel = {}
   const pressureOrder = ['<1000 hPa', '1000–1010 hPa', '1010–1020 hPa', '1020+ hPa']
+  const trendOrder = ['klesá', 'stabilní', 'roste']
   const spaOrder = [-1, 0, 1, 2, 3]
   sessions.forEach((s) => {
     const catchCount = (s.catches || []).length
@@ -2291,12 +2295,18 @@ function StatsModal({ sessions, members, userColor, onClose }) {
       const bucket = p < 1000 ? '<1000 hPa' : p < 1010 ? '1000–1010 hPa' : p < 1020 ? '1010–1020 hPa' : '1020+ hPa'
       byPressureBucket[bucket] = (byPressureBucket[bucket] || 0) + catchCount
     }
+    const trend = s.weather_pressure_trend
+    if (trend != null) {
+      const key = trend > 0 ? 'roste' : trend < 0 ? 'klesá' : 'stabilní'
+      byPressureTrend[key] = (byPressureTrend[key] || 0) + catchCount
+    }
     // u výprav složených z víc stanic bereme první -- je to jen orientační přehled, ne přesná analýza
     const spa = s.water_stations?.length > 0 ? s.water_stations[0].spa_level : s.water_spa_level
     if (spa != null) bySpaLevel[spa] = (bySpaLevel[spa] || 0) + catchCount
   })
   const moonRows = Object.entries(byMoonPhase).sort((a, b) => b[1] - a[1])
   const pressureRows = pressureOrder.filter((k) => byPressureBucket[k]).map((k) => [k, byPressureBucket[k]])
+  const trendRows = trendOrder.filter((k) => byPressureTrend[k]).map((k) => [k, byPressureTrend[k]])
   const spaRows = spaOrder.filter((k) => bySpaLevel[k]).map((k) => [k, bySpaLevel[k]])
 
   return (
@@ -2357,7 +2367,7 @@ function StatsModal({ sessions, members, userColor, onClose }) {
             )}
           </div>
 
-          {(moonRows.length > 0 || pressureRows.length > 0 || spaRows.length > 0) && (
+          {(moonRows.length > 0 || pressureRows.length > 0 || trendRows.length > 0 || spaRows.length > 0) && (
             <div className="stats-row" style={{ borderBottom: 'none' }}>
               <div className="stats-row-head"><strong>📈 Kdy se daří</strong></div>
               {moonRows.length > 0 && (
@@ -2376,6 +2386,18 @@ function StatsModal({ sessions, members, userColor, onClose }) {
                   <div className="stats-species" style={{ marginTop: 4 }}>
                     {pressureRows.map(([bucket, n]) => (
                       <span className="bait-chip" key={bucket}>📊 {bucket} — {n}×</span>
+                    ))}
+                  </div>
+                </>
+              )}
+              {trendRows.length > 0 && (
+                <>
+                  <div className="stats-total" style={{ marginTop: 10 }}>Podle trendu tlaku</div>
+                  <div className="stats-species" style={{ marginTop: 4 }}>
+                    {trendRows.map(([trend, n]) => (
+                      <span className="bait-chip" key={trend}>
+                        {trend === 'roste' ? '↗️' : trend === 'klesá' ? '↘️' : '➡️'} {trend} — {n}×
+                      </span>
                     ))}
                   </div>
                 </>
