@@ -57,7 +57,14 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
       setWeatherError(e.message)
     }
     try {
-      const confirmed = linkedLocations.length === 1 && linkedLocations[0].hydro_station_id ? linkedLocations[0] : null
+      let confirmed = null
+      if (c.location_id) {
+        const own = locationsCatalog.find((l) => l.id === c.location_id)
+        if (own?.hydro_station_id) confirmed = own
+      }
+      if (!confirmed && linkedLocations.length === 1 && linkedLocations[0].hydro_station_id) {
+        confirmed = linkedLocations[0]
+      }
       const station = confirmed
         ? { objID: confirmed.hydro_station_id, name: confirmed.hydro_station_name }
         : (await findNearestStations(c.lat, c.lng, 1))[0]
@@ -201,6 +208,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                   {(c.water_station_name || session?.water_station_name) && (
                     <span className="cond-chip">
                       💧 {c.water_level_cm ?? session?.water_level_cm ?? '—'} cm · {c.water_flow_m3s ?? session?.water_flow_m3s ?? '—'} m³/s
+                      {(c.water_temp_c ?? session?.water_temp_c) != null ? ` · ${c.water_temp_c ?? session?.water_temp_c} °C` : ''}
                     </span>
                   )}
                 </div>

@@ -73,6 +73,21 @@ function resolveHydroStation(linkedLocationIds, locationsCatalog) {
   return { objID: loc.hydro_station_id, name: loc.hydro_station_name, stream: loc.hydro_stream_name }
 }
 
+// Stejné jako výše, ale vrací VŠECHNY odlišné potvrzené stanice napříč
+// navázanými místy (bez duplicit) -- pro výpravu složenou z víc míst, kde
+// každé může mít svou vlastní stanici (jiný revír, jiná řeka).
+function resolveHydroStations(linkedLocationIds, locationsCatalog) {
+  if (!linkedLocationIds?.length) return []
+  const seen = new Map()
+  linkedLocationIds.forEach((id) => {
+    const loc = locationsCatalog.find((l) => l.id === id)
+    if (loc?.hydro_station_id && !seen.has(loc.hydro_station_id)) {
+      seen.set(loc.hydro_station_id, { objID: loc.hydro_station_id, name: loc.hydro_station_name, stream: loc.hydro_stream_name })
+    }
+  })
+  return Array.from(seen.values())
+}
+
 export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [sessions, setSessions] = useState([])
   const [activeId, setActiveId] = useState(null)
@@ -443,6 +458,22 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setMobileSheetOpen(false)
     const bounds = L.latLngBounds(pts.map((p) => [p.lat, p.lng]))
     mapInstance.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 })
+  }
+
+  // Přiblíží dominantní mapu na katalogové místo, ALE zůstává v režimu
+  // "📍 Revíry" (na rozdíl od otevření konkrétní výpravy, které režim opouští).
+  function focusOnLocation(location) {
+    if (!mapInstance.current) return
+    setShowLocations(false)
+    setLocationsReturnId(null)
+    setMobileSheetOpen(false)
+    if (location.area) {
+      const areas = normalizeAreas(location.area)
+      const bounds = areas.flat().map((p) => [p.lat, p.lng])
+      if (bounds.length) mapInstance.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 })
+    } else if (location.lat != null && location.lng != null) {
+      mapInstance.current.setView([location.lat, location.lng], 16)
+    }
   }
 
   // --- render markerů: agregovaný pohled (podle filtrů, přes všechny výpravy) nebo detail jedné výpravy ---
@@ -1019,6 +1050,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         weather_wind: s.wind || null, weather_desc: s.desc || null,
         water_level_cm: s.waterLevel ?? null, water_flow_m3s: s.waterFlow ?? null, water_temp_c: s.waterTemp ?? null,
         water_station_name: s.waterStationName || null, water_data_precision: s.waterPrecision || null,
+        water_stations: s.waterStations || null,
         status: s.live ? 'in_progress' : 'completed',
       }).select().single()
     if (sErr) { alert(sErr.message); return }
@@ -1099,6 +1131,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       wind: s.weather_wind || '', desc: s.weather_desc || '',
       waterLevel: s.water_level_cm ?? null, waterFlow: s.water_flow_m3s ?? null, waterTemp: s.water_temp_c ?? null,
       waterStationName: s.water_station_name || null, waterPrecision: s.water_data_precision || null,
+      waterStations: s.water_stations || null,
       linkedLocationIds: (s.session_locations || []).map((sl) => sl.location_id),
       lat: s.lat, lng: s.lng,
     })
@@ -1112,6 +1145,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       weather_wind: e.wind || null, weather_desc: e.desc || null,
       water_level_cm: e.waterLevel ?? null, water_flow_m3s: e.waterFlow ?? null, water_temp_c: e.waterTemp ?? null,
       water_station_name: e.waterStationName || null, water_data_precision: e.waterPrecision || null,
+      water_stations: e.waterStations || null,
     }).eq('id', e.id)
     if (error) { alert(error.message); return }
     setEditingSession(null)
@@ -1407,8 +1441,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         ) : (
           sorted.map((l) => (
             <div key={l.id} className="record-row" onClick={() => { setLocationsReturnId(l.id); setBaitsInitialKey(null); setShowLocations(true) }}>
-              <div className="record-head"><strong>{l.area ? '🎯' : '📍'} {l.name}</strong></div>
-              {l.revir && <div className="c-sub">{l.revir}</div>}
+              <div className="record-head">
+                <strong>{l.area ? '🎯' : '📍'} {l.name}</strong>
+                {l.revir && <span className="c-sub">{l.revir}</span>}
+              </div>
             </div>
           ))
         )}
@@ -1540,17 +1576,30 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   <div className="w-item"><div className="num">{activeSession.weather_pressure_hpa ?? '—'} hPa</div><div className="lab">tlak</div></div>
                   <div className="w-item"><div className="num">{activeSession.weather_wind || '—'}</div><div className="lab">vítr</div></div>
                 </div>
-                {activeSession.water_station_name && (
-                  <div className="weather-row" style={{ marginTop: 8 }}>
-                    <div className="w-item"><div className="num">💧 {activeSession.water_level_cm ?? '—'} cm</div><div className="lab">vodní stav</div></div>
-                    <div className="w-item"><div className="num">{activeSession.water_flow_m3s ?? '—'} m³/s</div><div className="lab">průtok</div></div>
-                    {activeSession.water_temp_c != null && <div className="w-item"><div className="num">{activeSession.water_temp_c}°C</div><div className="lab">teplota vody</div></div>}
-                  </div>
-                )}
-                {activeSession.water_station_name && (
-                  <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--ink-soft)' }}>
-                    {activeSession.water_station_name}{activeSession.water_data_precision ? ` · ${WATER_PRECISION_LABEL[activeSession.water_data_precision]}` : ''}
-                  </div>
+                {activeSession.water_stations?.length > 0 ? (
+                  activeSession.water_stations.map((ws) => (
+                    <div key={ws.station_id}>
+                      <div className="weather-row" style={{ marginTop: 8 }}>
+                        <div className="w-item"><div className="num">💧 {ws.level_cm ?? '—'} cm</div><div className="lab">vodní stav</div></div>
+                        <div className="w-item"><div className="num">{ws.flow_m3s ?? '—'} m³/s</div><div className="lab">průtok</div></div>
+                        {ws.temp_c != null && <div className="w-item"><div className="num">{ws.temp_c}°C</div><div className="lab">teplota vody</div></div>}
+                      </div>
+                      <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--ink-soft)' }}>
+                        {ws.station_name}{ws.precision ? ` · ${WATER_PRECISION_LABEL[ws.precision]}` : ''}
+                      </div>
+                    </div>
+                  ))
+                ) : activeSession.water_station_name && (
+                  <>
+                    <div className="weather-row" style={{ marginTop: 8 }}>
+                      <div className="w-item"><div className="num">💧 {activeSession.water_level_cm ?? '—'} cm</div><div className="lab">vodní stav</div></div>
+                      <div className="w-item"><div className="num">{activeSession.water_flow_m3s ?? '—'} m³/s</div><div className="lab">průtok</div></div>
+                      {activeSession.water_temp_c != null && <div className="w-item"><div className="num">{activeSession.water_temp_c}°C</div><div className="lab">teplota vody</div></div>}
+                    </div>
+                    <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--ink-soft)' }}>
+                      {activeSession.water_station_name}{activeSession.water_data_precision ? ` · ${WATER_PRECISION_LABEL[activeSession.water_data_precision]}` : ''}
+                    </div>
+                  </>
                 )}
                 <div style={{ marginTop: 8, fontSize: 13, color: 'var(--ink-soft)' }}>{activeSession.weather_desc}</div>
                 <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-soft)' }}>🌙 {moonPhaseName(activeSession.session_date)}</div>
@@ -1995,8 +2044,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onClose={() => { setShowLocations(false); setLocationsReturnId(null) }}
           onAddArea={startAddLocationArea}
           onManageAreas={startManageLocationAreas}
-          onOpenCatch={(c, locId) => { setShowLocations(false); setLocationsReturnId(locId); setBaitsInitialKey(null); setTicketCatch(c) }}
-          onOpenSession={(sessionId) => { setShowLocations(false); setActiveId(sessionId); setViewMode('detail') }}
+          onOpenCatch={(c, locId) => {
+            setShowLocations(false); setLocationsReturnId(locId); setBaitsInitialKey(null)
+            setLocationsView(false); setActiveId(c.session_id); setViewMode('detail')
+            setTicketCatch(c)
+          }}
+          onOpenSession={(sessionId) => {
+            setShowLocations(false); setLocationsView(false)
+            setActiveId(sessionId); setViewMode('detail')
+          }}
+          onFocusLocation={focusOnLocation}
         />
       )}
 
@@ -2333,17 +2390,19 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
     }
     // vodní stav — nezávisle na počasí, tiché selhání (žádná chyba nezobrazená uživateli)
     try {
-      const linkedStation = resolveHydroStation(draft.linkedLocationIds, locationsCatalog)
-      const station = linkedStation || (await findNearestStations(draft.lat, draft.lng, 1))[0]
-      if (station) {
+      const stations = resolveHydroStations(draft.linkedLocationIds, locationsCatalog)
+      const targets = stations.length > 0 ? stations : await findNearestStations(draft.lat, draft.lng, 1)
+      const results = (await Promise.all(targets.map(async (station) => {
         const water = await fetchWaterConditions(station.objID, draft.date, draft.timeFrom)
-        if (water) {
-          setDraft((d) => ({
-            ...d,
-            waterLevel: water.level_cm, waterFlow: water.flow_m3s, waterTemp: water.temp_c,
-            waterStationName: station.name, waterPrecision: water.precision,
-          }))
-        }
+        return water ? { station_id: station.objID, station_name: station.name, level_cm: water.level_cm, flow_m3s: water.flow_m3s, temp_c: water.temp_c, precision: water.precision } : null
+      }))).filter(Boolean)
+      if (results.length > 0) {
+        setDraft((d) => ({
+          ...d,
+          waterStations: results,
+          waterLevel: results[0].level_cm, waterFlow: results[0].flow_m3s, waterTemp: results[0].temp_c,
+          waterStationName: results[0].station_name, waterPrecision: results[0].precision,
+        }))
       }
     } catch (err) {
       console.warn('ČHMÚ se nepovedlo (appka to nechá prázdné):', err)
@@ -2408,7 +2467,14 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
               {weatherBusy ? 'Zjišťuji…' : '🌤 Přepočítat podmínky pro nové datum'}
             </button>
             {weatherError && <p className="error-text">{weatherError}</p>}
-            {draft.waterStationName && (
+            {draft.waterStations?.length > 0 ? (
+              draft.waterStations.map((ws) => (
+                <p key={ws.station_id} className="hint-text" style={{ marginTop: 6 }}>
+                  💧 {ws.level_cm != null ? `${ws.level_cm} cm` : '—'} · {ws.flow_m3s != null ? `${ws.flow_m3s} m³/s` : '—'}
+                  {ws.temp_c != null ? ` · ${ws.temp_c} °C` : ''} ({ws.station_name}{ws.precision ? `, ${WATER_PRECISION_LABEL[ws.precision]}` : ''})
+                </p>
+              ))
+            ) : draft.waterStationName && (
               <p className="hint-text" style={{ marginTop: 6 }}>
                 💧 {draft.waterLevel != null ? `${draft.waterLevel} cm` : '—'} · {draft.waterFlow != null ? `${draft.waterFlow} m³/s` : '—'}
                 {draft.waterTemp != null ? ` · ${draft.waterTemp} °C` : ''} ({draft.waterStationName}{draft.waterPrecision ? `, ${WATER_PRECISION_LABEL[draft.waterPrecision]}` : ''})
@@ -2662,17 +2728,19 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
       setWeatherError(e.message)
     }
     try {
-      const linkedStation = resolveHydroStation(draft.linkedLocationIds, locationsCatalog)
-      const station = linkedStation || (await findNearestStations(draft.point.lat, draft.point.lng, 1))[0]
-      if (station) {
+      const stations = resolveHydroStations(draft.linkedLocationIds, locationsCatalog)
+      const targets = stations.length > 0 ? stations : await findNearestStations(draft.point.lat, draft.point.lng, 1)
+      const results = (await Promise.all(targets.map(async (station) => {
         const water = await fetchWaterConditions(station.objID, draft.date, draft.timeFrom)
-        if (water) {
-          setDraft((d) => ({
-            ...d,
-            waterLevel: water.level_cm, waterFlow: water.flow_m3s, waterTemp: water.temp_c,
-            waterStationName: station.name, waterPrecision: water.precision,
-          }))
-        }
+        return water ? { station_id: station.objID, station_name: station.name, level_cm: water.level_cm, flow_m3s: water.flow_m3s, temp_c: water.temp_c, precision: water.precision } : null
+      }))).filter(Boolean)
+      if (results.length > 0) {
+        setDraft((d) => ({
+          ...d,
+          waterStations: results,
+          waterLevel: results[0].level_cm, waterFlow: results[0].flow_m3s, waterTemp: results[0].temp_c,
+          waterStationName: results[0].station_name, waterPrecision: results[0].precision,
+        }))
       }
     } catch (err) {
       console.warn('ČHMÚ se nepovedlo (appka to nechá prázdné):', err)
@@ -2758,7 +2826,14 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
               {weatherBusy ? 'Zjišťuji…' : '🌤 Doplnit podmínky automaticky'}
             </button>
             {weatherError && <p className="error-text">{weatherError}</p>}
-            {draft.waterStationName && (
+            {draft.waterStations?.length > 0 ? (
+              draft.waterStations.map((ws) => (
+                <p key={ws.station_id} className="hint-text" style={{ marginTop: 6 }}>
+                  💧 {ws.level_cm != null ? `${ws.level_cm} cm` : '—'} · {ws.flow_m3s != null ? `${ws.flow_m3s} m³/s` : '—'}
+                  {ws.temp_c != null ? ` · ${ws.temp_c} °C` : ''} ({ws.station_name}{ws.precision ? `, ${WATER_PRECISION_LABEL[ws.precision]}` : ''})
+                </p>
+              ))
+            ) : draft.waterStationName && (
               <p className="hint-text" style={{ marginTop: 6 }}>
                 💧 {draft.waterLevel != null ? `${draft.waterLevel} cm` : '—'} · {draft.waterFlow != null ? `${draft.waterFlow} m³/s` : '—'}
                 {draft.waterTemp != null ? ` · ${draft.waterTemp} °C` : ''} ({draft.waterStationName}{draft.waterPrecision ? `, ${WATER_PRECISION_LABEL[draft.waterPrecision]}` : ''})

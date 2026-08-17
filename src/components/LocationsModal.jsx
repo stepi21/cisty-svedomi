@@ -10,7 +10,7 @@ const fishSVG = (color) => `
   </svg>`
 const CATEGORY_COLOR = { dravec: '#5C7A85', bila: '#C4A572' }
 
-export default function LocationsModal({ locations, sessions, userId, initialLocationId, onUpdate, onDelete, onClose, onAddArea, onManageAreas, onOpenCatch, onOpenSession }) {
+export default function LocationsModal({ locations, sessions, userId, initialLocationId, onUpdate, onDelete, onClose, onAddArea, onManageAreas, onOpenCatch, onOpenSession, onFocusLocation }) {
   const [selectedId, setSelectedId] = useState(initialLocationId || null)
   const [editing, setEditing] = useState(false)
 
@@ -60,6 +60,11 @@ export default function LocationsModal({ locations, sessions, userId, initialLoc
             </div>
             {selected.revir && <p className="hint-text">Revír: {selected.revir}</p>}
             <LocationPreviewMap location={selected} />
+            {onFocusLocation && (selected.area || (selected.lat != null && selected.lng != null)) && (
+              <button type="button" className="new-btn" style={{ marginTop: 8 }} onClick={() => onFocusLocation(selected)}>
+                🔍 Zobrazit na hlavní mapě
+              </button>
+            )}
             <WaterStatusBlock location={selected} canEdit={canEdit} onUpdate={onUpdate} />
 
             <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 14 }}>
