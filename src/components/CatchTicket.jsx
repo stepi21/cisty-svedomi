@@ -21,7 +21,7 @@ function toLocalTimeInput(isoString) {
   return `${hh}:${mm}`
 }
 
-export default function CatchTicket({ catchData: c, session, catcherName, canEdit = false, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, locationsCatalog = [], onAddBait, onBackfillBaitPhoto, onSetCatchLocation, onRelocate, onFocusLocation, onOpenSession, onClose, onUpdated, onDeleted }) {
+export default function CatchTicket({ catchData: c, session, catcherName, canEdit = false, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, locationsCatalog = [], onAddBait, onBackfillBaitPhoto, onSetCatchLocation, onRelocate, onFocusLocation, onOpenSession, onClose, onUpdated, onDeleted, onShowToast }) {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [pickingRevir, setPickingRevir] = useState(false)
@@ -99,37 +99,47 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
 
   async function handleSave(e) {
     e.preventDefault()
+    if (!navigator.onLine) {
+      alert('Nejsi připojený k internetu. Zkus to znovu, až se signál vrátí — rozepsané úpravy zůstávají vyplněné, nic se neztratilo.')
+      return
+    }
     setBusy(true)
-    let photo_url = c.photo_url
-    if (form.photoFile) {
-      const url = await uploadPhoto(form.photoFile, `catches/${c.session_id}`)
-      if (url) photo_url = url
-    }
-    let bait_photo_url = form.bait_photo_url || null
-    if (form.baitPhotoFile) {
-      const url = await uploadPhoto(form.baitPhotoFile, `catches/${c.session_id}`)
-      if (url) {
-        bait_photo_url = url
-        onBackfillBaitPhoto?.(form.bait, url)
+    try {
+      let photo_url = c.photo_url
+      if (form.photoFile) {
+        const url = await uploadPhoto(form.photoFile, `catches/${c.session_id}`)
+        if (url) photo_url = url
       }
+      let bait_photo_url = form.bait_photo_url || null
+      if (form.baitPhotoFile) {
+        const url = await uploadPhoto(form.baitPhotoFile, `catches/${c.session_id}`)
+        if (url) {
+          bait_photo_url = url
+          onBackfillBaitPhoto?.(form.bait, url)
+        }
+      }
+      const sessionDate = session?.session_date || (c.caught_at ? c.caught_at.slice(0, 10) : null)
+      const caught_at = form.time && sessionDate
+        ? new Date(`${sessionDate}T${form.time}:00`).toISOString()
+        : c.caught_at
+      const { error } = await supabase.from('catches').update({
+        species: form.species, category: form.category, revir: form.revir || null,
+        length_cm: form.length_cm || null, weight_kg: form.weight_kg || null,
+        bait: form.bait, photo_url, bait_photo_url, caught_at,
+        weather_temp_c: form.weather_temp_c, weather_pressure_hpa: form.weather_pressure_hpa, weather_pressure_trend: form.weather_pressure_trend,
+        weather_wind: form.weather_wind, weather_desc: form.weather_desc,
+        water_level_cm: form.water_level_cm, water_flow_m3s: form.water_flow_m3s, water_temp_c: form.water_temp_c,
+        water_station_name: form.water_station_name, water_data_precision: form.water_data_precision, water_spa_level: form.water_spa_level,
+      }).eq('id', c.id)
+      if (error) { alert(error.message); return }
+      setEditing(false)
+      onShowToast?.('✓ Úlovek uložen')
+      onUpdated()
+    } catch (err) {
+      alert('Uložení se nepovedlo (možná vypadlo připojení). Formulář zůstává vyplněný, zkus to prosím znovu.\n\n' + err.message)
+    } finally {
+      setBusy(false)
     }
-    const sessionDate = session?.session_date || (c.caught_at ? c.caught_at.slice(0, 10) : null)
-    const caught_at = form.time && sessionDate
-      ? new Date(`${sessionDate}T${form.time}:00`).toISOString()
-      : c.caught_at
-    const { error } = await supabase.from('catches').update({
-      species: form.species, category: form.category, revir: form.revir || null,
-      length_cm: form.length_cm || null, weight_kg: form.weight_kg || null,
-      bait: form.bait, photo_url, bait_photo_url, caught_at,
-      weather_temp_c: form.weather_temp_c, weather_pressure_hpa: form.weather_pressure_hpa, weather_pressure_trend: form.weather_pressure_trend,
-      weather_wind: form.weather_wind, weather_desc: form.weather_desc,
-      water_level_cm: form.water_level_cm, water_flow_m3s: form.water_flow_m3s, water_temp_c: form.water_temp_c,
-      water_station_name: form.water_station_name, water_data_precision: form.water_data_precision, water_spa_level: form.water_spa_level,
-    }).eq('id', c.id)
-    setBusy(false)
-    if (error) { alert(error.message); return }
-    setEditing(false)
-    onUpdated()
   }
 
   async function handleDelete() {

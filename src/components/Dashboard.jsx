@@ -134,6 +134,22 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [editingAreasLocation, setEditingAreasLocation] = useState(null) // {id, areas:[]} — správa oblastí u místa v katalogu
   const [locationsView, setLocationsView] = useState(false) // přepínač "📍 Revíry" — dočasně nahradí sidebar/mapu katalogem míst, nic jiného se nemění
   const [showMoreMenu, setShowMoreMenu] = useState(false) // "☰ Více" — méně časté akce schované z hlavičky
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
+  const [toast, setToast] = useState(null) // krátké potvrzení "✓ Uloženo" po akci
+  const [searchQuery, setSearchQuery] = useState('') // hledání ve výpravách (název, revír, druh, nástraha)
+
+  useEffect(() => {
+    function goOnline() { setIsOnline(true) }
+    function goOffline() { setIsOnline(false) }
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline) }
+  }, [])
+
+  function showToast(message) {
+    setToast(message)
+    setTimeout(() => setToast(null), 2200)
+  }
 
   const placementTargetRef = useRef(null)
   useEffect(() => { placementTargetRef.current = placementTarget }, [placementTarget])
@@ -1040,88 +1056,106 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   async function saveSession() {
+    if (!navigator.onLine) {
+      alert('Nejsi připojený k internetu. Zkus to znovu, až se signál vrátí — rozepsaná výprava zůstává vyplněná, nic se neztratilo.')
+      return
+    }
     const s = draftSession
-    const { data: session, error: sErr } = await supabase
-      .from('sessions')
-      .insert({
-        group_id: groupId, user_id: userId, type: s.type, title: s.title, revir: s.revir || null, target_species: s.target_species || null,
-        session_date: s.date, time_from: s.timeFrom || null, time_to: s.timeTo || null,
-        lat: s.point.lat, lng: s.point.lng, area: s.area,
-        weather_temp_c: s.temp || null, weather_pressure_hpa: s.pressure || null, weather_pressure_trend: s.pressureTrend ?? null,
-        weather_wind: s.wind || null, weather_desc: s.desc || null,
-        water_level_cm: s.waterLevel ?? null, water_flow_m3s: s.waterFlow ?? null, water_temp_c: s.waterTemp ?? null,
-        water_station_name: s.waterStationName || null, water_data_precision: s.waterPrecision || null, water_spa_level: s.waterSpaLevel ?? null,
-        water_stations: s.waterStations || null,
-        status: s.live ? 'in_progress' : 'completed',
-      }).select().single()
-    if (sErr) { alert(sErr.message); return }
+    try {
+      const { data: session, error: sErr } = await supabase
+        .from('sessions')
+        .insert({
+          group_id: groupId, user_id: userId, type: s.type, title: s.title, revir: s.revir || null, target_species: s.target_species || null,
+          session_date: s.date, time_from: s.timeFrom || null, time_to: s.timeTo || null,
+          lat: s.point.lat, lng: s.point.lng, area: s.area,
+          weather_temp_c: s.temp || null, weather_pressure_hpa: s.pressure || null, weather_pressure_trend: s.pressureTrend ?? null,
+          weather_wind: s.wind || null, weather_desc: s.desc || null,
+          water_level_cm: s.waterLevel ?? null, water_flow_m3s: s.waterFlow ?? null, water_temp_c: s.waterTemp ?? null,
+          water_station_name: s.waterStationName || null, water_data_precision: s.waterPrecision || null, water_spa_level: s.waterSpaLevel ?? null,
+          water_stations: s.waterStations || null,
+          status: s.live ? 'in_progress' : 'completed',
+        }).select().single()
+      if (sErr) { alert(sErr.message); return }
 
-    if (s.linkedLocationIds && s.linkedLocationIds.length > 0) {
-      await supabase.from('session_locations').insert(
-        s.linkedLocationIds.map((location_id) => ({ session_id: session.id, location_id }))
-      )
-    }
-
-    for (const r of s.rods.filter((r) => r.name)) {
-      const baitsPayload = []
-      for (const b of (r.baits || [])) {
-        if (!b.name && !b.photoFile && !b.photo_url) continue
-        let photo_url = b.photo_url || null
-        if (b.photoFile) {
-          photo_url = await uploadPhoto(b.photoFile, `baits/${session.id}`)
-          if (photo_url) backfillBaitPhoto(b.name, photo_url)
-        }
-        baitsPayload.push({ name: b.name, photo_url })
+      if (s.linkedLocationIds && s.linkedLocationIds.length > 0) {
+        await supabase.from('session_locations').insert(
+          s.linkedLocationIds.map((location_id) => ({ session_id: session.id, location_id }))
+        )
       }
-      await supabase.from('rods').insert({
-        session_id: session.id, group_id: groupId, name: r.name,
-        bait: baitsPayload.map((b) => b.name).filter(Boolean).join(', ') || null,
-        lat: r.lat, lng: r.lng, baits: baitsPayload,
-      })
-    }
 
-    setDraftSession(null)
-    await loadSessions()
-    setActiveId(session.id)
-    setViewMode('detail')
+      for (const r of s.rods.filter((r) => r.name)) {
+        const baitsPayload = []
+        for (const b of (r.baits || [])) {
+          if (!b.name && !b.photoFile && !b.photo_url) continue
+          let photo_url = b.photo_url || null
+          if (b.photoFile) {
+            photo_url = await uploadPhoto(b.photoFile, `baits/${session.id}`)
+            if (photo_url) backfillBaitPhoto(b.name, photo_url)
+          }
+          baitsPayload.push({ name: b.name, photo_url })
+        }
+        await supabase.from('rods').insert({
+          session_id: session.id, group_id: groupId, name: r.name,
+          bait: baitsPayload.map((b) => b.name).filter(Boolean).join(', ') || null,
+          lat: r.lat, lng: r.lng, baits: baitsPayload,
+        })
+      }
+
+      setDraftSession(null)
+      await loadSessions()
+      setActiveId(session.id)
+      setViewMode('detail')
+      showToast('✓ Výprava uložena')
+    } catch (err) {
+      alert('Uložení se nepovedlo (možná vypadlo připojení). Formulář zůstává vyplněný, zkus to prosím znovu.\n\n' + err.message)
+    }
   }
 
   async function saveCatch() {
+    if (!navigator.onLine) {
+      alert('Nejsi připojený k internetu. Zkus to znovu, až se signál vrátí — rozepsaný úlovek zůstává vyplněný, nic se neztratilo.')
+      return
+    }
     const c = draftCatch
     const session = activeSession
-    const caughtAt = c.time && session
-      ? new Date(`${session.session_date}T${c.time}:00`).toISOString()
-      : null
-    let photo_url = null
-    if (c.photoFile) {
-      photo_url = await uploadPhoto(c.photoFile, `catches/${session.id}`)
+    try {
+      const caughtAt = c.time && session
+        ? new Date(`${session.session_date}T${c.time}:00`).toISOString()
+        : null
+      let photo_url = null
+      if (c.photoFile) {
+        photo_url = await uploadPhoto(c.photoFile, `catches/${session.id}`)
+      }
+      let bait_photo_url = c.bait_photo_url || null
+      if (c.baitPhotoFile) {
+        bait_photo_url = await uploadPhoto(c.baitPhotoFile, `catches/${session.id}`)
+        if (bait_photo_url) backfillBaitPhoto(c.bait, bait_photo_url)
+      }
+      // jednoznačný případ (výprava má navázané jen jedno katalogové místo) -> rovnou přiřadit i novému úlovku
+      const linkedIds = (session.session_locations || []).map((sl) => sl.location_id)
+      let location_id = null
+      let revir = c.revir || null
+      if (linkedIds.length === 1) {
+        const loc = locationsCatalog.find((l) => l.id === linkedIds[0])
+        if (loc) { location_id = loc.id; revir = loc.revir || null }
+      }
+      const { error } = await supabase.from('catches').insert({
+        session_id: session.id, group_id: groupId, rod_id: c.rodId || null,
+        species: c.species, category: c.category, length_cm: c.length || null, weight_kg: c.weight || null,
+        bait: c.bait, caught_at: caughtAt, lat: c.point.lat, lng: c.point.lng, photo_url, bait_photo_url,
+        location_id, revir,
+        weather_temp_c: c.weather_temp_c ?? null, weather_pressure_hpa: c.weather_pressure_hpa ?? null, weather_pressure_trend: c.weather_pressure_trend ?? null,
+        weather_wind: c.weather_wind || null, weather_desc: c.weather_desc || null,
+        water_level_cm: c.water_level_cm ?? null, water_flow_m3s: c.water_flow_m3s ?? null, water_temp_c: c.water_temp_c ?? null,
+        water_station_name: c.water_station_name || null, water_data_precision: c.water_data_precision || null, water_spa_level: c.water_spa_level ?? null,
+      })
+      if (error) { alert(error.message); return }
+      setDraftCatch(null)
+      await loadSessions()
+      showToast('✓ Úlovek uložen')
+    } catch (err) {
+      alert('Uložení se nepovedlo (možná vypadlo připojení). Formulář zůstává vyplněný, zkus to prosím znovu.\n\n' + err.message)
     }
-    let bait_photo_url = c.bait_photo_url || null
-    if (c.baitPhotoFile) {
-      bait_photo_url = await uploadPhoto(c.baitPhotoFile, `catches/${session.id}`)
-      if (bait_photo_url) backfillBaitPhoto(c.bait, bait_photo_url)
-    }
-    // jednoznačný případ (výprava má navázané jen jedno katalogové místo) -> rovnou přiřadit i novému úlovku
-    const linkedIds = (session.session_locations || []).map((sl) => sl.location_id)
-    let location_id = null
-    let revir = c.revir || null
-    if (linkedIds.length === 1) {
-      const loc = locationsCatalog.find((l) => l.id === linkedIds[0])
-      if (loc) { location_id = loc.id; revir = loc.revir || null }
-    }
-    const { error } = await supabase.from('catches').insert({
-      session_id: session.id, group_id: groupId, rod_id: c.rodId || null,
-      species: c.species, category: c.category, length_cm: c.length || null, weight_kg: c.weight || null,
-      bait: c.bait, caught_at: caughtAt, lat: c.point.lat, lng: c.point.lng, photo_url, bait_photo_url,
-      location_id, revir,
-      weather_temp_c: c.weather_temp_c ?? null, weather_pressure_hpa: c.weather_pressure_hpa ?? null, weather_pressure_trend: c.weather_pressure_trend ?? null,
-      weather_wind: c.weather_wind || null, weather_desc: c.weather_desc || null,
-      water_level_cm: c.water_level_cm ?? null, water_flow_m3s: c.water_flow_m3s ?? null, water_temp_c: c.water_temp_c ?? null,
-      water_station_name: c.water_station_name || null, water_data_precision: c.water_data_precision || null, water_spa_level: c.water_spa_level ?? null,
-    })
-    if (error) { alert(error.message); return }
-    setDraftCatch(null)
-    await loadSessions()
   }
 
   function startEditSession(s) {
@@ -1139,18 +1173,27 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   async function saveEditSession() {
+    if (!navigator.onLine) {
+      alert('Nejsi připojený k internetu. Zkus to znovu, až se signál vrátí — rozepsané úpravy zůstávají vyplněné, nic se neztratilo.')
+      return
+    }
     const e = editingSession
-    const { error } = await supabase.from('sessions').update({
-      title: e.title, session_date: e.date, revir: e.revir || null, target_species: e.target_species || null, time_from: e.timeFrom || null, time_to: e.timeTo || null,
-      weather_temp_c: e.temp || null, weather_pressure_hpa: e.pressure || null, weather_pressure_trend: e.pressureTrend ?? null,
-      weather_wind: e.wind || null, weather_desc: e.desc || null,
-      water_level_cm: e.waterLevel ?? null, water_flow_m3s: e.waterFlow ?? null, water_temp_c: e.waterTemp ?? null,
-      water_station_name: e.waterStationName || null, water_data_precision: e.waterPrecision || null, water_spa_level: e.waterSpaLevel ?? null,
-      water_stations: e.waterStations || null,
-    }).eq('id', e.id)
-    if (error) { alert(error.message); return }
-    setEditingSession(null)
-    await loadSessions()
+    try {
+      const { error } = await supabase.from('sessions').update({
+        title: e.title, session_date: e.date, revir: e.revir || null, target_species: e.target_species || null, time_from: e.timeFrom || null, time_to: e.timeTo || null,
+        weather_temp_c: e.temp || null, weather_pressure_hpa: e.pressure || null, weather_pressure_trend: e.pressureTrend ?? null,
+        weather_wind: e.wind || null, weather_desc: e.desc || null,
+        water_level_cm: e.waterLevel ?? null, water_flow_m3s: e.waterFlow ?? null, water_temp_c: e.waterTemp ?? null,
+        water_station_name: e.waterStationName || null, water_data_precision: e.waterPrecision || null, water_spa_level: e.waterSpaLevel ?? null,
+        water_stations: e.waterStations || null,
+      }).eq('id', e.id)
+      if (error) { alert(error.message); return }
+      setEditingSession(null)
+      await loadSessions()
+      showToast('✓ Uloženo')
+    } catch (err) {
+      alert('Uložení se nepovedlo (možná vypadlo připojení). Zkus to prosím znovu.\n\n' + err.message)
+    }
   }
 
   function monthLabel(dateStr) {
@@ -1209,6 +1252,30 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const allKeys = new Set()
     groups.forEach((y) => { allKeys.add(y.key); y.months.forEach((m) => allKeys.add(m.key)) })
     setCollapsedGroups(allKeys)
+  }
+
+  // Rychlý skok zpátky na nejnovější výpravu (appka je řadí sestupně podle data,
+  // takže sessions[0] je vždycky ta nejnovější) -- ať se z hlubší historie/
+  // statistik/galerie dá rychle vrátit "nahoru", bez ručního hledání roku/měsíce.
+  function jumpToNewest() {
+    if (sessions.length === 0) return
+    const newest = sessions[0]
+    setSearchQuery('')
+    setActiveCategory('all')
+    setActiveUserFilter('all')
+    const groups = buildGroups(sessions)
+    if (groups.length) {
+      setCollapsedGroups((prev) => {
+        const next = new Set(prev)
+        next.delete(groups[0].key)
+        if (groups[0].months.length) next.delete(groups[0].months[0].key)
+        return next
+      })
+    }
+    setActiveId(newest.id)
+    setViewMode('detail')
+    setLocationsView(false)
+    setMobileSheetOpen(true)
   }
 
   function startRelocateCatch(catchId) {
@@ -1407,10 +1474,21 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return map
   }
 
+  function sessionMatchesSearch(s, query) {
+    const q = query.trim().toLowerCase()
+    if (!q) return true
+    if (s.title?.toLowerCase().includes(q)) return true
+    if (s.revir?.toLowerCase().includes(q)) return true
+    if (s.target_species?.toLowerCase().includes(q)) return true
+    if ((s.catches || []).some((c) => c.species?.toLowerCase().includes(q) || c.bait?.toLowerCase().includes(q))) return true
+    return false
+  }
+
   const visibleSessions = sessions.filter((s) => {
     const catOk = activeCategory === 'all' || TYPE_CATEGORY[s.type] === activeCategory || filteredCatches(s).length > 0
     const userOk = activeUserFilter === 'all' || s.user_id === activeUserFilter
-    return catOk && userOk
+    const searchOk = sessionMatchesSearch(s, searchQuery)
+    return catOk && userOk && searchOk
   })
 
   function peekLabel() {
@@ -1460,9 +1538,18 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             <span>Výpravy</span>
             <button className="new-btn" onClick={startNewSession}>+ nová výprava</button>
           </div>
+          <div style={{ padding: '0 18px 10px' }}>
+            <input
+              className="text-input"
+              placeholder="🔎 Hledat (název, revír, druh, nástraha)…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
           <div className="sb-toolbar">
             <button className="new-btn" onClick={expandAll}>Rozbalit vše</button>
             <button className="new-btn" onClick={collapseAll}>Sbalit vše</button>
+            <button className="new-btn" onClick={jumpToNewest}>⬆️ Nejnovější</button>
           </div>
           <div className="filter-row">
             {['all', 'dravec', 'bila'].map((cat) => (
@@ -1748,6 +1835,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             Kód pro kamaráda: <strong>{inviteInfo.code}</strong> (platný 7 dní) — ať ho zadá po přihlášení do appky na obrazovce "Mám kód pozvánky".
             <button className="ticket-close" onClick={() => setInviteInfo(null)}>✕</button>
           </div>
+        )}
+        {!isOnline && (
+          <div className="offline-banner">📡 Nejsi připojený k internetu — rozepsaná data zůstávají vyplněná, zkus uložit až se signál vrátí.</div>
         )}
       </header>
 
@@ -2100,6 +2190,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           catchData={ticketCatch}
           session={sessionForCatch(ticketCatch)}
           catcherName={sessionForCatch(ticketCatch) ? userName(sessionForCatch(ticketCatch).user_id) : null}
+          onShowToast={showToast}
           canEdit={sessionForCatch(ticketCatch)?.user_id === userId}
           baitPhotoMap={baitPhotoLookup()}
           baitListId={baitListId(sessionForCatch(ticketCatch)?.type)}
@@ -2137,6 +2228,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onDeleted={() => { setTicketCatch(null); loadSessions() }}
         />
       )}
+      {toast && <div className="save-toast">{toast}</div>}
     </div>
   )
 }
@@ -2799,9 +2891,9 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
   }
 
   useEffect(() => {
-    if (draft.live && draft.temp === '') { handleFetchWeather() }
+    if (draft.date && draft.temp === '') { handleFetchWeather() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [draft.date])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -2993,6 +3085,11 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
     }
     setWeatherBusy(false)
   }
+
+  useEffect(() => {
+    if (draft.time && draft.weather_temp_c == null) { handleFetchWeather() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.time])
 
   async function handleSubmit(e) {
     e.preventDefault()
