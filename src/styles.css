@@ -61,7 +61,7 @@ header{ background:var(--water-deep); color:var(--white); padding:16px 20px; }
 .head-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
 header h1{ font-family:'Fraunces', serif; font-weight:600; font-size:26px; margin:0; }
 header h1 .accent{ color:var(--amber); }
-.hamburger-btn{ font-size:19px; padding:6px 11px; line-height:1; flex:none; }
+.hamburger-btn{ font-size:21px; padding:8px 13px; line-height:1; flex:none; background:var(--white); color:var(--water-deep); border-color:transparent; }
 .head-secondary-row{
   display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
   margin-top:12px;
@@ -71,7 +71,7 @@ header h1 .accent{ color:var(--amber); }
 .head-actions-wrap{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
 .head-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
 .whoami{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:#B9CFCB; align-self:center; }
-.head-actions .new-btn, .head-actions-primary .new-btn, .head-actions-secondary .new-btn, .hamburger-btn{ color:#E7EFEC; border-color:rgba(255,255,255,.3); }
+.head-actions .new-btn, .head-actions-primary .new-btn, .head-actions-secondary .new-btn{ color:#E7EFEC; border-color:rgba(255,255,255,.3); }
 .invite-banner{
   margin-top:10px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.25);
   padding:8px 14px; border-radius:8px; font-size:13px; position:relative;
@@ -147,6 +147,7 @@ header h1 .accent{ color:var(--amber); }
 .record-row:hover{ background:#F7F4EA; }
 .record-head{ display:flex; align-items:baseline; justify-content:space-between; font-size:15px; }
 .record-length{ font-family:'IBM Plex Mono', monospace; font-weight:600; color:var(--water-deep); font-size:16px; }
+.revir-chip{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-soft); background:var(--paper); border:1px solid var(--paper-line); border-radius:20px; padding:2px 9px; white-space:nowrap; }
 .record-sub{
   display:flex; align-items:center; gap:6px; margin-top:4px;
   font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft);

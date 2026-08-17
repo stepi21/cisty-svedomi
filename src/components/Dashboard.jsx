@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient'
 import CatchTicket from './CatchTicket.jsx'
 import HelpModal from './HelpModal.jsx'
 import GalleryModal from './GalleryModal.jsx'
-import BaitsModal from './BaitsModal.jsx'
+import BaitsModal, { computeBaitsList } from './BaitsModal.jsx'
 import BaitPicker from './BaitPicker.jsx'
 import LocationsModal from './LocationsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
@@ -66,6 +66,11 @@ function mergeLocationRevirs(locations) {
 // ručně potvrzenou/přiřazenou stanici ČHMÚ, použije se ta -- appka pak
 // NEPŘEPOČÍTÁVÁ nejbližší stanici znovu podle souřadnic (to by přepsalo
 // ruční opravu v katalogu).
+// Hledání appky ignoruje diakritiku i velikost písmen ("dousa" najde "Douša").
+function normalizeSearchText(s) {
+  return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+}
+
 function resolveHydroStation(linkedLocationIds, locationsCatalog) {
   if (!linkedLocationIds || linkedLocationIds.length !== 1) return null
   const loc = locationsCatalog.find((l) => l.id === linkedLocationIds[0])
@@ -132,7 +137,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [editingSession, setEditingSession] = useState(null)     // rozepsaná editace výpravy (datum, počasí...)
   const [editingAreasSession, setEditingAreasSession] = useState(null) // {id, areas:[]} — správa oblastí u uložené výpravy
   const [editingAreasLocation, setEditingAreasLocation] = useState(null) // {id, areas:[]} — správa oblastí u místa v katalogu
-  const [locationsView, setLocationsView] = useState(false) // přepínač "📍 Revíry" — dočasně nahradí sidebar/mapu katalogem míst, nic jiného se nemění
+  const [activePanel, setActivePanel] = useState(null) // null | 'locations' | 'baits' | 'catches' — jen jeden panel může být aktivní najednou
+  const [baitsStartAdding, setBaitsStartAdding] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false) // "☰ Více" — méně časté akce schované z hlavičky
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
   const [toast, setToast] = useState(null) // krátké potvrzení "✓ Uloženo" po akci
@@ -499,11 +505,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     markersLayer.current.clearLayers()
     const map = mapInstance.current
 
-    if (locationsView) {
+    if (activePanel === 'locations') {
       const bounds = []
       locationsCatalog.forEach((loc) => {
         if (loc.area) {
-          normalizeAreas(loc.area).forEach((pts) => {
+          const areas = normalizeAreas(loc.area)
+          areas.forEach((pts) => {
             const polygon = L.polygon(pts.map((p) => [p.lat, p.lng]), {
               color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.18,
             }).bindPopup(`${loc.name}${loc.revir ? ` (${loc.revir})` : ''}`)
@@ -511,6 +518,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             polygon.addTo(markersLayer.current)
             pts.forEach((p) => bounds.push([p.lat, p.lng]))
           })
+          // pevně velký puntík uprostřed -- vyšrafovaná plocha se zmenšováním mapy
+          // fyzicky zmenšuje (na rozdíl od úlovků), při oddálení bývá skoro neviditelná
+          const c = areaCentroid(areas.flat())
+          const centroidMarker = L.circleMarker([c.lat, c.lng], {
+            radius: 7, color: '#6B7A4F', weight: 2, fillColor: '#EDE9DC', fillOpacity: 1,
+          }).bindPopup(`${loc.name}${loc.revir ? ` (${loc.revir})` : ''}`)
+          centroidMarker.on('click', () => { setLocationsReturnId(loc.id); setBaitsInitialKey(null); setShowLocations(true) })
+          centroidMarker.addTo(markersLayer.current)
         } else if (loc.lat != null && loc.lng != null) {
           const marker = L.circleMarker([loc.lat, loc.lng], {
             radius: 8, color: '#B97F35', weight: 2, fillColor: '#D9A054', fillOpacity: 0.8,
@@ -598,7 +613,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     } else {
       map.setView([49.8, 15.5], 8)
     }
-  }, [activeSession, activeCategory, activeUserFilter, viewMode, sessions, locationsCatalog, locationsView])
+  }, [activeSession, activeCategory, activeUserFilter, viewMode, sessions, locationsCatalog, activePanel])
 
   async function backfillBaitPhoto(baitName, photoUrl) {
     const key = (baitName || '').trim().toLowerCase()
@@ -879,8 +894,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   // --- začátek tvorby nové výpravy ---
-  function startNewSession() { pendingLiveRef.current = false; setPickingType(true); setMobileSheetOpen(false); setLocationsView(false) }
-  function startNewSessionLive() { pendingLiveRef.current = true; setPickingType(true); setMobileSheetOpen(false); setLocationsView(false) }
+  function startNewSession() { pendingLiveRef.current = false; setPickingType(true); setMobileSheetOpen(false); setActivePanel(null) }
+  function startNewSessionLive() { pendingLiveRef.current = true; setPickingType(true); setMobileSheetOpen(false); setActivePanel(null) }
 
   async function endLiveSession(session) {
     const now = new Date()
@@ -1239,6 +1254,21 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setCollapsedGroups(allKeys)
   }, [sessions])
 
+  // Při aktivním hledání appka dočasně rozbalí úplně vše (ať vidíš všechny
+  // výsledky napříč lety/měsíci bez ručního rozklikávání) a po smazání textu
+  // se vrátí přesně na to, co bylo rozbalené/sbalené předtím.
+  const savedCollapsedGroupsRef = useRef(null)
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      if (savedCollapsedGroupsRef.current === null) savedCollapsedGroupsRef.current = collapsedGroups
+      setCollapsedGroups(new Set())
+    } else if (savedCollapsedGroupsRef.current !== null) {
+      setCollapsedGroups(savedCollapsedGroupsRef.current)
+      savedCollapsedGroupsRef.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery])
+
   function toggleGroup(key) {
     setCollapsedGroups((prev) => {
       const next = new Set(prev)
@@ -1274,7 +1304,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     }
     setActiveId(newest.id)
     setViewMode('detail')
-    setLocationsView(false)
+    setActivePanel(null)
     setMobileSheetOpen(true)
   }
 
@@ -1475,12 +1505,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   function sessionMatchesSearch(s, query) {
-    const q = query.trim().toLowerCase()
+    const q = normalizeSearchText(query)
     if (!q) return true
-    if (s.title?.toLowerCase().includes(q)) return true
-    if (s.revir?.toLowerCase().includes(q)) return true
-    if (s.target_species?.toLowerCase().includes(q)) return true
-    if ((s.catches || []).some((c) => c.species?.toLowerCase().includes(q) || c.bait?.toLowerCase().includes(q))) return true
+    if (normalizeSearchText(s.title).includes(q)) return true
+    if (normalizeSearchText(s.revir).includes(q)) return true
+    if (normalizeSearchText(s.target_species).includes(q)) return true
+    if ((s.catches || []).some((c) => normalizeSearchText(c.species).includes(q) || normalizeSearchText(c.bait).includes(q))) return true
     return false
   }
 
@@ -1492,7 +1522,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   })
 
   function peekLabel() {
-    if (locationsView) return `📍 Revíry · ${locationsCatalog.length}`
+    if (activePanel === 'locations') return `📍 Revíry · ${locationsCatalog.length}`
+    if (activePanel === 'baits') return `🪱 Nástrahy`
+    if (activePanel === 'catches') return `🐟 Úlovky`
     if (viewMode === 'detail' && activeSession) return activeSession.title
     const parts = []
     if (activeCategory !== 'all') parts.push(activeCategory === 'dravec' ? 'Dravci' : 'Bílá ryba')
@@ -1506,23 +1538,137 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   // --- postranní panel/mobilní lišta v režimu "📍 Revíry" — nezávislé na viewMode/activeId výprav, ty se drží beze změny v pozadí ---
   function renderLocationsList() {
-    const sorted = [...locationsCatalog].sort((a, b) => a.name.localeCompare(b.name))
+    const q = normalizeSearchText(searchQuery)
+    const sorted = [...locationsCatalog]
+      .filter((l) => !q || normalizeSearchText(l.name).includes(q) || normalizeSearchText(l.revir).includes(q))
+      .sort((a, b) => a.name.localeCompare(b.name))
     return (
       <>
         <div className="sb-head">
           <span>Revíry</span>
           <button className="new-btn" onClick={startAddLocationArea}>+ Přidat místo</button>
         </div>
+        <div style={{ padding: '0 18px 10px' }}>
+          <input
+            className="text-input"
+            placeholder="🔎 Hledat revír (název, číslo)…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
         {sorted.length === 0 ? (
           <div style={{ padding: '20px 18px', color: 'var(--ink-soft)', fontSize: 13 }}>
-            Katalog je zatím prázdný. Zkus přidat první přes „+ Přidat místo".
+            {locationsCatalog.length === 0 ? 'Katalog je zatím prázdný. Zkus přidat první přes „+ Přidat místo".' : 'Nic nenalezeno.'}
           </div>
         ) : (
-          sorted.map((l) => (
-            <div key={l.id} className="record-row" onClick={() => { setLocationsReturnId(l.id); setBaitsInitialKey(null); setShowLocations(true) }}>
+          sorted.map((l) => {
+            const linkedSessions = sessions.filter((s) => (s.session_locations || []).some((sl) => sl.location_id === l.id))
+            const catchCount = linkedSessions.reduce((sum, s) => sum + (s.catches || []).filter((c) => c.location_id === l.id).length, 0)
+            return (
+              <div key={l.id} className="record-row" onClick={() => { setLocationsReturnId(l.id); setBaitsInitialKey(null); setShowLocations(true) }}>
+                <div className="record-head">
+                  <strong>{l.area ? '🎯' : '📍'} {l.name}</strong>
+                  {l.revir && <span className="revir-chip">{l.revir}</span>}
+                </div>
+                <div className="c-sub" style={{ marginTop: 4 }}>{linkedSessions.length} výprav · {catchCount} úlovků</div>
+              </div>
+            )
+          })
+        )}
+      </>
+    )
+  }
+
+  // --- postranní panel "🪱 Nástrahy" — stejný vzor jako Revíry/Výpravy: hledání + seznam, detail se otevírá jako modal (BaitsModal) ---
+  function renderBaitsList() {
+    const q = normalizeSearchText(searchQuery)
+    const baits = computeBaitsList(sessions, baitCatalog)
+      .filter((b) => !q || normalizeSearchText(b.label).includes(q))
+      .sort((a, b) => b.catches.length - a.catches.length)
+    return (
+      <>
+        <div className="sb-head">
+          <span>Nástrahy</span>
+          <button className="new-btn" onClick={() => { setBaitsInitialKey(null); setBaitsStartAdding(true); setShowBaits(true) }}>+ Přidat nástrahu</button>
+        </div>
+        <div style={{ padding: '0 18px 10px' }}>
+          <input
+            className="text-input"
+            placeholder="🔎 Hledat nástrahu…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        {baits.length === 0 ? (
+          <div style={{ padding: '20px 18px', color: 'var(--ink-soft)', fontSize: 13 }}>
+            {searchQuery ? 'Nic nenalezeno.' : 'Zatím žádné. Zkus přidat první přes „+ Přidat nástrahu".'}
+          </div>
+        ) : (
+          baits.map((b) => (
+            <div
+              key={b.key} className="record-row"
+              onClick={() => { setBaitsInitialKey(b.key); setBaitsStartAdding(false); setShowBaits(true) }}
+            >
               <div className="record-head">
-                <strong>{l.area ? '🎯' : '📍'} {l.name}</strong>
-                {l.revir && <span className="c-sub">{l.revir}</span>}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                  {b.photo_url
+                    ? <img src={b.photo_url} alt="" className="bait-thumb" style={{ marginLeft: 0, flex: 'none' }} />
+                    : <span style={{ flex: 'none' }}>{b.category === 'dravec' ? '🐟' : '🐠'}</span>}
+                  <strong style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.label}</strong>
+                </span>
+                <span className="record-length">{b.catches.length}×</span>
+              </div>
+            </div>
+          ))
+        )}
+      </>
+    )
+  }
+
+  // --- postranní panel "🐟 Úlovky" — plochý seznam (bez seskupení podle měsíce), hledání jako primární způsob navigace ---
+  function renderCatchesList() {
+    const q = normalizeSearchText(searchQuery)
+    const all = []
+    sessions.forEach((s) => {
+      ;(s.catches || []).forEach((c) => all.push({ ...c, sessionRef: s }))
+    })
+    const filtered = all
+      .filter((c) => !q
+        || normalizeSearchText(c.species).includes(q)
+        || normalizeSearchText(c.bait).includes(q)
+        || normalizeSearchText(c.revir).includes(q)
+        || normalizeSearchText(c.sessionRef.title).includes(q))
+      .sort((a, b) => (b.caught_at || b.sessionRef.session_date || '').localeCompare(a.caught_at || a.sessionRef.session_date || ''))
+    return (
+      <>
+        <div className="sb-head"><span>Úlovky</span></div>
+        <div style={{ padding: '0 18px 10px' }}>
+          <input
+            className="text-input"
+            placeholder="🔎 Hledat úlovek (druh, nástraha, revír)…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        {filtered.length === 0 ? (
+          <div style={{ padding: '20px 18px', color: 'var(--ink-soft)', fontSize: 13 }}>
+            {searchQuery ? 'Nic nenalezeno.' : 'Zatím žádný úlovek.'}
+          </div>
+        ) : (
+          filtered.map((c) => (
+            <div
+              key={c.id} className="record-row"
+              onClick={() => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c) }}
+            >
+              <div className="record-head">
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                  <div className="fish-mini" style={{ flex: 'none', width: 26, height: 26 }} dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />
+                  <strong style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.species}</strong>
+                </span>
+                <span className="record-length">{c.length_cm ?? '—'} cm</span>
+              </div>
+              <div className="c-sub" style={{ marginTop: 4 }}>
+                {c.caught_at ? c.caught_at.slice(0, 10) : c.sessionRef.session_date} · {c.sessionRef.title}{c.revir ? ` · ${c.revir}` : ''}
               </div>
             </div>
           ))
@@ -1804,7 +1950,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           <div style={{ position: 'relative' }}>
             <button className="new-btn hamburger-btn" onClick={() => setShowMoreMenu((v) => !v)} title="Více">☰</button>
             {showMoreMenu && (
-              <div className="type-picker" style={{ position: 'absolute', top: '100%', right: 0, left: 'auto', transform: 'none', marginTop: 6, minWidth: 170, zIndex: 500 }}>
+              <div className="type-picker" style={{ position: 'absolute', top: '100%', right: 0, left: 'auto', transform: 'none', marginTop: 6, minWidth: 190, zIndex: 500 }}>
+                <div className="whoami" style={{ padding: '2px 4px 6px' }}>{myProfile?.display_name}</div>
+                <button className="type-btn" onClick={() => { setShowMoreMenu(false); createInvite() }}>+ pozvat parťáka</button>
+                <button className="type-btn" onClick={() => { setShowMoreMenu(false); onSignOut() }}>Odhlásit</button>
+                <div style={{ height: 1, background: 'var(--paper-line)', margin: '6px 0' }} />
                 <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowGallery(true) }}>🖼 Galerie</button>
                 <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowRecords(true) }}>🏆 Rekordy</button>
                 <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowStats(true) }}>📊 Statistiky</button>
@@ -1818,16 +1968,20 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         <div className="head-secondary-row">
           <div className="head-actions-primary">
             <button
-              className={`new-btn ${locationsView ? 'active-toggle' : ''}`}
-              onClick={() => setLocationsView((v) => { const next = !v; if (next) setMobileSheetOpen(true); return next })}
+              className={`new-btn ${activePanel === 'locations' ? 'active-toggle' : ''}`}
+              onClick={() => setActivePanel((p) => { const next = p === 'locations' ? null : 'locations'; if (next) setMobileSheetOpen(true); return next })}
               title="Revíry"
             >📍 Revíry</button>
-            <button className="new-btn" onClick={() => { setBaitsInitialKey(null); setShowBaits(true) }} title="Nástrahy">🪱 Nástrahy</button>
-          </div>
-          <div className="head-actions-secondary">
-            <span className="whoami">{myProfile?.display_name}</span>
-            <button className="new-btn" onClick={createInvite}>+ pozvat parťáka</button>
-            <button className="new-btn" onClick={onSignOut}>Odhlásit</button>
+            <button
+              className={`new-btn ${activePanel === 'baits' ? 'active-toggle' : ''}`}
+              onClick={() => setActivePanel((p) => { const next = p === 'baits' ? null : 'baits'; if (next) setMobileSheetOpen(true); return next })}
+              title="Nástrahy"
+            >🪱 Nástrahy</button>
+            <button
+              className={`new-btn ${activePanel === 'catches' ? 'active-toggle' : ''}`}
+              onClick={() => setActivePanel((p) => { const next = p === 'catches' ? null : 'catches'; if (next) setMobileSheetOpen(true); return next })}
+              title="Úlovky"
+            >🐟 Úlovky</button>
           </div>
         </div>
         {inviteInfo && (
@@ -1843,8 +1997,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
       <div className="layout">
         <aside className="sidebar">
-          {locationsView ? renderLocationsList() : renderSessionList()}
+          {activePanel === 'locations' ? renderLocationsList()
+            : activePanel === 'baits' ? renderBaitsList()
+            : activePanel === 'catches' ? renderCatchesList()
+            : renderSessionList()}
         </aside>
+
 
         <main>
           <div ref={mapRef} id="map" style={{ cursor: isPlacingSomething ? 'crosshair' : '' }} />
@@ -2037,7 +2195,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           )}
 
           <div className="desktop-detail-wrap">
-            {!locationsView && renderDetailStrip()}
+            {activePanel !== 'locations' && renderDetailStrip()}
           </div>
         </main>
       </div>
@@ -2048,14 +2206,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           <span className="peek-chevron">{mobileSheetOpen ? '▾' : '▴'}</span>
         </div>
         <div className="mobile-sheet-body">
-          {locationsView ? renderLocationsList() : (
-            viewMode === 'detail' && activeSession && !draftSession ? (
-              <>
-                <button className="new-btn" onClick={() => setViewMode('aggregate')} style={{ margin: '0 18px 8px' }}>← Zpět na seznam</button>
-                {renderDetailStrip()}
-              </>
-            ) : renderSessionList()
-          )}
+          {activePanel === 'locations' ? renderLocationsList()
+            : activePanel === 'baits' ? renderBaitsList()
+            : activePanel === 'catches' ? renderCatchesList()
+            : (
+              viewMode === 'detail' && activeSession && !draftSession ? (
+                <>
+                  <button className="new-btn" onClick={() => setViewMode('aggregate')} style={{ margin: '0 18px 8px' }}>← Zpět na seznam</button>
+                  {renderDetailStrip()}
+                </>
+              ) : renderSessionList()
+            )}
         </div>
       </div>
 
@@ -2125,13 +2286,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           groupId={groupId}
           userId={userId}
           initialBaitKey={baitsInitialKey}
+          startAdding={baitsStartAdding}
           onCatalogChanged={loadBaitCatalog}
           onRenamePropagate={renameBaitEverywhere}
           onRemoveFromRods={removeBaitFromMyRods}
           onBackfillBaitPhoto={backfillBaitPhoto}
-          onClose={() => { setShowBaits(false); setBaitsInitialKey(null) }}
-          onOpenCatch={(c, key) => { setShowBaits(false); setBaitsInitialKey(key); setLocationsReturnId(null); setTicketCatch(c) }}
-          onOpenSession={(sessionId) => { setShowBaits(false); setActiveId(sessionId); setViewMode('detail') }}
+          onClose={() => { setShowBaits(false); setBaitsInitialKey(null); setBaitsStartAdding(false) }}
+          onOpenCatch={(c, key) => { setShowBaits(false); setBaitsStartAdding(false); setBaitsInitialKey(key); setLocationsReturnId(null); setTicketCatch(c) }}
+          onOpenSession={(sessionId) => { setShowBaits(false); setBaitsStartAdding(false); setActivePanel(null); setActiveId(sessionId); setViewMode('detail') }}
         />
       )}
 
@@ -2148,11 +2310,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onManageAreas={startManageLocationAreas}
           onOpenCatch={(c, locId) => {
             setShowLocations(false); setLocationsReturnId(locId); setBaitsInitialKey(null)
-            setLocationsView(false); setActiveId(c.session_id); setViewMode('detail')
+            setActivePanel(null); setActiveId(c.session_id); setViewMode('detail')
             setTicketCatch(c)
           }}
           onOpenSession={(sessionId) => {
-            setShowLocations(false); setLocationsView(false)
+            setShowLocations(false); setActivePanel(null)
             setActiveId(sessionId); setViewMode('detail')
           }}
           onFocusLocation={focusOnLocation}

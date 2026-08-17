@@ -11,13 +11,10 @@ const fishSVG = (color) => `
 const CATEGORY_COLOR = { dravec: '#5C7A85', bila: '#C4A572' }
 const TYPE_CATEGORY = { kapr: 'bila', privlac: 'dravec', muska: 'dravec', plavana: 'bila', jine: null }
 
-export default function BaitsModal({ sessions, baitCatalog, groupId, userId, initialBaitKey, onCatalogChanged, onRenamePropagate, onRemoveFromRods, onBackfillBaitPhoto, onClose, onOpenCatch, onOpenSession }) {
-  const [selectedKey, setSelectedKey] = useState(initialBaitKey || null)
-  const [adding, setAdding] = useState(false)
-  const [editingCatalogId, setEditingCatalogId] = useState(null)
-  const [filter, setFilter] = useState('all')
-
-  // --- spočítat úlovky na jednotlivé nástrahy z existujících dat ---
+// Sloučí nástrahy zadané u prutů (i bez úlovku), z úlovků, a z katalogu do
+// jednoho seznamu -- katalog vyhrává, pokud existuje. Sdílené mezi detailem
+// (BaitsModal) a přehledovým seznamem v postranním panelu (Dashboard.jsx).
+export function computeBaitsList(sessions, baitCatalog) {
   const catchMap = {}
   sessions.forEach((s) => {
     ;(s.catches || []).forEach((c) => {
@@ -31,7 +28,6 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
     })
   })
 
-  // --- doplnit nástrahy zadané u prutů, i když na ně ještě nic nechytlo ---
   const rodBaitMap = {}
   const sessionsByBaitKey = {}
   function registerSessionUsage(key, session) {
@@ -58,7 +54,6 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
     })
   })
 
-  // --- sloučit vše: pruty (bez úlovku) -> úlovky -> katalog (katalog vyhrává, pokud je zadaný) ---
   const merged = {}
   Object.entries(rodBaitMap).forEach(([key, v]) => {
     merged[key] = { key, label: v.label, photo_url: v.photo_url, catches: [], category: v.category || 'dravec', catalogEntry: null }
@@ -84,13 +79,18 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
     }
   })
 
-  const baits = Object.values(merged).map((b) => ({
+  return Object.values(merged).map((b) => ({
     ...b,
     sessionsUsed: Array.from((sessionsByBaitKey[b.key] || new Map()).values()),
   }))
-  const filteredBaits = baits
-    .filter((b) => filter === 'all' || b.category === filter)
-    .sort((a, b) => b.catches.length - a.catches.length)
+}
+
+export default function BaitsModal({ sessions, baitCatalog, groupId, userId, initialBaitKey, startAdding = false, onCatalogChanged, onRenamePropagate, onRemoveFromRods, onBackfillBaitPhoto, onClose, onOpenCatch, onOpenSession }) {
+  const [selectedKey, setSelectedKey] = useState(initialBaitKey || null)
+  const [adding, setAdding] = useState(startAdding)
+  const [editingCatalogId, setEditingCatalogId] = useState(null)
+
+  const baits = computeBaitsList(sessions, baitCatalog)
   const selected = baits.find((b) => b.key === selectedKey)
 
   async function handleCatalogChanged() {
@@ -115,8 +115,8 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
       }
       if (!window.confirm(`Nástraha "${selected.label}" není nikde použitá. Smazat ji z katalogu?`)) return
       if (selected.catalogEntry) await supabase.from('baits').delete().eq('id', selected.catalogEntry.id)
-      setSelectedKey(null)
       await handleCatalogChanged()
+      onClose()
     }
 
     if (editingCatalogId) {
@@ -143,7 +143,7 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
           <div className="perforation"></div>
           <div className="ticket-body">
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-              <button className="new-btn" onClick={() => setSelectedKey(null)}>← Zpět na nástrahy</button>
+              <button className="new-btn" onClick={onClose}>← Zpět na nástrahy</button>
               {(selected.catalogEntry ? canEditCatalog : true) && (
                 <button className="new-btn" onClick={() => setEditingCatalogId(selected.key)}>✏️ Upravit</button>
               )}
@@ -213,43 +213,26 @@ export default function BaitsModal({ sessions, baitCatalog, groupId, userId, ini
       <AddBaitForm
         groupId={groupId}
         userId={userId}
-        onCancel={() => setAdding(false)}
-        onSaved={async () => { setAdding(false); await handleCatalogChanged() }}
+        onCancel={onClose}
+        onSaved={async () => { setAdding(false); await handleCatalogChanged(); onClose() }}
       />
     )
   }
 
-  // ---------- seznam nástrah ----------
+  // ---------- fallback (normálně se sem nedostaneme -- appka vždycky otevírá
+  // buď konkrétní nástrahu, nebo rovnou formulář na přidání; seznam žije v
+  // postranním panelu, viz Dashboard.jsx renderBaitsList()) ----------
   return (
     <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="ticket" style={{ maxWidth: 440 }}>
+      <div className="ticket" style={{ maxWidth: 380 }}>
         <div className="ticket-top">
           <button className="ticket-close" onClick={onClose}>✕</button>
-          <div className="eyebrow">Přehled</div>
-          <h2>🪱 Nástrahy</h2>
+          <div className="eyebrow">Nástrahy</div>
+          <h2>Nic není vybráno</h2>
         </div>
         <div className="perforation"></div>
         <div className="ticket-body">
-          <button className="new-btn" onClick={() => setAdding(true)} style={{ marginBottom: 14 }}>+ Přidat nástrahu</button>
-
-          <div className="filter-row" style={{ padding: 0, marginBottom: 12 }}>
-            {['all', 'dravec', 'bila'].map((cat) => (
-              <button
-                key={cat}
-                className={`filter-chip ${filter === cat ? `active ${cat}` : ''}`}
-                onClick={() => setFilter(cat)}
-              >
-                {cat === 'all' ? 'Vše' : cat === 'dravec' ? 'Dravci' : 'Bílá ryba'}
-              </button>
-            ))}
-          </div>
-
-          {filteredBaits.length === 0 && <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Zatím žádné.</p>}
-          {filteredBaits.map((b) => (
-            <div key={b.key} className="record-row" onClick={() => setSelectedKey(b.key)}>
-              <div className="record-head"><strong>{b.label}</strong><span className="record-length">{b.catches.length}×</span></div>
-            </div>
-          ))}
+          <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Vyber nástrahu ze seznamu v panelu „🪱 Nástrahy".</p>
         </div>
       </div>
     </div>
