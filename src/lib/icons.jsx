@@ -331,6 +331,42 @@ export function IconLocate({ size = 20, color = 'currentColor' }) {
   )
 }
 
+// Trend tlaku -- roste/klesá/stabilní, barva nese hlavní informaci
+// (zelená/červená/šedá), stejně jako appka měla už dřív s emoji šipkami.
+export function IconPressureTrend({ trend, size = 14 }) {
+  if (trend > 0) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#2E7D46" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M5 16l6-7 4 4 5-6" />
+        <path d="M15 7h5v5" />
+      </svg>
+    )
+  }
+  if (trend < 0) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#B4432E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M5 8l6 7 4-4 5 6" />
+        <path d="M15 17h5v-5" />
+      </svg>
+    )
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="var(--ink-soft)" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+      <path d="M4 12h16" />
+    </svg>
+  )
+}
+
+// "⬆️ Nejnovější" -- stejný organický rukopis jako zbytek sady (mírně
+// nepravidelný tvar, ne dokonalá geometrie), místo obyčejné šipky nahoru.
+export function IconNewest({ size = 20, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2.5c.4 0 .8.2 1 .5l6.5 8.3c.5.6 0 1.5-.8 1.5h-3.7v7.2c0 .7-.6 1.3-1.3 1.3h-3.4c-.7 0-1.3-.6-1.3-1.3v-7.2H5.3c-.8 0-1.3-.9-.8-1.5L11 3c.2-.3.6-.5 1-.5Z" fill={color} />
+    </svg>
+  )
+}
+
 // ---------- fáze měsíce (8 fází, skutečný tvar, ne pořád stejný symbol) ----------
 // Technika: dva stejně velké kruhy přes sebe (osvětlený + "stínový" ve
 // barvě pozadí), oříznuté do kruhu -- offset stínu určuje, kolik měsíce

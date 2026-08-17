@@ -5,7 +5,7 @@ import CatchTicket from './CatchTicket.jsx'
 import HelpModal from './HelpModal.jsx'
 import GalleryModal from './GalleryModal.jsx'
 import BaitsModal, { computeBaitsList } from './BaitsModal.jsx'
-import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconGallery, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconPlay, IconLocate, IconMoonPhase } from '../lib/icons.jsx'
+import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconGallery, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconPlay, IconLocate, IconMoonPhase, IconPressureTrend, IconNewest } from '../lib/icons.jsx'
 import BaitPicker from './BaitPicker.jsx'
 import LocationsModal from './LocationsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
@@ -153,6 +153,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
   const [toast, setToast] = useState(null) // krátké potvrzení "✓ Uloženo" po akci
   const [searchQuery, setSearchQuery] = useState('') // hledání ve výpravách (název, revír, druh, nástraha)
+  const [catchesCategory, setCatchesCategory] = useState('all') // filtr dravec/bílá ryba v panelu Úlovky
 
   useEffect(() => {
     function goOnline() { setIsOnline(true) }
@@ -1300,6 +1301,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   function switchPanel(panel) {
     setActivePanel((p) => (panel === null ? null : (p === panel ? null : panel)))
     setSearchQuery('')
+    setCatchesCategory('all')
     setMobileSheetOpen(true)
   }
 
@@ -1504,7 +1506,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   function allKnownSpecies() {
-    const set = new Set(['Obecně dravci'])
+    const set = new Set()
     sessions.forEach((s) => {
       ;(s.catches || []).forEach((c) => { if (c.species) set.add(c.species.trim()) })
     })
@@ -1654,6 +1656,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       ;(s.catches || []).forEach((c) => all.push({ ...c, sessionRef: s }))
     })
     const filtered = all
+      .filter((c) => catchesCategory === 'all' || c.category === catchesCategory)
       .filter((c) => !q
         || normalizeSearchText(c.species).includes(q)
         || normalizeSearchText(c.bait).includes(q)
@@ -1663,6 +1666,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return (
       <>
         <div className="sb-head"><span>Úlovky</span></div>
+        <div className="filter-row">
+          {['all', 'dravec', 'bila'].map((cat) => (
+            <button
+              key={cat}
+              className={`filter-chip ${catchesCategory === cat ? `active ${cat}` : ''}`}
+              onClick={() => setCatchesCategory(cat)}
+            >
+              {cat === 'all' ? 'Vše' : cat === 'dravec' ? 'Dravci' : 'Bílá ryba'}
+            </button>
+          ))}
+        </div>
         <div style={{ padding: '0 18px 10px' }}>
           <input
             className="text-input"
@@ -1716,7 +1730,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           <div className="sb-toolbar">
             <button className="new-btn" onClick={expandAll}>Rozbalit vše</button>
             <button className="new-btn" onClick={collapseAll}>Sbalit vše</button>
-            <button className="new-btn" onClick={jumpToNewest}>⬆️ Nejnovější</button>
+            <button className="new-btn" onClick={jumpToNewest}><IconNewest size={13} color="var(--water-deep)" /> Nejnovější</button>
           </div>
           <div className="filter-row">
             {['all', 'dravec', 'bila'].map((cat) => (
@@ -1826,9 +1840,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 'var(--fs-sm2)', color: 'var(--ink-soft)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <IconCalendar size={13} /> {activeSession.session_date}{activeSession.time_from ? ` · ${activeSession.time_from}–${activeSession.time_to || '?'}` : ''}
                 </div>
+                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 'var(--fs-xs)', color: 'var(--ink-soft)', marginTop: 2 }}>
+                  Zapsal: {userName(activeSession.user_id)}
+                </div>
                 <div className="weather-row" style={{ marginTop: 8 }}>
                   <div className="w-item"><div className="num">{activeSession.weather_temp_c ?? '—'}°C</div><div className="lab">teplota</div></div>
-                  <div className="w-item"><div className="num">{activeSession.weather_pressure_hpa ?? '—'} hPa{activeSession.weather_pressure_trend > 0 ? ' ↗️' : activeSession.weather_pressure_trend < 0 ? ' ↘️' : ''}</div><div className="lab">tlak</div></div>
+                  <div className="w-item"><div className="num">{activeSession.weather_pressure_hpa ?? '—'} hPa <IconPressureTrend trend={activeSession.weather_pressure_trend} size={12} /></div><div className="lab">tlak</div></div>
                   <div className="w-item"><div className="num">{activeSession.weather_wind || '—'}</div><div className="lab">vítr</div></div>
                 </div>
                 {activeSession.water_stations?.length > 0 ? (
@@ -2681,7 +2698,7 @@ function StatsModal({ sessions, members, userColor, onClose }) {
                   <div className="stats-species" style={{ marginTop: 4 }}>
                     {trendRows.map(([trend, n]) => (
                       <span className="bait-chip" key={trend}>
-                        {trend === 'roste' ? '↗️' : trend === 'klesá' ? '↘️' : '➡️'} {trend} — {n}×
+                        <IconPressureTrend trend={trend === 'roste' ? 1 : trend === 'klesá' ? -1 : 0} size={13} /> {trend} — {n}×
                       </span>
                     ))}
                   </div>
@@ -2768,7 +2785,24 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
             {AREA_TYPES.includes(draft.type) && (
               <>
                 <label className="field-label">Cíl (nepovinné)</label>
-                <input className="text-input" value={draft.target_species || ''} onChange={(e) => set('target_species', e.target.value)} placeholder="Obecně dravci, nebo konkrétní druh" list="known-species" autoComplete="off" />
+                <label className="location-check-row" style={{ marginBottom: 6 }}>
+                  <input
+                    type="checkbox"
+                    checked={draft.target_species === 'Obecně dravci'}
+                    onChange={(e) => set('target_species', e.target.checked ? 'Obecně dravci' : '')}
+                  />
+                  Obecně dravci
+                </label>
+                {draft.target_species !== 'Obecně dravci' && (
+                  <input
+                    className="text-input"
+                    value={draft.target_species || ''}
+                    onChange={(e) => set('target_species', e.target.value)}
+                    placeholder="nebo napiš konkrétní druh…"
+                    list="known-species"
+                    autoComplete="off"
+                  />
+                )}
               </>
             )}
             <div className="input-row">
@@ -2797,7 +2831,7 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
             )}
 
             <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy}>
-              {weatherBusy ? 'Zjišťuji…' : '🌤 Přepočítat podmínky pro nové datum'}
+              {weatherBusy ? 'Zjišťuji…' : <><IconRefresh size={13} /> Přepočítat podmínky pro nové datum</>}
             </button>
             {weatherError && <p className="error-text">{weatherError}</p>}
             {draft.waterStations?.length > 0 ? (
@@ -3139,7 +3173,24 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
             {AREA_TYPES.includes(draft.type) && (
               <>
                 <label className="field-label">Cíl (nepovinné)</label>
-                <input className="text-input" value={draft.target_species || ''} onChange={(e) => set('target_species', e.target.value)} placeholder="Obecně dravci, nebo konkrétní druh" list="known-species" autoComplete="off" />
+                <label className="location-check-row" style={{ marginBottom: 6 }}>
+                  <input
+                    type="checkbox"
+                    checked={draft.target_species === 'Obecně dravci'}
+                    onChange={(e) => set('target_species', e.target.checked ? 'Obecně dravci' : '')}
+                  />
+                  Obecně dravci
+                </label>
+                {draft.target_species !== 'Obecně dravci' && (
+                  <input
+                    className="text-input"
+                    value={draft.target_species || ''}
+                    onChange={(e) => set('target_species', e.target.value)}
+                    placeholder="nebo napiš konkrétní druh…"
+                    list="known-species"
+                    autoComplete="off"
+                  />
+                )}
               </>
             )}
             <div className="input-row">
@@ -3158,7 +3209,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
             </div>
 
             <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy} style={{ marginTop: 10 }}>
-              {weatherBusy ? 'Zjišťuji…' : '🌤 Doplnit podmínky automaticky'}
+              {weatherBusy ? 'Zjišťuji…' : <><IconRefresh size={13} /> Doplnit podmínky automaticky</>}
             </button>
             {weatherError && <p className="error-text">{weatherError}</p>}
             {draft.waterStations?.length > 0 ? (
@@ -3327,7 +3378,7 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
               </div>
             </div>
             <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy} style={{ marginBottom: 8 }}>
-              {weatherBusy ? 'Zjišťuji…' : '🌤 Dopočítat podmínky pro tento čas'}
+              {weatherBusy ? 'Zjišťuji…' : <><IconRefresh size={13} /> Dopočítat podmínky pro tento čas</>}
             </button>
             {weatherError && <p className="error-text">{weatherError}</p>}
             {draft.weather_temp_c != null && (

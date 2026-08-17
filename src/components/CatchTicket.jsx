@@ -4,7 +4,7 @@ import { uploadPhoto } from '../lib/storage.js'
 import { moonPhaseName, fetchWeather } from '../lib/weather.js'
 import { fetchWaterConditions, findNearestStations, WATER_PRECISION_LABEL, SPA_LEVEL_INFO } from '../lib/hydrology.js'
 import BaitPicker from './BaitPicker.jsx'
-import { IconClose, IconEdit, IconTrash, IconCamera, IconRevir, IconCalendar, IconThermometer, IconGauge, IconWind, IconMoonPhase, IconDroplet } from '../lib/icons.jsx'
+import { IconClose, IconEdit, IconTrash, IconCamera, IconRevir, IconCalendar, IconThermometer, IconGauge, IconWind, IconMoonPhase, IconDroplet, IconRefresh, IconPressureTrend } from '../lib/icons.jsx'
 
 const CATEGORY_COLOR = { dravec: '#5C7A85', bila: '#C4A572' }
 
@@ -217,7 +217,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                   <span className="cond-chip"><IconThermometer size={12} /> {c.weather_temp_c ?? session?.weather_temp_c ?? '—'}°C</span>
                   <span className="cond-chip">
                     <IconGauge size={12} /> {c.weather_pressure_hpa ?? session?.weather_pressure_hpa ?? '—'} hPa
-                    {(() => { const t = c.weather_pressure_trend ?? session?.weather_pressure_trend; return t > 0 ? ' ↗️' : t < 0 ? ' ↘️' : '' })()}
+                    <IconPressureTrend trend={c.weather_pressure_trend ?? session?.weather_pressure_trend} size={12} />
                   </span>
                   <span className="cond-chip"><IconWind size={12} /> {c.weather_wind || session?.weather_wind || '—'}</span>
                   <span className="cond-chip">{(() => { const phase = moonPhaseName(session?.session_date || c.caught_at?.slice(0, 10)); return <><IconMoonPhase phase={phase} size={13} /> {phase}</> })()}</span>
@@ -287,7 +287,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                 <input type="file" accept="image/*" hidden onChange={(e) => setForm({ ...form, photoFile: e.target.files[0] })} />
               </label>
               <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy} style={{ marginTop: 8 }}>
-                {weatherBusy ? 'Zjišťuji…' : '🌤 Dopočítat podmínky pro tento čas'}
+                {weatherBusy ? 'Zjišťuji…' : <><IconRefresh size={13} /> Dopočítat podmínky pro tento čas</>}
               </button>
               {weatherError && <p className="error-text">{weatherError}</p>}
               {form.weather_temp_c != null && (
