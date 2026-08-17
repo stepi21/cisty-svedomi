@@ -2891,7 +2891,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
   }
 
   useEffect(() => {
-    if (draft.date && draft.temp === '') { handleFetchWeather() }
+    if (draft.date) { handleFetchWeather() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft.date])
 
@@ -3087,7 +3087,7 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
   }
 
   useEffect(() => {
-    if (draft.time && draft.weather_temp_c == null) { handleFetchWeather() }
+    if (draft.time) { handleFetchWeather() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft.time])
 
