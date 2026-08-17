@@ -1263,12 +1263,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       if (error) { alert(error.message); return }
       // Kaskáda počasí i na úlovky z téhle výpravy -- appka dřív nechávala úlovky
       // na starých hodnotách (např. starý směr větru), i když se výprava přepočítala.
-      // Vodní stav se sem záměrně nepropisuje -- úlovek může mít vlastní přesnější
-      // stanici (viz "📍 Revír" u výpravy s víc revíry).
-      await supabase.from('catches').update({
-        weather_temp_c: e.temp || null, weather_pressure_hpa: e.pressure || null, weather_pressure_trend: e.pressureTrend ?? null,
-        weather_wind: e.wind || null, weather_desc: e.desc || null,
-      }).eq('session_id', e.id)
+      // Prochází úlovky jednotlivě (stejný ověřený vzor jako backfillBaitPhoto/
+      // renameBaitEverywhere) místo jednoho hromadného UPDATE, ať se to spolehlivě
+      // propíše i při víc úlovcích. Vodní stav se sem záměrně nepropisuje -- úlovek
+      // může mít vlastní přesnější stanici (viz "📍 Revír" u výpravy s víc revíry).
+      const sessionCatches = sessions.find((s) => s.id === e.id)?.catches || []
+      for (const c of sessionCatches) {
+        await supabase.from('catches').update({
+          weather_temp_c: e.temp || null, weather_pressure_hpa: e.pressure || null, weather_pressure_trend: e.pressureTrend ?? null,
+          weather_wind: e.wind || null, weather_desc: e.desc || null,
+        }).eq('id', c.id)
+      }
       setEditingSession(null)
       await loadSessions()
       showToast('✓ Uloženo')
@@ -1572,6 +1577,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // nástrahy skutečně zapsané u prutů TÉTO konkrétní výpravy.
   function sessionBaitOptions(session) {
     const map = {}
+    const guessCategory = TYPE_CATEGORY[session?.type] || null
     ;(session?.rods || []).forEach((r) => {
       const entries = []
       ;(r.baits || []).forEach((b) => { if (b.name) entries.push({ name: b.name.trim(), photo_url: b.photo_url || null }) })
@@ -1579,7 +1585,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       entries.forEach(({ name, photo_url }) => {
         const key = name.toLowerCase()
         if (!key || map[key]) return
-        map[key] = { id: key, name, photo_url }
+        map[key] = { id: key, name, photo_url, category: guessCategory }
       })
     })
     return Object.values(map).sort((a, b) => a.name.localeCompare(b.name))
@@ -2172,7 +2178,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           )}
 
           {addAreaStep === 'choose' && (
-            <div className="type-picker">
+            <div className="type-picker" style={{ zIndex: 700 }}>
               <div className="type-picker-title">Jak přidat oblast?</div>
               <button className="type-btn" onClick={() => setAddAreaStep('catalog')}><IconRevir size={14} /> Z katalogu</button>
               <button className="type-btn" onClick={startAddAreaManualFromChoice}><IconEdit size={13} /> Naklikat novou na mapě</button>
@@ -2181,7 +2187,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           )}
 
           {addAreaStep === 'catalog' && (
-            <div className="type-picker" style={{ minWidth: 260 }}>
+            <div className="type-picker" style={{ minWidth: 260, zIndex: 700 }}>
               <div className="type-picker-title">Vyber místa z katalogu</div>
               {locationsCatalog.filter((l) => l.area).length === 0 && <p className="hint-text">Katalog zatím nemá žádnou vyšrafovanou oblast.</p>}
               <div className="location-checklist">
