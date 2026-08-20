@@ -149,6 +149,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // celé editace místa se resetuje, ať appka omylem nenaváže na cizí/starý
   // kontext z úplně jiného místa.
   const lastRiverCutRef = useRef(null)                           // {cutPoint, dirPoints} konce poslední vygenerované plochy
+  const lastSnapWhichRef = useRef('end')                          // 'start' | 'end' -- který konec to je, potřeba pro správný očekávaný úhel při kontrole navázání
   const sessionFirstStartCutRef = useRef(null)                   // start řezu PRVNÍ plochy vygenerované v týhle živé editaci -- uloží se s revírem, ať jde navázat i z jeho začátku
   const [riverSnapAvailable, setRiverSnapAvailable] = useState(false)
   const [riverSnapEnabled, setRiverSnapEnabled] = useState(true)
@@ -898,6 +899,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // nenabídne navázání na kontext z úplně jiného, nesouvisejícího revíru.
   function resetRiverSnapMemory() {
     lastRiverCutRef.current = null
+    lastSnapWhichRef.current = 'end'
     sessionFirstStartCutRef.current = null
     setRiverSnapAvailable(false)
     setSnapSourceLabel(null)
@@ -912,6 +914,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const cut = location.edge_cuts?.[which]
     if (!cut) return
     lastRiverCutRef.current = cut
+    lastSnapWhichRef.current = which
     setRiverSnapAvailable(true)
     setRiverSnapEnabled(true)
     setSnapSourceLabel(`${location.name} (${which === 'start' ? 'začátek' : 'konec'})`)
@@ -1206,8 +1209,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const controller = new AbortController()
     riverAbortRef.current = controller
     // Bezpečnostní pojistka navíc k ručnímu Zrušit -- kdyby appka i přes
-    // vlastní serverovou logiku "visela" nepřiměřeně dlouho.
-    const safetyTimeout = setTimeout(() => controller.abort(), 45000)
+    // vlastní serverovou logiku "visela" nepřiměřeně dlouho. Nastaveno těsně
+    // nad worst-case proxy (4 servery x 6s = ~24s), ne o moc víc.
+    const safetyTimeout = setTimeout(() => controller.abort(), 25000)
     try {
       let useSnap = riverSnapEnabled && lastRiverCutRef.current
       let snapSkippedReason = null
@@ -1217,9 +1221,20 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       // porovná ho se směrem PRVNÍHO úseku téhle nové čáry. Velký rozdíl
       // (sousední revír míří jinam -- soutok, jiná zákruta) by jinak vedl
       // k pokřivené/uříznuté ploše, aniž by appka na to jakkoli upozornila.
+      //
+      // DŮLEŽITÉ: očekávaný úhel se liší podle toho, jestli se navazuje na
+      // START, nebo END sousedního revíru -- navázání na KONEC znamená
+      // pokračovat STEJNÝM směrem (očekávané ~0°), zatímco navázání na
+      // ZAČÁTEK znamená prodloužit revír "nazpátek", proti tomu, jak byl
+      // původně nakreslený (očekávané ~180°, ne 0°!). Bez týhle úvahy by
+      // kontrola mylně odmítala i naprosto správná navázání na začátek.
       if (useSnap && riverLineDraft.points.length >= 2) {
         const ownDir = [riverLineDraft.points[0], riverLineDraft.points[1]]
-        const angle = angleBetweenDirectionsDegrees(lastRiverCutRef.current.dirPoints, ownDir)
+        const storedDir = lastRiverCutRef.current.dirPoints
+        const referenceDir = lastSnapWhichRef.current === 'start'
+          ? [storedDir[1], storedDir[0]] // otočeno -- u startu je "vpřed" logicky opačný směr
+          : storedDir
+        const angle = angleBetweenDirectionsDegrees(referenceDir, ownDir)
         if (angle > 45) {
           useSnap = false
           snapSkippedReason = `Zvolený revír míří jiným směrem (rozdíl ${Math.round(angle)}°) — navázání appka přeskočila, ať plochu nepokřiví. Vygenerováno normálně.`
@@ -1242,7 +1257,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         if (!sessionFirstStartCutRef.current) sessionFirstStartCutRef.current = startCut
         // Konec téhle plochy si appka zapamatuje -- kdyby uživatel hned
         // navazoval další plochou, půjde se na ni napojit stejně přesně.
+        // (Vždy jde sémanticky o "konec" -- proto lastSnapWhichRef 'end'.)
         lastRiverCutRef.current = endCut
+        lastSnapWhichRef.current = 'end'
         setRiverSnapAvailable(!!endCut)
         // Nemerguje se rovnou do areaDraft -- appka nejdřív ukáže výsledek
         // a nechá potvrdit "Použít", ať se needěje neprošená rovnou do

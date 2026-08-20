@@ -383,6 +383,19 @@ DOLADĚNÍ UX AUTO-KRESLENÍ PODLE BŘEHU (na základě zkoušení v provozu)
   úspěch nezvyšuje (viz poznámka o blokovaných cloudových IP rozsazích
   výše), jen prodlužuje čekání do zjištění neúspěchu. 4 servery x 6s =
   max ~24s worst-case.
+- OPRAVA REGRESE: kontrola úhlu z předchozí dávky (viz výše) nerozlišovala
+  navázání na START vs. END sousedního revíru -- navázání na ZAČÁTEK
+  přirozeně znamená prodloužit revír "nazpátek", proti tomu, jak byl
+  původně nakreslený (správně vychází úhel ~180°, ne ~0°!), zatímco
+  navázání na KONEC znamená pokračovat stejným směrem (~0°). Appka to
+  nerozlišovala a mylně odmítala i naprosto správná navázání na začátek
+  (např. rozdíl 167° ≈ 180° = ve skutečnosti v pořádku). Přidán
+  lastSnapWhichRef ('start'/'end'), podle kterého se očekávaný úhel
+  před kontrolou otočí (referenceDir = otočené dirPoints u 'start').
+- OPRAVA: klientská bezpečnostní pojistka (safetyTimeout v generateRiverArea)
+  zůstala na 45s i po zkrácení proxy timeoutu na 6s/server (4x6s=~24s
+  worst-case) -- reálně tak mohlo čekání trvat výrazně déle, než dávalo
+  smysl. Zkráceno na 25s (těsně nad nový worst-case).
 
 ZMĚNY PROTI PŘEDCHOZÍ DÁVCE (oprava buttonů, oprava párování úlovků,
 vazba polygon<->katalog, přepínač Revíry)
