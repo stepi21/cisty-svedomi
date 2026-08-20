@@ -149,7 +149,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // celé editace místa se resetuje, ať appka omylem nenaváže na cizí/starý
   // kontext z úplně jiného místa.
   const lastRiverCutRef = useRef(null)                           // {cutPoint, dirPoints} konce poslední vygenerované plochy
-  const lastSnapWhichRef = useRef('end')                          // 'start' | 'end' -- který konec to je, potřeba pro správný očekávaný úhel při kontrole navázání
   const sessionFirstStartCutRef = useRef(null)                   // start řezu PRVNÍ plochy vygenerované v týhle živé editaci -- uloží se s revírem, ať jde navázat i z jeho začátku
   const [riverSnapAvailable, setRiverSnapAvailable] = useState(false)
   const [riverSnapEnabled, setRiverSnapEnabled] = useState(true)
@@ -560,53 +559,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     }
   }
 
-  // Hrubý odhad vzdálenosti v metrech mezi dvěma body {lat,lng} -- stačí na
-  // řazení/filtrování "co je blízko", není potřeba přesná geodetická formule.
+  // Hrubý odhad vzdálenosti v metrech mezi dvěma body {lat,lng} -- používá
+  // se JEN na řazení/výpis v seznamu navázání ("nejbližší první"), nemá
+  // žádný vliv na to, jak appka navázání samo geometricky zpracuje.
   function roughDistanceMeters(a, b) {
     const dLat = (a.lat - b.lat) * 111320
     const midLat = (a.lat + b.lat) / 2
     const dLng = (a.lng - b.lng) * 111320 * Math.cos((midLat * Math.PI) / 180)
     return Math.sqrt(dLat * dLat + dLng * dLng)
-  }
-
-  // Úhel (ve stupních) mezi směrem uloženého řezu sousedního revíru a
-  // směrem PRVNÍHO úseku právě kreslené čáry -- appka podle tohohle pozná,
-  // jestli navázání dává geometrický smysl (revír pokračuje +- stejným
-  // směrem), nebo jestli by nasazení cizího sklonu řezu jen pokřivilo
-  // výslednou plochu (např. sousední revír míří jinam -- soutok, jiná
-  // zákruta apod.).
-  function angleBetweenDirectionsDegrees(dirPointsA, dirPointsB) {
-    function toVec(pts) {
-      const midLat = (pts[0].lat + pts[1].lat) / 2
-      const dLat = (pts[1].lat - pts[0].lat) * 111320
-      const dLng = (pts[1].lng - pts[0].lng) * 111320 * Math.cos((midLat * Math.PI) / 180)
-      const len = Math.sqrt(dLat * dLat + dLng * dLng) || 1
-      return [dLat / len, dLng / len]
-    }
-    const [a1, a2] = toVec(dirPointsA)
-    const [b1, b2] = toVec(dirPointsB)
-    const dot = Math.max(-1, Math.min(1, a1 * b1 + a2 * b2))
-    return (Math.acos(dot) * 180) / Math.PI
-  }
-
-  // Vrátí konce (začátek/konec) katalogových revírů, které mají uložený řez
-  // A JSOU BLÍZKO danému referenčnímu bodu (typicky první bod rozkreslované
-  // čáry) -- appka tak nenabízí navázání na vzdálený, nesouvisející revír, a
-  // navíc u revíru nabídne jen ten konkrétní konec, co je fakticky nablízku
-  // (ne oba, kdy by druhý byl matoucí a geograficky nesmyslný).
-  function getNearbyCatalogSnaps(referencePoint, maxDistanceMeters = 3000) {
-    if (!referencePoint) return []
-    const results = []
-    locationsCatalog.forEach((l) => {
-      if (!l.edge_cuts) return
-      ;['start', 'end'].forEach((which) => {
-        const cut = l.edge_cuts[which]
-        if (!cut) return
-        const dist = roughDistanceMeters(referencePoint, cut.cutPoint)
-        if (dist <= maxDistanceMeters) results.push({ location: l, which, distance: dist })
-      })
-    })
-    return results.sort((a, b) => a.distance - b.distance)
   }
 
   function focusOnPoint(lat, lng) {
@@ -899,7 +859,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // nenabídne navázání na kontext z úplně jiného, nesouvisejícího revíru.
   function resetRiverSnapMemory() {
     lastRiverCutRef.current = null
-    lastSnapWhichRef.current = 'end'
     sessionFirstStartCutRef.current = null
     setRiverSnapAvailable(false)
     setSnapSourceLabel(null)
@@ -914,7 +873,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const cut = location.edge_cuts?.[which]
     if (!cut) return
     lastRiverCutRef.current = cut
-    lastSnapWhichRef.current = which
     setRiverSnapAvailable(true)
     setRiverSnapEnabled(true)
     setSnapSourceLabel(`${location.name} (${which === 'start' ? 'začátek' : 'konec'})`)
@@ -1233,9 +1191,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         if (!sessionFirstStartCutRef.current) sessionFirstStartCutRef.current = startCut
         // Konec téhle plochy si appka zapamatuje -- kdyby uživatel hned
         // navazoval další plochou, půjde se na ni napojit stejně přesně.
-        // (Vždy jde sémanticky o "konec" -- proto lastSnapWhichRef 'end'.)
         lastRiverCutRef.current = endCut
-        lastSnapWhichRef.current = 'end'
         setRiverSnapAvailable(!!endCut)
         // Nemerguje se rovnou do areaDraft -- appka nejdřív ukáže výsledek
         // a nechá potvrdit "Použít", ať se needěje neprošená rovnou do
@@ -2631,20 +2587,34 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                       </label>
                     </>
                   )}
-                  {!riverBusy && getNearbyCatalogSnaps(riverLineDraft.points[0]).length > 0 && (
+                  {!riverBusy && locationsCatalog.some((l) => l.edge_cuts && (l.edge_cuts.start || l.edge_cuts.end)) && (
                     <button
                       type="button" className="new-btn" style={{ margin: '2px 0 4px', width: '100%', justifyContent: 'center', color: '#fff', borderColor: 'rgba(255,255,255,.4)' }}
                       onClick={() => setShowCatalogSnapPicker((v) => !v)}
-                    >{showCatalogSnapPicker ? 'Zavřít výběr revíru' : 'Navázat na revír v okolí'}</button>
+                    >{showCatalogSnapPicker ? 'Zavřít výběr revíru' : 'Navázat na revír z katalogu'}</button>
                   )}
                   {showCatalogSnapPicker && (
-                    <div style={{ maxHeight: 140, overflowY: 'auto', background: 'rgba(0,0,0,.15)', borderRadius: 8, padding: 6, margin: '0 0 6px' }}>
-                      {getNearbyCatalogSnaps(riverLineDraft.points[0]).map(({ location: l, which, distance }) => (
-                        <div key={`${l.id}-${which}`} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', fontSize: 11.5, color: '#fff' }}>
-                          <span style={{ flex: 1, textAlign: 'left' }}>{l.name} <span style={{ opacity: .6 }}>({Math.round(distance)} m)</span></span>
-                          <button type="button" className="new-btn" style={{ color: '#fff', borderColor: 'rgba(255,255,255,.4)' }} onClick={() => pickCatalogSnap(l, which)}>Navázat</button>
-                        </div>
-                      ))}
+                    <div style={{ maxHeight: 160, overflowY: 'auto', background: 'rgba(0,0,0,.15)', borderRadius: 8, padding: 6, margin: '0 0 6px' }}>
+                      {locationsCatalog
+                        .flatMap((l) => ['start', 'end']
+                          .filter((which) => l.edge_cuts?.[which])
+                          .map((which) => ({
+                            location: l,
+                            which,
+                            distance: riverLineDraft.points[0]
+                              ? roughDistanceMeters(riverLineDraft.points[0], l.edge_cuts[which].cutPoint)
+                              : null,
+                          })))
+                        .sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity))
+                        .map(({ location: l, which, distance }) => (
+                          <div key={`${l.id}-${which}`} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', fontSize: 11.5, color: '#fff' }}>
+                            <span style={{ flex: 1, textAlign: 'left' }}>
+                              {l.name} — <strong>{which === 'start' ? 'Začátek' : 'Konec'}</strong>
+                              {distance != null && <span style={{ opacity: .6 }}> ({Math.round(distance)} m)</span>}
+                            </span>
+                            <button type="button" className="new-btn" style={{ color: '#fff', borderColor: 'rgba(255,255,255,.4)' }} onClick={() => pickCatalogSnap(l, which)}>Navázat</button>
+                          </div>
+                        ))}
                     </div>
                   )}
                   {riverBusy && <p className="hint-text" style={{ margin: '4px 0', fontSize: 11.5 }}>Zjišťuji tvar vody z OSM dat…</p>}
