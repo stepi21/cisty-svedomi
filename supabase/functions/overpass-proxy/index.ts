@@ -14,6 +14,14 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 // stejným fallbackem na záložní server jako dřív, jen teď na straně
 // serveru místo v prohlížeči, kde na CORS vůbec nezáleží.
 //
+// DŮLEŽITÉ OMEZENÍ (zjištěno v provozu): Overpass API provozovatelé kvůli
+// zneužívání v minulosti zablokovali части rozsahů Azure/AWS (viz OSM wiki,
+// Overpass API/status) -- cloudové IP adresy (kam spadá i Supabase Edge
+// Functions/Deno Deploy) tak mohou dostávat horší zacházení (502/blokace)
+// než běžný prohlížeč z domácí IP adresy. Proto appka zkouší víc zrcadel
+// a s prodlevou opakuje -- ale stoprocentní spolehlivost tohle nezaručí,
+// je to vlastnost veřejné bezplatné služby, ne chyba v appce.
+//
 // Bezpečnost: appka posílá jen samotný OverpassQL dotaz (text) v těle
 // požadavku -- žádná autentizace navíc není potřeba, jde o veřejná OSM
 // data (stejná otevřenost jako u chmi-proxy).
@@ -22,7 +30,22 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 const OVERPASS_SERVERS = [
   "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://overpass.openstreetmap.ru/api/interpreter",
 ];
+
+// Slušné představení appky -- některé instance берou popisný User-Agent
+// v potaz při rozhodování, koho omezit přednostně (žádná záruka, ale
+// nemá to nevýhody).
+const USER_AGENT = "CistySvedomiApp/1.0 (rybarsky denik, kontakt v repozitari)";
+
+// Kódy, u kterých má smysl to na tom samém serveru zkusit ještě jednou --
+// typicky dočasné přetížení serveru, ne chyba v dotazu samotném.
+const RETRYABLE_STATUSES = [502, 503, 504];
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -57,28 +80,40 @@ export default {
 
     let lastError: string | null = null;
     for (const server of OVERPASS_SERVERS) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 25000);
-        const upstream = await fetch(server, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: "data=" + encodeURIComponent(query),
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        if (!upstream.ok) {
-          lastError = `server odpověděl chybou ${upstream.status}`;
-          continue; // zkusí další server v seznamu
+      // Dva pokusy na tenhle server -- druhý jen pro dočasné přetížení
+      // (502/503/504), ne pro jiné chyby (u těch nemá smysl čekat a
+      // zkoušet znovu na tom samém serveru).
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 25000);
+          const upstream = await fetch(server, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              "User-Agent": USER_AGENT,
+            },
+            body: "data=" + encodeURIComponent(query),
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          if (!upstream.ok) {
+            lastError = `server odpověděl chybou ${upstream.status}`;
+            if (attempt === 1 && RETRYABLE_STATUSES.includes(upstream.status)) {
+              await sleep(2000);
+              continue; // druhý pokus na tom samém serveru
+            }
+            break; // na tenhle server appka dál nespoléhá, jde na další v seznamu
+          }
+          const text = await upstream.text();
+          return new Response(text, {
+            status: 200,
+            headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+          });
+        } catch (err) {
+          lastError = err instanceof Error ? err.message : String(err);
+          break; // síťová/timeout chyba -- zkusí rovnou další server, ne tenhle znovu
         }
-        const text = await upstream.text();
-        return new Response(text, {
-          status: 200,
-          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-        });
-      } catch (err) {
-        lastError = err instanceof Error ? err.message : String(err);
-        // zkusí další server v seznamu
       }
     }
 

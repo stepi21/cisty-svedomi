@@ -186,6 +186,22 @@ ZMĚNY PROTI PŘEDCHOZÍ DÁVCE (auto-tvar revíru podle břehu, velké úseky p
    (stejně jako chmi-proxy) -- ne přes GitHub/Vercel, ale přes Supabase
    CLI (`supabase functions deploy overpass-proxy`) nebo ručně v
    Supabase dashboardu (Edge Functions -> Deploy new function).
+   Proxy navíc na každém ze dvou serverů zkusí dotaz 2x s prodlevou 2s,
+   pokud server odpoví dočasnou chybou (502/503/504 -- přetížení) --
+   veřejné Overpass servery na tohle občas narazí i samy o sobě, nejde
+   o chybu v appce ani v proxy.
+   DŮLEŽITÉ ZJIŠTĚNÍ Z PROVOZU: Overpass provozovatelé v minulosti kvůli
+   zneužívání zablokovali části IP rozsahů Azure/AWS (viz OSM wiki,
+   "Overpass API/status") -- cloudové IP adresy (kam spadá i Supabase
+   Edge Functions/Deno Deploy, na kterém overpass-proxy běží) tak můžou
+   dostávat horší zacházení (víc 502) než běžný prohlížeč z domácí IP.
+   Appka proto zkouší 4 zrcadla místo 2 (přidáno overpass.private.coffee
+   a overpass.openstreetmap.ru) a posílá popisný User-Agent, ale
+   stoprocentní spolehlivost přes proxy tohle nezaručí -- je to vlastnost
+   veřejné bezplatné služby, ne chyba v appce. Pokud se 502 objevuje
+   často i po těchto úpravách, další možnost do budoucna je vlastní
+   placená Overpass instance (např. Geofabrik) nebo přímé volání zase
+   z prohlížeče jen jako fallback, když proxy selže (kombinace obojího).
    Dostupné všude, kde appka dřív nabízela jen ruční kreslení: katalog
    míst ("+ Přidat místo"), nová výprava typu přívlač, "+ Přidat oblast"
    u rozepsané i uložené výpravy, "Upravit oblasti" u katalogového místa.
