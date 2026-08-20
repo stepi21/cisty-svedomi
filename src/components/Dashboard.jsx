@@ -1210,36 +1210,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     riverAbortRef.current = controller
     // Bezpečnostní pojistka navíc k ručnímu Zrušit -- kdyby appka i přes
     // vlastní serverovou logiku "visela" nepřiměřeně dlouho. Nastaveno těsně
-    // nad worst-case proxy (4 servery x 6s = ~24s), ne o moc víc.
-    const safetyTimeout = setTimeout(() => controller.abort(), 25000)
+    // nad worst-case proxy (4 servery x 4s = ~16s), ne o moc víc.
+    const safetyTimeout = setTimeout(() => controller.abort(), 18000)
     try {
-      let useSnap = riverSnapEnabled && lastRiverCutRef.current
-      let snapSkippedReason = null
+      const useSnap = riverSnapEnabled && lastRiverCutRef.current
       const snapLabelForThisGeneration = useSnap ? snapSourceLabel : null
-
-      // Než appka nasadí cizí sklon řezu, ověří, jestli vůbec dává smysl --
-      // porovná ho se směrem PRVNÍHO úseku téhle nové čáry. Velký rozdíl
-      // (sousední revír míří jinam -- soutok, jiná zákruta) by jinak vedl
-      // k pokřivené/uříznuté ploše, aniž by appka na to jakkoli upozornila.
-      //
-      // DŮLEŽITÉ: očekávaný úhel se liší podle toho, jestli se navazuje na
-      // START, nebo END sousedního revíru -- navázání na KONEC znamená
-      // pokračovat STEJNÝM směrem (očekávané ~0°), zatímco navázání na
-      // ZAČÁTEK znamená prodloužit revír "nazpátek", proti tomu, jak byl
-      // původně nakreslený (očekávané ~180°, ne 0°!). Bez týhle úvahy by
-      // kontrola mylně odmítala i naprosto správná navázání na začátek.
-      if (useSnap && riverLineDraft.points.length >= 2) {
-        const ownDir = [riverLineDraft.points[0], riverLineDraft.points[1]]
-        const storedDir = lastRiverCutRef.current.dirPoints
-        const referenceDir = lastSnapWhichRef.current === 'start'
-          ? [storedDir[1], storedDir[0]] // otočeno -- u startu je "vpřed" logicky opačný směr
-          : storedDir
-        const angle = angleBetweenDirectionsDegrees(referenceDir, ownDir)
-        if (angle > 45) {
-          useSnap = false
-          snapSkippedReason = `Zvolený revír míří jiným směrem (rozdíl ${Math.round(angle)}°) — navázání appka přeskočila, ať plochu nepokřiví. Vygenerováno normálně.`
-        }
-      }
+      const snapSkippedReason = null
 
       const { areas: polygons, startCut, endCut } = await buildRiverAreasFromLine(riverLineDraft.points, {
         corridorWidthMeters: Number(riverCorridorWidth) || 80,

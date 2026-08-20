@@ -378,24 +378,33 @@ DOLADĚNÍ UX AUTO-KRESLENÍ PODLE BŘEHU (na základě zkoušení v provozu)
   popisek pro AKTUÁLNÍ generování zachytí do riverConfirm.usedSnapLabel
   v okamžiku úspěchu, a až POTÉ se snapSourceLabel aktualizuje pro
   případné další navazování v řadě.
-- Timeout na jeden Overpass server v proxy dál zkrácen z 10s na 6s --
-  funkční odpověď přijde rychle, nebo vůbec, delší čekání šanci na
-  úspěch nezvyšuje (viz poznámka o blokovaných cloudových IP rozsazích
-  výše), jen prodlužuje čekání do zjištění neúspěchu. 4 servery x 6s =
-  max ~24s worst-case.
-- OPRAVA REGRESE: kontrola úhlu z předchozí dávky (viz výše) nerozlišovala
-  navázání na START vs. END sousedního revíru -- navázání na ZAČÁTEK
-  přirozeně znamená prodloužit revír "nazpátek", proti tomu, jak byl
-  původně nakreslený (správně vychází úhel ~180°, ne ~0°!), zatímco
-  navázání na KONEC znamená pokračovat stejným směrem (~0°). Appka to
-  nerozlišovala a mylně odmítala i naprosto správná navázání na začátek
-  (např. rozdíl 167° ≈ 180° = ve skutečnosti v pořádku). Přidán
-  lastSnapWhichRef ('start'/'end'), podle kterého se očekávaný úhel
-  před kontrolou otočí (referenceDir = otočené dirPoints u 'start').
-- OPRAVA: klientská bezpečnostní pojistka (safetyTimeout v generateRiverArea)
-  zůstala na 45s i po zkrácení proxy timeoutu na 6s/server (4x6s=~24s
-  worst-case) -- reálně tak mohlo čekání trvat výrazně déle, než dávalo
-  smysl. Zkráceno na 25s (těsně nad nový worst-case).
+- Timeout na jeden Overpass server v proxy dál zkrácen na 4s (postupně
+  10s -> 6s -> 4s podle zpětné vazby z provozu) -- funkční odpověď
+  přijde rychle, nebo vůbec, delší čekání šanci na úspěch nezvyšuje
+  (viz poznámka o blokovaných cloudových IP rozsazích výše), jen
+  prodlužuje čekání do zjištění neúspěchu. 4 servery x 4s = max ~16s
+  worst-case. Klientská bezpečnostní pojistka odpovídajícně na 18s
+  (bývala 45s, pak 25s -- pokaždé zapomenutá stará hodnota po zkrácení
+  proxy timeoutu, teď by se na to nemělo zapomenout znovu).
+- OPRAVA (zásadní, geometrická): kontrola úhlu z předchozí dávky (viz
+  ZMĚNY výše v tomhle souboru) se ukázala jako nedostatečná -- i po
+  opravě rozlišení start/end (očekávaný úhel ~0° vs ~180°) appka
+  narazila na případ, kdy navázání PROŠLO kontrolou (úhel byl v
+  toleranci), ale výsledná plocha byla stejně jen malý útržek u
+  začátku, bez prodloužení až k druhému bodu čáry -- i menší odchylka
+  ve směru dokáže řeznou rovinu natočit natolik nakřivo, že usekne
+  drtivou většinu correktně vygenerované plochy. ŘEŠENÍ (v riverShape.js,
+  buildRiverAreasFromLine): appka při navázání na sousední revír už
+  NEPŘEBÍRÁ JEHO SMĚR vůbec -- směr řezné roviny (dirStart) se VŽDY
+  počítá z vlastní právě kreslené čáry. Přebírá se JEN PŘESNÁ POLOHA
+  bodu (cutPoint) sousedního revíru, aby hrana sedla bez mezery. Tímhle
+  appka nemůže nikdy uříznout celou plochu kvůli cizímu, nesprávně
+  natočenému směru -- nejhorší možný důsledek odchylky je drobný
+  klínek/nedokonalost přesně na švu, nikdy katastrofální oříznutí.
+  Kvůli tomu byla ODSTRANĚNA i kontrola úhlu (angleBetweenDirectionsDegrees)
+  z Dashboard.jsx -- už není potřeba jako pojistka, appka teď navázání
+  vždy použije, když je zapnuté. Funkce zůstává v kódu nepoužitá pro
+  případ budoucí potřeby, ale žádná logika ji už nevolá.
 
 ZMĚNY PROTI PŘEDCHOZÍ DÁVCE (oprava buttonů, oprava párování úlovků,
 vazba polygon<->katalog, přepínač Revíry)

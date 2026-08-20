@@ -169,16 +169,16 @@ export async function buildRiverAreasFromLine(points, options = {}) {
   const end = ptsXY[ptsXY.length - 1]
 
   let dirStart, startCut
+  // Směr řezné roviny se VŽDY počítá z vlastní čáry -- i při navázání na
+  // sousední revír appka nepřebírá jeho SMĚR (i menší odchylka dokázala
+  // řeznou rovinu natočit nakřivo a uříznout skoro celou plochu, ověřeno v
+  // provozu). Přebírá se jen PŘESNÁ POLOHA bodu, aby hrana sedla bez
+  // mezery -- při odchylce směru vznikne nanejvýš drobný klínek na švu,
+  // nikdy katastrofální oříznutí.
+  dirStart = normalizeVec([ptsXY[1][0] - ptsXY[0][0], ptsXY[1][1] - ptsXY[0][1]])
   if (options.previousCut) {
-    // Přebírá přesně stejnou řeznou čáru (bod i sklon) jako konec sousední
-    // plochy -- oba body se promítnou do TÉTO čáry místní projekce (proj),
-    // takže nezáleží na tom, jaká projekce se použila při generování té
-    // sousední plochy dřív (žádné křížové zkreslení mezi projekcemi).
-    const dPtsXY = options.previousCut.dirPoints.map(proj.toXY)
-    dirStart = normalizeVec([dPtsXY[1][0] - dPtsXY[0][0], dPtsXY[1][1] - dPtsXY[0][1]])
     startCut = proj.toXY(options.previousCut.cutPoint)
   } else {
-    dirStart = normalizeVec([ptsXY[1][0] - ptsXY[0][0], ptsXY[1][1] - ptsXY[0][1]])
     startCut = [start[0] - dirStart[0] * overshootMeters, start[1] - dirStart[1] * overshootMeters]
   }
 

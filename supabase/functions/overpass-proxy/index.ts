@@ -72,14 +72,14 @@ export default {
 
     let lastError: string | null = null;
     for (const server of OVERPASS_SERVERS) {
-      // Jeden pokus na server, krátký timeout (6s) -- funkční odpověď od
+      // Jeden pokus na server, krátký timeout (4s) -- funkční odpověď od
       // Overpass přijde typicky rychle, nebo vůbec (viz i poznámka výše o
       // blokovaných cloudových IP rozsazích). Delší čekání by nezvýšilo
       // šanci na úspěch, jen by prodlužovalo dobu do zjištění, že se má jít
-      // na další server/zkusit to znovu. 4 servery x 6s = max ~24s worst-case.
+      // na další server/zkusit to znovu. 4 servery x 4s = max ~16s worst-case.
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
         const upstream = await fetch(server, {
           method: "POST",
           headers: {
