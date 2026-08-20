@@ -594,7 +594,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             const polygon = L.polygon(pts.map((p) => [p.lat, p.lng]), {
               color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.18,
             }).bindPopup(`${loc.name}${loc.revir ? ` (${loc.revir})` : ''}`)
-            polygon.on('click', () => { setLocationsReturnId(loc.id); setBaitsInitialKey(null); setShowLocations(true) })
+            // Pokud appka zrovna něco kreslí (nová/upravovaná oblast, čára podle
+            // břehu...), klik na starou plochu revíru se nemá otevřít jako detail
+            // -- má se chovat jako běžný klik do mapy (přidat bod), jinak nejde
+            // překreslit/navázat přesně na stávající místo.
+            polygon.on('click', (e) => {
+              if (isPlacingSomething) { handleMapClick(e.latlng); return }
+              setLocationsReturnId(loc.id); setBaitsInitialKey(null); setShowLocations(true)
+            })
             polygon.addTo(markersLayer.current)
             pts.forEach((p) => bounds.push([p.lat, p.lng]))
           })
@@ -604,13 +611,19 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           const centroidMarker = L.circleMarker([c.lat, c.lng], {
             radius: 7, color: '#6B7A4F', weight: 2, fillColor: '#EDE9DC', fillOpacity: 1,
           }).bindPopup(`${loc.name}${loc.revir ? ` (${loc.revir})` : ''}`)
-          centroidMarker.on('click', () => { setLocationsReturnId(loc.id); setBaitsInitialKey(null); setShowLocations(true) })
+          centroidMarker.on('click', (e) => {
+            if (isPlacingSomething) { handleMapClick(e.latlng); return }
+            setLocationsReturnId(loc.id); setBaitsInitialKey(null); setShowLocations(true)
+          })
           centroidMarker.addTo(markersLayer.current)
         } else if (loc.lat != null && loc.lng != null) {
           const marker = L.circleMarker([loc.lat, loc.lng], {
             radius: 8, color: '#B97F35', weight: 2, fillColor: '#D9A054', fillOpacity: 0.8,
           }).bindPopup(`${loc.name}${loc.revir ? ` (${loc.revir})` : ''}`)
-          marker.on('click', () => { setLocationsReturnId(loc.id); setBaitsInitialKey(null); setShowLocations(true) })
+          marker.on('click', (e) => {
+            if (isPlacingSomething) { handleMapClick(e.latlng); return }
+            setLocationsReturnId(loc.id); setBaitsInitialKey(null); setShowLocations(true)
+          })
           marker.addTo(markersLayer.current)
           bounds.push([loc.lat, loc.lng])
         }
@@ -693,7 +706,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     } else {
       map.setView([49.8, 15.5], 8)
     }
-  }, [activeSession, activeCategory, activeUserFilter, viewMode, sessions, locationsCatalog, activePanel])
+  }, [activeSession, activeCategory, activeUserFilter, viewMode, sessions, locationsCatalog, activePanel, placementTarget, areaDraft, riverLineDraft, rodPointsDraft])
 
   async function backfillBaitPhoto(baitName, photoUrl) {
     const key = (baitName || '').trim().toLowerCase()
@@ -2405,15 +2418,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           )}
 
           {riverLineDraft && (
-            <div className="type-picker area-hint" style={{ minWidth: 230, maxWidth: 'min(260px, 82vw)', padding: 10, zIndex: 700 }}>
+            <div className="place-hint area-hint" style={{ maxWidth: 'min(280px, 88vw)', zIndex: 700 }}>
               {!riverConfirm ? (
                 <>
-                  <div className="type-picker-title" style={{ marginBottom: 4 }}>Klikej středem toku</div>
-                  <p className="hint-text" style={{ margin: '0 0 6px', fontSize: 11.5 }}>
-                    {riverLineDraft.points.length} {riverLineDraft.points.length === 1 ? 'bod' : 'body'} (min. 2)
-                  </p>
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
-                    <label style={{ fontSize: 10.5, display: 'flex', flexDirection: 'column', gap: 2, color: 'var(--ink-soft)' }}>
+                  Klikej body středem toku ({riverLineDraft.points.length} {riverLineDraft.points.length === 1 ? 'bod' : 'body'}, potřeba aspoň 2).
+                  <div style={{ display: 'flex', gap: 6, justifyContent: 'center', margin: '8px 0 4px', flexWrap: 'wrap' }}>
+                    <label style={{ fontSize: 10.5, display: 'flex', flexDirection: 'column', gap: 2, color: 'rgba(255,255,255,.75)' }}>
                       Koridor (m)
                       <input
                         type="number" className="text-input" style={{ width: 68, padding: '5px 7px' }}
@@ -2421,7 +2431,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                         onChange={(e) => setRiverCorridorWidth(Number(e.target.value) || 80)}
                       />
                     </label>
-                    <label style={{ fontSize: 10.5, display: 'flex', flexDirection: 'column', gap: 2, color: 'var(--ink-soft)' }}>
+                    <label style={{ fontSize: 10.5, display: 'flex', flexDirection: 'column', gap: 2, color: 'rgba(255,255,255,.75)' }}>
                       Přesah (m)
                       <input
                         type="number" className="text-input" style={{ width: 68, padding: '5px 7px' }}
@@ -2431,7 +2441,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                     </label>
                   </div>
                   {riverBusy && <p className="hint-text" style={{ margin: '4px 0', fontSize: 11.5 }}>Zjišťuji tvar vody z OSM dat…</p>}
-                  {riverError && <p className="error-text" style={{ margin: '4px 0', fontSize: 11.5 }}>{riverError}</p>}
+                  {riverError && <p className="hint-text" style={{ margin: '4px 0', fontSize: 11.5, color: '#B4432E', fontWeight: 600 }}>{riverError}</p>}
                   <div className="area-controls">
                     <button className="new-btn" onClick={undoRiverLinePoint} disabled={!riverLineDraft.points.length || riverBusy}>Zpět o bod</button>
                     <button
@@ -2444,10 +2454,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 </>
               ) : (
                 <>
-                  <div className="type-picker-title" style={{ marginBottom: 4 }}>Vypadá to dobře?</div>
-                  <p className="hint-text" style={{ margin: '0 0 8px', fontSize: 11.5 }}>
-                    Vygenerováno {riverConfirm.polygons.length} {riverConfirm.polygons.length === 1 ? 'plocha' : 'plochy'} — vykreslené na mapě.
-                  </p>
+                  Vypadá to dobře? Vygenerováno {riverConfirm.polygons.length} {riverConfirm.polygons.length === 1 ? 'plocha' : 'plochy'} — vykreslené na mapě.
                   <div className="area-controls">
                     <button className="btn-primary" style={{ margin: 0 }} onClick={confirmRiverArea}>Použít</button>
                     <button className="new-btn" onClick={retryRiverGeneration}>Zkusit znovu</button>

@@ -274,6 +274,30 @@ DOLADĚNÍ UX AUTO-KRESLENÍ PODLE BŘEHU (na základě zkoušení v provozu)
   aby se obešel React stale-closure problém (state update je asynchronní).
 - Panel při klikání čáry zmenšen (minWidth 230px, maxWidth min(260px,82vw),
   menší padding/fonty) -- na mobilu teď zabírá podstatně méně místa z mapy.
+- OPRAVA: tlačítka "Zpět o bod"/"Zrušit" byla neviditelná (bílý text na
+  bílém pozadí) -- panel používal třídu "type-picker" (světlé pozadí),
+  ale ".area-controls .new-btn" počítá s tmavým pozadím (bílý text/okraj).
+  Přepnuto na stejnou dvojici tříd "place-hint area-hint", jakou používají
+  všechny ostatní podobné panely (rodPointsDraft, areaDraft) -- sjednoceno
+  vzhledově i barevně se zbytkem appky.
+- OPRAVA: klik na plochu/bod existujícího revíru na mapě zatím VŽDY otevřel
+  jeho detail (LocationsModal) -- i uprostřed kreslení nové/upravované
+  oblasti, kdy to bránilo naklikat čáru přes stejné místo (např. při
+  předělávání starého revíru novou metodou, nebo při navazování nové
+  plochy přesně na starou). Teď appka nejdřív zkontroluje, jestli zrovna
+  něco kreslí (isPlacingSomething), a pokud ano, klik na plochu/bod revíru
+  se chová jako běžný klik do mapy (handleMapClick) místo otevření detailu.
+  Vyžadovalo přidat placementTarget/areaDraft/riverLineDraft/rodPointsDraft
+  do dependency array useEffectu, co kreslí markery revírů na mapě, ať se
+  handler přepočítá s aktuálním stavem kreslení.
+- Navazování nové plochy přesně na starý revír (bez mezery/přesahu):
+  appka teď díky výše uvedené opravě umožní kliknout i přes starou plochu.
+  Pro přesné navázání bez mezery zatím appka nemá automatické "přichycení"
+  na hranici sousedního revíru -- doporučeno použít pole "Přesah na konci"
+  s malou kladnou hodnotou (~15-20 m), ať se nová plocha o kousek překryje
+  se starou (vizuálně neviditelné, v datech neškodné). Přesné geometrické
+  přichycení na hranu sousedního revíru zůstává jako možné budoucí
+  vylepšení (vyžaduje ukládat metadata řezu u každé vygenerované plochy).
 
 ZMĚNY PROTI PŘEDCHOZÍ DÁVCE (oprava buttonů, oprava párování úlovků,
 vazba polygon<->katalog, přepínač Revíry)
