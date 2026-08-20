@@ -559,6 +559,35 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     }
   }
 
+  // Hrubý odhad vzdálenosti v metrech mezi dvěma body {lat,lng} -- stačí na
+  // řazení/filtrování "co je blízko", není potřeba přesná geodetická formule.
+  function roughDistanceMeters(a, b) {
+    const dLat = (a.lat - b.lat) * 111320
+    const midLat = (a.lat + b.lat) / 2
+    const dLng = (a.lng - b.lng) * 111320 * Math.cos((midLat * Math.PI) / 180)
+    return Math.sqrt(dLat * dLat + dLng * dLng)
+  }
+
+  // Vrátí konce (začátek/konec) katalogových revírů, které mají uložený řez
+  // A JSOU BLÍZKO danému referenčnímu bodu (typicky první bod rozkreslované
+  // čáry) -- appka tak nenabízí navázání na vzdálený, nesouvisející revír, a
+  // navíc u revíru nabídne jen ten konkrétní konec, co je fakticky nablízku
+  // (ne oba, kdy by druhý byl matoucí a geograficky nesmyslný).
+  function getNearbyCatalogSnaps(referencePoint, maxDistanceMeters = 3000) {
+    if (!referencePoint) return []
+    const results = []
+    locationsCatalog.forEach((l) => {
+      if (!l.edge_cuts) return
+      ;['start', 'end'].forEach((which) => {
+        const cut = l.edge_cuts[which]
+        if (!cut) return
+        const dist = roughDistanceMeters(referencePoint, cut.cutPoint)
+        if (dist <= maxDistanceMeters) results.push({ location: l, which, distance: dist })
+      })
+    })
+    return results.sort((a, b) => a.distance - b.distance)
+  }
+
   function focusOnPoint(lat, lng) {
     if (!mapInstance.current || lat == null || lng == null) return
     setMobileSheetOpen(false)
@@ -2569,19 +2598,18 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                       </label>
                     </>
                   )}
-                  {!riverBusy && locationsCatalog.some((l) => l.edge_cuts && (l.edge_cuts.start || l.edge_cuts.end)) && (
+                  {!riverBusy && getNearbyCatalogSnaps(riverLineDraft.points[0]).length > 0 && (
                     <button
                       type="button" className="new-btn" style={{ margin: '2px 0 4px', width: '100%', justifyContent: 'center', color: '#fff', borderColor: 'rgba(255,255,255,.4)' }}
                       onClick={() => setShowCatalogSnapPicker((v) => !v)}
-                    >{showCatalogSnapPicker ? 'Zavřít výběr revíru' : 'Navázat na revír z katalogu'}</button>
+                    >{showCatalogSnapPicker ? 'Zavřít výběr revíru' : 'Navázat na revír v okolí'}</button>
                   )}
                   {showCatalogSnapPicker && (
                     <div style={{ maxHeight: 140, overflowY: 'auto', background: 'rgba(0,0,0,.15)', borderRadius: 8, padding: 6, margin: '0 0 6px' }}>
-                      {locationsCatalog.filter((l) => l.edge_cuts && (l.edge_cuts.start || l.edge_cuts.end)).map((l) => (
-                        <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', fontSize: 11.5, color: '#fff' }}>
-                          <span style={{ flex: 1, textAlign: 'left' }}>{l.name}</span>
-                          {l.edge_cuts.start && <button type="button" className="new-btn" style={{ color: '#fff', borderColor: 'rgba(255,255,255,.4)' }} onClick={() => pickCatalogSnap(l, 'start')}>Začátek</button>}
-                          {l.edge_cuts.end && <button type="button" className="new-btn" style={{ color: '#fff', borderColor: 'rgba(255,255,255,.4)' }} onClick={() => pickCatalogSnap(l, 'end')}>Konec</button>}
+                      {getNearbyCatalogSnaps(riverLineDraft.points[0]).map(({ location: l, which, distance }) => (
+                        <div key={`${l.id}-${which}`} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', fontSize: 11.5, color: '#fff' }}>
+                          <span style={{ flex: 1, textAlign: 'left' }}>{l.name} <span style={{ opacity: .6 }}>({Math.round(distance)} m)</span></span>
+                          <button type="button" className="new-btn" style={{ color: '#fff', borderColor: 'rgba(255,255,255,.4)' }} onClick={() => pickCatalogSnap(l, which)}>Navázat</button>
                         </div>
                       ))}
                     </div>
