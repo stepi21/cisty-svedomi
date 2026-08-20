@@ -4,8 +4,14 @@
 //
 // Postup:
 // 1) Overpass dotaz na vodní plochy (natural=water, waterway=riverbank,
-//    relace natural=water) v obdélníku kolem čáry -- s automatickým
-//    fallbackem na záložní veřejný server, když hlavní neodpoví/timeoutne.
+//    relace natural=water) v obdélníku kolem čáry -- přes vlastní Supabase
+//    Edge Function "overpass-proxy" (viz supabase/functions/overpass-proxy),
+//    NE přímo z prohlížeče. Důvod (ověřeno v provozu): veřejné Overpass
+//    servery běží na víc zrcadel přes DNS round-robin a ne všechna
+//    spolehlivě posílají CORS hlavičky -- prohlížeč přímé volání appky
+//    občas rovnou zablokuje (Access-Control-Allow-Origin chybí), nezávisle
+//    na tom, jak dlouho appka čeká. Proxy běží server-server, kde na CORS
+//    nezáleží, a má stejný fallback na záložní server jako dřív.
 // 2) Kolem čáry appka vytvoří "koridor" (buffer) zvolené šířky a prolne ho
 //    (intersect) se skutečnou vodou -- vzdálené zátoky/ramena mimo koridor
 //    odpadnou, i když jsou v OSM zapsané jako součást téhož polygonu.
@@ -19,10 +25,9 @@
 
 import * as turf from '@turf/turf'
 
-const OVERPASS_SERVERS = [
-  'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
-]
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+const PROXY_URL = `${SUPABASE_URL}/functions/v1/overpass-proxy`
 
 function metersToDegLat(m) { return m / 111320 }
 function metersToDegLng(m, lat) { return m / (111320 * Math.cos((lat * Math.PI) / 180)) }
@@ -40,31 +45,21 @@ function buildSearchBBox(points, padMeters) {
   return { south: south - padLat, north: north + padLat, west: west - padLng, east: east + padLng }
 }
 
-async function queryOverpassWithFallback(query) {
-  let lastError = null
-  for (const server of OVERPASS_SERVERS) {
-    try {
-      const controller = new AbortController()
-      // O něco delší než server-side [timeout:25] v dotazu -- ať appka
-      // nezruší spojení dřív, než server sám stihne odpovědět (byť třeba
-      // chybou), a zbude i rezerva na přenos dat po síti.
-      const timeoutId = setTimeout(() => controller.abort(), 30000)
-      const res = await fetch(server, {
-        method: 'POST',
-        body: 'data=' + encodeURIComponent(query),
-        signal: controller.signal,
-      })
-      clearTimeout(timeoutId)
-      if (!res.ok) throw new Error(`server odpověděl chybou ${res.status}`)
-      return await res.json()
-    } catch (err) {
-      lastError = err.name === 'AbortError'
-        ? new Error('vypršel časový limit (server neodpověděl do 30 vteřin)')
-        : err
-      // zkusí další server v seznamu, žádná další akce tady není potřeba
-    }
+async function queryOverpassViaProxy(query) {
+  const res = await fetch(PROXY_URL, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query }),
+  })
+  const data = await res.json().catch(() => null)
+  if (!res.ok) {
+    throw new Error(data?.error || `proxy odpověděla chybou ${res.status}`)
   }
-  throw lastError || new Error('Všechny Overpass servery selhaly.')
+  return data
 }
 
 function makeProjector(refLat) {
@@ -138,7 +133,7 @@ export async function buildRiverAreasFromLine(points, options = {}) {
     out skel qt;
   `
 
-  const data = await queryOverpassWithFallback(query)
+  const data = await queryOverpassViaProxy(query)
 
   const nodesData = {}
   data.elements.filter((e) => e.type === 'node').forEach((n) => { nodesData[n.id] = { lat: n.lat, lng: n.lon } })

@@ -167,13 +167,25 @@ ZMĚNY PROTI PŘEDCHOZÍ DÁVCE (auto-tvar revíru podle břehu, velké úseky p
 1. NOVÁ FUNKCE: automatické generování tvaru revíru podél řeky (nová
    knihovna src/lib/riverShape.js). Místo ručního klikání celého obvodu
    uživatel nakliká jen pár bodů STŘEDEM TOKU -- appka najde skutečnou
-   vodní plochu z OpenStreetMap dat (Overpass API, s automatickým
-   fallbackem na záložní veřejný server při timeoutu/výpadku), prolne ji
-   s "koridorem" zadané šířky kolem čáry (turf.js buffer+intersect --
+   vodní plochu z OpenStreetMap dat (Overpass API), prolne ji s
+   "koridorem" zadané šířky kolem čáry (turf.js buffer+intersect --
    vzdálené zátoky/ramena mimo koridor odpadnou, i když jsou v OSM
    součástí téhož polygonu), a usekne na délku čáry dvěma kolmými řezy
    na jejích koncích (s volitelným přesahem v metrech).
    Nová závislost v package.json: @turf/turf.
+   DŮLEŽITÉ (ověřeno v provozu): appka NEVOLÁ Overpass API přímo z
+   prohlížeče -- veřejné Overpass servery běží na víc zrcadel přes DNS
+   round-robin a ne všechna spolehlivě posílají CORS hlavičky, takže
+   přímé volání appka prohlížeč občas rovnou zablokuje (bez ohledu na
+   timeout). Appka proto volá vlastní Supabase Edge Function
+   "overpass-proxy" (viz supabase/functions/overpass-proxy) -- stejný
+   princip jako existující chmi-proxy pro ČHMÚ data -- která na pozadí
+   (server-server, žádné CORS) přeposílá dotaz na Overpass se stejným
+   fallbackem na záložní server jako dřív, jen teď na straně serveru.
+   NASAZENÍ: tuhle Edge Function je potřeba nasadit na Supabase zvlášť
+   (stejně jako chmi-proxy) -- ne přes GitHub/Vercel, ale přes Supabase
+   CLI (`supabase functions deploy overpass-proxy`) nebo ručně v
+   Supabase dashboardu (Edge Functions -> Deploy new function).
    Dostupné všude, kde appka dřív nabízela jen ruční kreslení: katalog
    míst ("+ Přidat místo"), nová výprava typu přívlač, "+ Přidat oblast"
    u rozepsané i uložené výpravy, "Upravit oblasti" u katalogového místa.
