@@ -45,7 +45,7 @@ function buildSearchBBox(points, padMeters) {
   return { south: south - padLat, north: north + padLat, west: west - padLng, east: east + padLng }
 }
 
-async function queryOverpassViaProxy(query) {
+async function queryOverpassViaProxy(query, signal) {
   const res = await fetch(PROXY_URL, {
     method: 'POST',
     headers: {
@@ -54,6 +54,7 @@ async function queryOverpassViaProxy(query) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ query }),
+    signal,
   })
   const data = await res.json().catch(() => null)
   if (!res.ok) {
@@ -133,7 +134,7 @@ export async function buildRiverAreasFromLine(points, options = {}) {
     out skel qt;
   `
 
-  const data = await queryOverpassViaProxy(query)
+  const data = await queryOverpassViaProxy(query, options.signal)
 
   const nodesData = {}
   data.elements.filter((e) => e.type === 'node').forEach((n) => { nodesData[n.id] = { lat: n.lat, lng: n.lon } })

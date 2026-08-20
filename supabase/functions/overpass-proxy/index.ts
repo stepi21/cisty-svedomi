@@ -39,14 +39,6 @@ const OVERPASS_SERVERS = [
 // nemá to nevýhody).
 const USER_AGENT = "CistySvedomiApp/1.0 (rybarsky denik, kontakt v repozitari)";
 
-// Kódy, u kterých má smysl to na tom samém serveru zkusit ještě jednou --
-// typicky dočasné přetížení serveru, ne chyba v dotazu samotném.
-const RETRYABLE_STATUSES = [502, 503, 504];
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -80,40 +72,36 @@ export default {
 
     let lastError: string | null = null;
     for (const server of OVERPASS_SERVERS) {
-      // Dva pokusy na tenhle server -- druhý jen pro dočasné přetížení
-      // (502/503/504), ne pro jiné chyby (u těch nemá smysl čekat a
-      // zkoušet znovu na tom samém serveru).
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 25000);
-          const upstream = await fetch(server, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/x-www-form-urlencoded",
-              "User-Agent": USER_AGENT,
-            },
-            body: "data=" + encodeURIComponent(query),
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-          if (!upstream.ok) {
-            lastError = `server odpověděl chybou ${upstream.status}`;
-            if (attempt === 1 && RETRYABLE_STATUSES.includes(upstream.status)) {
-              await sleep(2000);
-              continue; // druhý pokus na tom samém serveru
-            }
-            break; // na tenhle server appka dál nespoléhá, jde na další v seznamu
-          }
-          const text = await upstream.text();
-          return new Response(text, {
-            status: 200,
-            headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-          });
-        } catch (err) {
-          lastError = err instanceof Error ? err.message : String(err);
-          break; // síťová/timeout chyba -- zkusí rovnou další server, ne tenhle znovu
+      // Jeden pokus na server -- appka má teď 4 zrcadla v seznamu, takže
+      // je rychlejší a spolehlivější jít hned na další server než čekat
+      // a zkoušet ten samý znovu (a appka navíc na frontendu umožňuje
+      // celé generování kdykoli zrušit, worst-case čekání by tak i tak
+      // nemělo přerůst v řádu minut).
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        const upstream = await fetch(server, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": USER_AGENT,
+          },
+          body: "data=" + encodeURIComponent(query),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!upstream.ok) {
+          lastError = `server odpověděl chybou ${upstream.status}`;
+          continue; // jde na další server v seznamu
         }
+        const text = await upstream.text();
+        return new Response(text, {
+          status: 200,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        });
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : String(err);
+        // jde na další server v seznamu
       }
     }
 

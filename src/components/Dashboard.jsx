@@ -134,11 +134,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [areaDraft, setAreaDraft] = useState(null)               // {areas:[], current:[]} během kreslení oblasti
   const [areaDrawChoice, setAreaDrawChoice] = useState(null)     // {resumeTarget} — mezikrok "jak nakreslit oblast?" (ručně / podle břehu)
   const [riverLineDraft, setRiverLineDraft] = useState(null)     // {points:[]} — sbírání bodů středem toku pro auto tvar podle břehu
+  const [riverConfirm, setRiverConfirm] = useState(null)         // {polygons:[...]} — výsledek čeká na potvrzení "Použít"/"Zkusit znovu"
   const [riverCorridorWidth, setRiverCorridorWidth] = useState(80)
   const [riverOvershoot, setRiverOvershoot] = useState(0)
   const [riverBusy, setRiverBusy] = useState(false)
   const [riverError, setRiverError] = useState(null)
+  const [autoAdvancingArea, setAutoAdvancingArea] = useState(false) // potlačí "starý" areaDraft panel při automatickém navázání po potvrzení
   const riverResumeTargetRef = useRef(null)                      // kam se appka vrátí (placementTarget) po dokončení auto-kreslení
+  const riverAbortRef = useRef(null)                             // umožní zrušit rozjeté generování (tlačítko Zrušit i uprostřed čekání)
+  const pendingConfirmActionRef = useRef(null)                   // 'proceedToForm' | 'finishAppendArea' | 'proceedRelocateArea' — spustí se, až se areaDraft skutečně aktualizuje
   const [rodPointsDraft, setRodPointsDraft] = useState(null)     // [{lat,lng}, ...] během sbírání pozic prutů (bodové typy)
   const [placementTarget, setPlacementTarget] = useState(null)   // 'session-point' | 'area-point' | 'rod-<i>' | 'catch-point'
   const [draftSession, setDraftSession] = useState(null)         // otevřený formulář nové výpravy
@@ -368,6 +372,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     }
 
     if (target === 'river-line-point') {
+      if (riverConfirm) return // appka čeká na "Použít"/"Zkusit znovu" -- další klik na mapu teď nic nepřidává
       setRiverLineDraft((prev) => ({ points: [...(prev?.points || []), point] }))
       return
     }
@@ -469,7 +474,18 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         latlngs.forEach((ll) => L.circleMarker(ll, { radius: 5, color: '#2C6E71', fillOpacity: 1 }).addTo(draftLayer.current))
       }
     }
-  }, [areaDraft, riverLineDraft])
+
+    // Výsledek generování podle břehu, čeká na potvrzení "Použít" -- appka
+    // ho ukáže vyplněný sytější barvou, ať je na první pohled vidět, co se
+    // vlastně bude ukládat, než uživatel klikne "Použít".
+    if (riverConfirm) {
+      riverConfirm.polygons.forEach((pts) => {
+        L.polygon(pts.map((p) => [p.lat, p.lng]), {
+          color: '#2D78C8', weight: 2, fillColor: '#2D78C8', fillOpacity: 0.4,
+        }).addTo(draftLayer.current)
+      })
+    }
+  }, [areaDraft, riverLineDraft, riverConfirm])
 
   // --- kreslení náhledu pozic prutů při zakládání bodové výpravy ---
   useEffect(() => {
@@ -1023,10 +1039,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setRiverLineDraft((prev) => (prev ? { points: prev.points.slice(0, -1) } : prev))
   }
 
+  // Zrušit jde kdykoli -- i uprostřed čekání na Overpass. Přeruší i
+  // případný rozjetý požadavek (viz riverAbortRef), ať appka nezůstane
+  // "viset" bez možnosti se z toho dostat.
   function cancelRiverLine() {
+    riverAbortRef.current?.abort()
+    riverAbortRef.current = null
     setRiverLineDraft(null)
+    setRiverConfirm(null)
     setPlacementTarget(null)
     setRiverError(null)
+    setRiverBusy(false)
     riverResumeTargetRef.current = null
     pendingAreaAppendRef.current = null
   }
@@ -1035,25 +1058,64 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (!riverLineDraft || riverLineDraft.points.length < 2) return
     setRiverBusy(true)
     setRiverError(null)
+    const controller = new AbortController()
+    riverAbortRef.current = controller
+    // Bezpečnostní pojistka navíc k ručnímu Zrušit -- kdyby appka i přes
+    // vlastní serverovou logiku "visela" nepřiměřeně dlouho.
+    const safetyTimeout = setTimeout(() => controller.abort(), 60000)
     try {
       const polygons = await buildRiverAreasFromLine(riverLineDraft.points, {
         corridorWidthMeters: riverCorridorWidth,
         overshootMeters: riverOvershoot,
+        signal: controller.signal,
       })
       if (!polygons || polygons.length === 0) {
         setRiverError('Nepodařilo se najít použitelnou vodní plochu podél tvé čáry. Zkus přidat víc bodů, zvětšit šířku koridoru, nebo nakresli oblast ručně.')
-        setRiverBusy(false)
-        return
+      } else {
+        // Nemerguje se rovnou do areaDraft -- appka nejdřív ukáže výsledek
+        // a nechá potvrdit "Použít", ať se needěje neprošená rovnou do
+        // starého "Hotovo/Přidat oblast(i)" panelu bez možnosti si to
+        // nejdřív prohlédnout.
+        setRiverConfirm({ polygons })
       }
-      const resumeTarget = riverResumeTargetRef.current
-      setAreaDraft((prev) => ({ areas: [...(prev?.areas || []), ...polygons], current: [] }))
-      setRiverLineDraft(null)
-      riverResumeTargetRef.current = null
-      setPlacementTarget(resumeTarget)
     } catch (err) {
-      setRiverError('Nepodařilo se získat data o řece: ' + err.message + '. Zkus to znovu za chvíli, nebo nakresli oblast ručně.')
+      if (err?.name === 'AbortError') {
+        setRiverError('Generování zrušeno.')
+      } else {
+        setRiverError('Nepodařilo se získat data o řece: ' + err.message + '. Zkus to znovu za chvíli, nebo nakresli oblast ručně.')
+      }
     }
+    clearTimeout(safetyTimeout)
+    riverAbortRef.current = null
     setRiverBusy(false)
+  }
+
+  // Zavolá se po kliknutí "Použít" v potvrzovacím kroku -- teprve teď appka
+  // přidá vygenerovanou plochu do areaDraft a rovnou (bez dalšího kliknutí)
+  // spustí tu samou dokončovací funkci, jakou by appka spustila po ručním
+  // "Hotovo, pokračovat"/"Přidat oblast(i)". Dokončovací funkce čtou
+  // areaDraft ze stavu komponenty, ne z parametru -- proto se nespouští
+  // hned tady (viděly by starou hodnotu před aktualizací), ale přes
+  // pendingConfirmActionRef v navazujícím useEffectu níž.
+  function confirmRiverArea() {
+    if (!riverConfirm) return
+    const polygons = riverConfirm.polygons
+    const resumeTarget = riverResumeTargetRef.current
+    riverResumeTargetRef.current = null
+    setRiverConfirm(null)
+    setRiverLineDraft(null)
+    setPlacementTarget(null)
+    setAutoAdvancingArea(true)
+    pendingConfirmActionRef.current =
+      resumeTarget === 'relocate-area-point' ? 'proceedRelocateArea'
+      : resumeTarget === 'area-point-append' ? 'finishAppendArea'
+      : 'proceedToForm'
+    setAreaDraft((prev) => ({ areas: [...(prev?.areas || []), ...polygons], current: [] }))
+  }
+
+  function retryRiverGeneration() {
+    setRiverConfirm(null)
+    setRiverError(null)
   }
 
   function togglePickingCatalogId(id) {
@@ -1614,6 +1676,22 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       await loadSessions()
     })()
   }
+
+  // Spustí se AŽ PO skutečné aktualizaci areaDraft (ne hned po setAreaDraft
+  // v confirmRiverArea) -- proceedToForm/finishAppendArea/proceedRelocateArea
+  // čtou areaDraft ze stavu komponenty, takže by hned po volání setAreaDraft
+  // ve stejném tiku ještě viděly starou hodnotu (React state update je
+  // asynchronní). Efekt s dependency [areaDraft] garantuje, že se spustí
+  // až po skutečném přepsání stavu.
+  useEffect(() => {
+    if (!pendingConfirmActionRef.current) return
+    const action = pendingConfirmActionRef.current
+    pendingConfirmActionRef.current = null
+    if (action === 'proceedToForm') proceedToForm()
+    else if (action === 'finishAppendArea') finishAppendArea()
+    else if (action === 'proceedRelocateArea') proceedRelocateArea()
+    setAutoAdvancingArea(false)
+  }, [areaDraft])
 
   async function deleteSession() {
     if (!window.confirm('Opravdu smazat celou výpravu včetně všech úlovků a prutů? Nedá se to vrátit zpět.')) return
@@ -2327,40 +2405,56 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           )}
 
           {riverLineDraft && (
-            <div className="type-picker area-hint" style={{ minWidth: 270, zIndex: 700 }}>
-              <div className="type-picker-title">Klikej body středem toku</div>
-              <p className="hint-text" style={{ margin: '0 0 8px' }}>
-                {riverLineDraft.points.length} {riverLineDraft.points.length === 1 ? 'bod' : 'body'} (potřeba aspoň 2). Appka najde skutečnou vodní plochu z OSM dat kolem tvé čáry.
-              </p>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                <label style={{ fontSize: 11, display: 'flex', flexDirection: 'column', gap: 2, color: 'var(--ink-soft)' }}>
-                  Šířka koridoru (m)
-                  <input
-                    type="number" className="text-input" style={{ width: 92 }}
-                    value={riverCorridorWidth}
-                    onChange={(e) => setRiverCorridorWidth(Number(e.target.value) || 80)}
-                  />
-                </label>
-                <label style={{ fontSize: 11, display: 'flex', flexDirection: 'column', gap: 2, color: 'var(--ink-soft)' }}>
-                  Přesah na konci (m)
-                  <input
-                    type="number" className="text-input" style={{ width: 92 }}
-                    value={riverOvershoot}
-                    onChange={(e) => setRiverOvershoot(Number(e.target.value) || 0)}
-                  />
-                </label>
-              </div>
-              {riverBusy && <p className="hint-text" style={{ margin: '4px 0' }}>Zjišťuji tvar vody z OSM dat…</p>}
-              {riverError && <p className="error-text" style={{ margin: '4px 0' }}>{riverError}</p>}
-              <div className="area-controls">
-                <button className="new-btn" onClick={undoRiverLinePoint} disabled={!riverLineDraft.points.length || riverBusy}>Zpět o bod</button>
-                <button
-                  className="btn-primary" style={{ margin: 0 }}
-                  onClick={generateRiverArea}
-                  disabled={riverLineDraft.points.length < 2 || riverBusy}
-                >{riverBusy ? 'Generuji…' : 'Vygenerovat'}</button>
-                <button className="new-btn" onClick={cancelRiverLine} disabled={riverBusy}>Zrušit</button>
-              </div>
+            <div className="type-picker area-hint" style={{ minWidth: 230, maxWidth: 'min(260px, 82vw)', padding: 10, zIndex: 700 }}>
+              {!riverConfirm ? (
+                <>
+                  <div className="type-picker-title" style={{ marginBottom: 4 }}>Klikej středem toku</div>
+                  <p className="hint-text" style={{ margin: '0 0 6px', fontSize: 11.5 }}>
+                    {riverLineDraft.points.length} {riverLineDraft.points.length === 1 ? 'bod' : 'body'} (min. 2)
+                  </p>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+                    <label style={{ fontSize: 10.5, display: 'flex', flexDirection: 'column', gap: 2, color: 'var(--ink-soft)' }}>
+                      Koridor (m)
+                      <input
+                        type="number" className="text-input" style={{ width: 68, padding: '5px 7px' }}
+                        value={riverCorridorWidth}
+                        onChange={(e) => setRiverCorridorWidth(Number(e.target.value) || 80)}
+                      />
+                    </label>
+                    <label style={{ fontSize: 10.5, display: 'flex', flexDirection: 'column', gap: 2, color: 'var(--ink-soft)' }}>
+                      Přesah (m)
+                      <input
+                        type="number" className="text-input" style={{ width: 68, padding: '5px 7px' }}
+                        value={riverOvershoot}
+                        onChange={(e) => setRiverOvershoot(Number(e.target.value) || 0)}
+                      />
+                    </label>
+                  </div>
+                  {riverBusy && <p className="hint-text" style={{ margin: '4px 0', fontSize: 11.5 }}>Zjišťuji tvar vody z OSM dat…</p>}
+                  {riverError && <p className="error-text" style={{ margin: '4px 0', fontSize: 11.5 }}>{riverError}</p>}
+                  <div className="area-controls">
+                    <button className="new-btn" onClick={undoRiverLinePoint} disabled={!riverLineDraft.points.length || riverBusy}>Zpět o bod</button>
+                    <button
+                      className="btn-primary" style={{ margin: 0 }}
+                      onClick={generateRiverArea}
+                      disabled={riverLineDraft.points.length < 2 || riverBusy}
+                    >{riverBusy ? 'Generuji…' : 'Vygenerovat'}</button>
+                    <button className="new-btn" onClick={cancelRiverLine}>Zrušit</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="type-picker-title" style={{ marginBottom: 4 }}>Vypadá to dobře?</div>
+                  <p className="hint-text" style={{ margin: '0 0 8px', fontSize: 11.5 }}>
+                    Vygenerováno {riverConfirm.polygons.length} {riverConfirm.polygons.length === 1 ? 'plocha' : 'plochy'} — vykreslené na mapě.
+                  </p>
+                  <div className="area-controls">
+                    <button className="btn-primary" style={{ margin: 0 }} onClick={confirmRiverArea}>Použít</button>
+                    <button className="new-btn" onClick={retryRiverGeneration}>Zkusit znovu</button>
+                    <button className="new-btn" onClick={cancelRiverLine}>Zrušit</button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -2523,7 +2617,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             </div>
           )}
 
-          {areaDraft && (
+          {areaDraft && !autoAdvancingArea && (
             <div className="place-hint area-hint">
               Klikej podél trasy/oblasti ({areaDraft.current.length} bodů v aktuální, potřeba aspoň 3){areaDraft.areas.length > 0 ? ` · hotových oblastí: ${areaDraft.areas.length}` : ''}.
               <div className="area-controls">

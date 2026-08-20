@@ -186,10 +186,10 @@ ZMĚNY PROTI PŘEDCHOZÍ DÁVCE (auto-tvar revíru podle břehu, velké úseky p
    (stejně jako chmi-proxy) -- ne přes GitHub/Vercel, ale přes Supabase
    CLI (`supabase functions deploy overpass-proxy`) nebo ručně v
    Supabase dashboardu (Edge Functions -> Deploy new function).
-   Proxy navíc na každém ze dvou serverů zkusí dotaz 2x s prodlevou 2s,
-   pokud server odpoví dočasnou chybou (502/503/504 -- přetížení) --
-   veřejné Overpass servery na tohle občas narazí i samy o sobě, nejde
-   o chybu v appce ani v proxy.
+   Proxy zkouší 1 pokus na server (server timeout 12s), přes všechny 4
+   servery -- appka teď navíc na frontendu umožňuje generování kdykoli
+   zrušit (i uprostřed čekání, tlačítko Zrušit funguje vždy) a má vlastní
+   60s bezpečnostní limit, kdyby appka i tak "visela" nepřiměřeně dlouho.
    DŮLEŽITÉ ZJIŠTĚNÍ Z PROVOZU: Overpass provozovatelé v minulosti kvůli
    zneužívání zablokovali části IP rozsahů Azure/AWS (viz OSM wiki,
    "Overpass API/status") -- cloudové IP adresy (kam spadá i Supabase
@@ -202,6 +202,16 @@ ZMĚNY PROTI PŘEDCHOZÍ DÁVCE (auto-tvar revíru podle břehu, velké úseky p
    často i po těchto úpravách, další možnost do budoucna je vlastní
    placená Overpass instance (např. Geofabrik) nebo přímé volání zase
    z prohlížeče jen jako fallback, když proxy selže (kombinace obojího).
+   UX DOLADĚNO PODLE ZPĚTNÉ VAZBY: po úspěšném vygenerování appka teď
+   NEJDŘÍV ukáže výsledek na mapě (sytě modře) a zeptá se "Vypadá to
+   dobře?" -- teprve po kliknutí "Použít" appka plochu skutečně přidá a
+   automaticky naváže na dokončovací krok (Hotovo/Přidat oblast(i)/
+   Uložit), BEZ nutnosti to potvrzovat ještě jednou přes starý "ruční"
+   panel. "Zkusit znovu" nechá stejnou naklikanou čáru a jen zahodí
+   výsledek (jde rovnou přegenerovat s jinou šířkou koridoru/přesahem).
+   Tlačítko Zrušit je teď vždy klikatelné, i během "Generuji…". Panel je
+   zmenšený (menší padding/fonty), aby na mobilu tolik nezasahoval do
+   mapy při kreslení čáry.
    Dostupné všude, kde appka dřív nabízela jen ruční kreslení: katalog
    míst ("+ Přidat místo"), nová výprava typu přívlač, "+ Přidat oblast"
    u rozepsané i uložené výpravy, "Upravit oblasti" u katalogového místa.
@@ -240,6 +250,30 @@ a. Hromadná aktualizace existujících výprav podle nově předělaného
 b. Živé GPS trasování za jízdy na loďce (auto-sbírání bodů čáry podle
    polohy, místo ručního klikání) -- navrhováno, ale vědomě odloženo na
    samostatnou fázi až po ověření základního auto-kreslení v praxi.
+
+DOLADĚNÍ UX AUTO-KRESLENÍ PODLE BŘEHU (na základě zkoušení v provozu)
+-----------------------------------------------------------------------
+- Overpass-proxy: odstraněn dvojitý pokus na server (dřív mohlo worst-case
+  čekání vyjít na ~3,5 minuty přes 4 servery x 2 pokusy x 25s) -- teď jen
+  1 pokus na server s timeoutem 12s, 4 servery -> max ~48s. Na frontendu
+  navíc bezpečnostní pojistka 60s (riverAbortRef + setTimeout), i kdyby
+  server-side logika selhala jinak.
+- Přidáno tlačítko "Zrušit", který je vidět a klikatelný I BĚHEM
+  generování (ne až po něm) -- zavolá riverAbortRef.current.abort(),
+  takže appka fakt přeruší čekání na síť, nejen skryje UI.
+- "Zpět o bod" (undoRiverLinePoint) při klikání čáry středem toku --
+  funguje, jen byl (asi) testovaný na appce před tímhle nasazením.
+- Nový dvoukrokový flow: po úspěšném vygenerování appka NEJDŘÍV ukáže
+  "Vypadá to dobře?" s tlačítky Použít / Zkusit znovu / Zrušit (výsledek
+  je vidět rovnou na mapě), a teprve po "Použít" automaticky pokračuje
+  rovnou do navazujícího kroku (uložení místa do katalogu / formulář
+  nové výpravy / uložení přesunuté oblasti) -- BEZ mezikroku "chceš
+  přidat další oblast?", jak appka dřív dělala u ručního kreslení.
+  Technicky řešeno přes pendingConfirmActionRef + useEffect na [areaDraft]
+  (ne přímým voláním finishAppendArea/proceedToForm hned po setAreaDraft),
+  aby se obešel React stale-closure problém (state update je asynchronní).
+- Panel při klikání čáry zmenšen (minWidth 230px, maxWidth min(260px,82vw),
+  menší padding/fonty) -- na mobilu teď zabírá podstatně méně místa z mapy.
 
 ZMĚNY PROTI PŘEDCHOZÍ DÁVCE (oprava buttonů, oprava párování úlovků,
 vazba polygon<->katalog, přepínač Revíry)
