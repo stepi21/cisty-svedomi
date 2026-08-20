@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import L from 'leaflet'
 import { fetchLiveConditions, findNearestStations, SPA_LEVEL_INFO } from '../lib/hydrology.js'
-import { IconClose, IconEdit, IconTrash, IconMapEdit, IconZoom, IconDroplet, IconCheck, IconRevir } from '../lib/icons.jsx'
+import { IconClose, IconEdit, IconTrash, IconMapEdit, IconZoom, IconDroplet, IconCheck, IconRevir, IconBoat } from '../lib/icons.jsx'
 
 const fishSVG = (color) => `
   <svg viewBox="0 0 64 34" xmlns="http://www.w3.org/2000/svg">
@@ -16,7 +16,12 @@ export default function LocationsModal({ locations, sessions, userId, initialLoc
   const [editing, setEditing] = useState(false)
 
   const selected = locations.find((l) => l.id === selectedId)
-  const sorted = [...locations].sort((a, b) => a.name.localeCompare(b.name))
+  const sorted = [...locations].sort((a, b) => {
+    const aReach = a.scope === 'reach' ? 0 : 1
+    const bReach = b.scope === 'reach' ? 0 : 1
+    if (aReach !== bReach) return aReach - bReach
+    return a.name.localeCompare(b.name)
+  })
 
   if (selected) {
     const canEdit = selected.created_by === userId
@@ -44,7 +49,10 @@ export default function LocationsModal({ locations, sessions, userId, initialLoc
           <div className="ticket-top">
             <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
             <div className="eyebrow">Místo</div>
-            <h2>{selected.name}</h2>
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {selected.scope === 'reach' && <IconBoat size={18} color="var(--amber)" />}
+              {selected.name}
+            </h2>
           </div>
           <div className="perforation"></div>
           <div className="ticket-body">
@@ -129,7 +137,13 @@ export default function LocationsModal({ locations, sessions, userId, initialLoc
           {sorted.length === 0 && <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Zatím žádné.</p>}
           {sorted.map((l) => (
             <div key={l.id} className="record-row" onClick={() => setSelectedId(l.id)}>
-              <div className="record-head"><strong>{l.name}</strong></div>
+              <div className="record-head">
+                <strong style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  {l.scope === 'reach'
+                    ? <IconBoat size={16} color="var(--amber-deep)" />
+                    : <IconRevir size={16} color="var(--water-deep)" dotColor="var(--paper)" />} {l.name}
+                </strong>
+              </div>
               {l.revir && <div className="c-sub">{l.revir}</div>}
             </div>
           ))}
@@ -294,12 +308,13 @@ function LocationPreviewMap({ location }) {
 function EditLocationForm({ location, onCancel, onSaved }) {
   const [name, setName] = useState(location.name)
   const [revir, setRevir] = useState(location.revir || '')
+  const [scope, setScope] = useState(location.scope || 'spot')
   const [busy, setBusy] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
     setBusy(true)
-    await onSaved({ name, revir: revir || null })
+    await onSaved({ name, revir: revir || null, scope })
     setBusy(false)
   }
 
@@ -318,6 +333,24 @@ function EditLocationForm({ location, onCancel, onSaved }) {
             <input className="text-input" required autoFocus value={name} onChange={(e) => setName(e.target.value)} />
             <label className="field-label">Revír</label>
             <input className="text-input" value={revir} onChange={(e) => setRevir(e.target.value)} />
+            <label className="field-label">Typ místa</label>
+            <div className="tab-row">
+              <button
+                type="button"
+                className={`tab-btn ${scope === 'spot' ? 'active' : ''}`}
+                onClick={() => setScope('spot')}
+              ><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconRevir size={13} dotColor={scope === 'spot' ? '#fff' : 'var(--water-deep)'} /> Malé místo</span></button>
+              <button
+                type="button"
+                className={`tab-btn ${scope === 'reach' ? 'active' : ''}`}
+                onClick={() => setScope('reach')}
+              ><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconBoat size={13} /> Velký úsek (loď)</span></button>
+            </div>
+            {scope === 'reach' && (
+              <p className="help-note" style={{ marginBottom: 8 }}>
+                Velký úsek se nezobrazuje na přehledové mapě mezi malými místy — jen v seznamu (nahoře) a po kliknutí „Zobrazit na hlavní mapě".
+              </p>
+            )}
             <button className="btn-primary" type="submit" disabled={busy} style={{ marginTop: 10 }}>{busy ? 'Ukládám…' : 'Uložit'}</button>
           </form>
         </div>

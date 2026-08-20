@@ -5,12 +5,13 @@ import CatchTicket from './CatchTicket.jsx'
 import HelpModal from './HelpModal.jsx'
 import GalleryModal from './GalleryModal.jsx'
 import BaitsModal, { computeBaitsList } from './BaitsModal.jsx'
-import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconGallery, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconPlay, IconLocate, IconMoonPhase, IconPressureTrend, IconNewest } from '../lib/icons.jsx'
+import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconGallery, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconPlay, IconLocate, IconMoonPhase, IconPressureTrend, IconNewest, IconBoat, IconRiverAuto } from '../lib/icons.jsx'
 import BaitPicker from './BaitPicker.jsx'
 import LocationsModal from './LocationsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
 import { fetchWaterConditions, fetchLiveConditions, findNearestStations, WATER_PRECISION_LABEL, SPA_LEVEL_INFO } from '../lib/hydrology.js'
 import { uploadPhoto } from '../lib/storage.js'
+import { buildRiverAreasFromLine } from '../lib/riverShape.js'
 
 const iconCarp = `<svg viewBox="0 0 24 24" fill="none"><path d="M3 12c0-4 5-7 10-7s8 3 8 7-3 7-8 7-10-3-10-7Z" stroke="#2C6E71" stroke-width="1.6"/><circle cx="16" cy="10.5" r="1" fill="#2C6E71"/></svg>`
 const iconSpin = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 20 L18 6" stroke="#6B7A4F" stroke-width="1.8"/><circle cx="4" cy="20" r="2" stroke="#6B7A4F" stroke-width="1.6"/><path d="M18 6 l3 -1 -1 3" stroke="#6B7A4F" stroke-width="1.6"/></svg>`
@@ -131,6 +132,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [locationActionMenuFor, setLocationActionMenuFor] = useState(null) // uložená výprava, pro kterou se ukazuje menu 📍 Místo
   const [attachingLocationsSessionId, setAttachingLocationsSessionId] = useState(null) // id výpravy, které se dodatečně mění navázaná místa
   const [areaDraft, setAreaDraft] = useState(null)               // {areas:[], current:[]} během kreslení oblasti
+  const [areaDrawChoice, setAreaDrawChoice] = useState(null)     // {resumeTarget} — mezikrok "jak nakreslit oblast?" (ručně / podle břehu)
+  const [riverLineDraft, setRiverLineDraft] = useState(null)     // {points:[]} — sbírání bodů středem toku pro auto tvar podle břehu
+  const [riverCorridorWidth, setRiverCorridorWidth] = useState(80)
+  const [riverOvershoot, setRiverOvershoot] = useState(0)
+  const [riverBusy, setRiverBusy] = useState(false)
+  const [riverError, setRiverError] = useState(null)
+  const riverResumeTargetRef = useRef(null)                      // kam se appka vrátí (placementTarget) po dokončení auto-kreslení
   const [rodPointsDraft, setRodPointsDraft] = useState(null)     // [{lat,lng}, ...] během sbírání pozic prutů (bodové typy)
   const [placementTarget, setPlacementTarget] = useState(null)   // 'session-point' | 'area-point' | 'rod-<i>' | 'catch-point'
   const [draftSession, setDraftSession] = useState(null)         // otevřený formulář nové výpravy
@@ -237,6 +245,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       if (savedSession) setDraftSession(JSON.parse(savedSession))
       const savedCatch = localStorage.getItem(`draft_catch_${groupId}`)
       if (savedCatch) setDraftCatch(JSON.parse(savedCatch))
+      const savedLocation = localStorage.getItem(`draft_location_${groupId}`)
+      if (savedLocation) setSavingLocationFor(JSON.parse(savedLocation))
       const savedNav = localStorage.getItem(`nav_state_${groupId}`)
       if (savedNav) {
         const nav = JSON.parse(savedNav)
@@ -272,6 +282,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       localStorage.removeItem(`draft_catch_${groupId}`)
     }
   }, [draftCatch, groupId])
+
+  useEffect(() => {
+    if (savingLocationFor) {
+      localStorage.setItem(`draft_location_${groupId}`, JSON.stringify(savingLocationFor))
+    } else {
+      localStorage.removeItem(`draft_location_${groupId}`)
+    }
+  }, [savingLocationFor, groupId])
 
   async function loadSessions() {
     setLoading(true)
@@ -349,6 +367,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       return
     }
 
+    if (target === 'river-line-point') {
+      setRiverLineDraft((prev) => ({ points: [...(prev?.points || []), point] }))
+      return
+    }
+
     if (target === 'relocate-session-point') {
       setPlacementTarget(null)
       const sid = relocateSessionIdRef.current
@@ -409,29 +432,44 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const pendingLiveRef = useRef(false)
   const pendingPointModeCatalogRef = useRef(null)
 
-  // --- kreslení preview polygonu(ů) při tvorbě oblasti ---
+  // --- kreslení preview polygonu(ů) při tvorbě oblasti (ruční i auto podle břehu) ---
+  // Sjednoceno do jednoho efektu (jedno clearLayers) -- areaDraft a riverLineDraft
+  // se sice v UI nikdy nezobrazují současně, ale generateRiverArea() nastavuje obě
+  // najednou (nová oblast + zrušení rozkreslené čáry), takže dva samostatné efekty
+  // by si mohly navzájem smazat výsledek podle pořadí spuštění.
   useEffect(() => {
     if (!draftLayer.current) return
     draftLayer.current.clearLayers()
-    if (!areaDraft) return
 
-    areaDraft.areas.forEach((pts) => {
-      L.polygon(pts.map((p) => [p.lat, p.lng]), {
-        color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.15,
-      }).addTo(draftLayer.current)
-    })
+    if (areaDraft) {
+      areaDraft.areas.forEach((pts) => {
+        L.polygon(pts.map((p) => [p.lat, p.lng]), {
+          color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.15,
+        }).addTo(draftLayer.current)
+      })
 
-    const cur = areaDraft.current
-    if (cur.length) {
-      const latlngs = cur.map((p) => [p.lat, p.lng])
-      if (latlngs.length === 1) {
-        L.circleMarker(latlngs[0], { radius: 6, color: '#6B7A4F' }).addTo(draftLayer.current)
-      } else {
-        L.polyline(latlngs, { color: '#6B7A4F', weight: 3, dashArray: '6 6' }).addTo(draftLayer.current)
-        latlngs.forEach((ll) => L.circleMarker(ll, { radius: 5, color: '#6B7A4F', fillOpacity: 1 }).addTo(draftLayer.current))
+      const cur = areaDraft.current
+      if (cur.length) {
+        const latlngs = cur.map((p) => [p.lat, p.lng])
+        if (latlngs.length === 1) {
+          L.circleMarker(latlngs[0], { radius: 6, color: '#6B7A4F' }).addTo(draftLayer.current)
+        } else {
+          L.polyline(latlngs, { color: '#6B7A4F', weight: 3, dashArray: '6 6' }).addTo(draftLayer.current)
+          latlngs.forEach((ll) => L.circleMarker(ll, { radius: 5, color: '#6B7A4F', fillOpacity: 1 }).addTo(draftLayer.current))
+        }
       }
     }
-  }, [areaDraft])
+
+    if (riverLineDraft && riverLineDraft.points.length) {
+      const latlngs = riverLineDraft.points.map((p) => [p.lat, p.lng])
+      if (latlngs.length === 1) {
+        L.circleMarker(latlngs[0], { radius: 6, color: '#2C6E71' }).addTo(draftLayer.current)
+      } else {
+        L.polyline(latlngs, { color: '#2C6E71', weight: 3, dashArray: '6 6' }).addTo(draftLayer.current)
+        latlngs.forEach((ll) => L.circleMarker(ll, { radius: 5, color: '#2C6E71', fillOpacity: 1 }).addTo(draftLayer.current))
+      }
+    }
+  }, [areaDraft, riverLineDraft])
 
   // --- kreslení náhledu pozic prutů při zakládání bodové výpravy ---
   useEffect(() => {
@@ -529,7 +567,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
     if (activePanel === 'locations') {
       const bounds = []
-      locationsCatalog.forEach((loc) => {
+      // Velké úseky (scope 'reach', chytání z lodi) appka na tuhle souhrnnou
+      // mapu záměrně nekreslí -- na dlouhé trase by přes sebe navzájem
+      // překrývaly malá místa. Vidět je jen v seznamu a po kliknutí
+      // "Zobrazit na hlavní mapě" (focusOnLocation) přiblížené samostatně.
+      locationsCatalog.filter((loc) => loc.scope !== 'reach').forEach((loc) => {
         if (loc.area) {
           const areas = normalizeAreas(loc.area)
           areas.forEach((pts) => {
@@ -736,11 +778,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setPlacementTarget('new-location-point')
   }
 
-  async function saveLocationToCatalog(name, revir) {
+  async function saveLocationToCatalog(name, revir, scope = 'spot') {
     const s = savingLocationFor
     const { error } = await supabase.from('locations').insert({
       group_id: groupId, created_by: userId, name, revir: revir || null,
-      area: s.area, lat: s.lat, lng: s.lng,
+      area: s.area, lat: s.lat, lng: s.lng, scope,
     })
     if (error) { alert(error.message); return }
     setSavingLocationFor(null)
@@ -938,12 +980,80 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     pendingPointModeCatalogRef.current = null
     const type = pendingTypeRef.current
     if (AREA_TYPES.includes(type)) {
-      setAreaDraft({ areas: [], current: [] })
-      setPlacementTarget('area-point')
+      beginAreaDrawing('area-point')
     } else {
       setRodPointsDraft([])
       setPlacementTarget('session-point')
     }
+  }
+
+  // --- mezikrok "jak nakreslit oblast?" -- ručně (jako dosud) vs. auto podle
+  // břehu (nová metoda, viz lib/riverShape.js). Používá se všude, kde appka
+  // dřív rovnou spouštěla ruční kreslení -- výsledek se v obou případech
+  // vloží do stejného areaDraft.areas, takže vše po dokreslení (tlačítka
+  // "Hotovo"/"Přidat oblast(i)"/"Uložit novou oblast") funguje beze změny.
+  function beginAreaDrawing(resumeTarget) {
+    setMobileSheetOpen(false)
+    setAreaDrawChoice({ resumeTarget })
+  }
+
+  function chooseManualDrawing() {
+    const resumeTarget = areaDrawChoice?.resumeTarget
+    setAreaDrawChoice(null)
+    setAreaDraft({ areas: [], current: [] })
+    setPlacementTarget(resumeTarget)
+  }
+
+  function chooseRiverDrawing() {
+    riverResumeTargetRef.current = areaDrawChoice?.resumeTarget
+    setAreaDrawChoice(null)
+    setRiverError(null)
+    setRiverLineDraft({ points: [] })
+    setPlacementTarget('river-line-point')
+  }
+
+  function cancelAreaDrawChoice() {
+    setAreaDrawChoice(null)
+    // pro případ, že appka čekala na dokončení "append" callbacku (viz
+    // startAddAreaPoint) -- ať Zrušit tady fakt celou akci ukončí
+    pendingAreaAppendRef.current = null
+  }
+
+  function undoRiverLinePoint() {
+    setRiverLineDraft((prev) => (prev ? { points: prev.points.slice(0, -1) } : prev))
+  }
+
+  function cancelRiverLine() {
+    setRiverLineDraft(null)
+    setPlacementTarget(null)
+    setRiverError(null)
+    riverResumeTargetRef.current = null
+    pendingAreaAppendRef.current = null
+  }
+
+  async function generateRiverArea() {
+    if (!riverLineDraft || riverLineDraft.points.length < 2) return
+    setRiverBusy(true)
+    setRiverError(null)
+    try {
+      const polygons = await buildRiverAreasFromLine(riverLineDraft.points, {
+        corridorWidthMeters: riverCorridorWidth,
+        overshootMeters: riverOvershoot,
+      })
+      if (!polygons || polygons.length === 0) {
+        setRiverError('Nepodařilo se najít použitelnou vodní plochu podél tvé čáry. Zkus přidat víc bodů, zvětšit šířku koridoru, nebo nakresli oblast ručně.')
+        setRiverBusy(false)
+        return
+      }
+      const resumeTarget = riverResumeTargetRef.current
+      setAreaDraft((prev) => ({ areas: [...(prev?.areas || []), ...polygons], current: [] }))
+      setRiverLineDraft(null)
+      riverResumeTargetRef.current = null
+      setPlacementTarget(resumeTarget)
+    } catch (err) {
+      setRiverError('Nepodařilo se získat data o řece: ' + err.message + '. Zkus to znovu za chvíli, nebo nakresli oblast ručně.')
+    }
+    setRiverBusy(false)
   }
 
   function togglePickingCatalogId(id) {
@@ -1068,15 +1178,24 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (offerCatalog) {
       setAddAreaStep('choose')
     } else {
-      setAreaDraft({ areas: [], current: [] })
-      setPlacementTarget('area-point-append')
+      beginAreaDrawing('area-point-append')
     }
   }
 
   function startAddAreaManualFromChoice() {
     setAddAreaStep(null)
-    setAreaDraft({ areas: [], current: [] })
-    setPlacementTarget('area-point-append')
+    beginAreaDrawing('area-point-append')
+  }
+
+  // Řeší případ, kdy appka U TÉTO KONKRÉTNÍ akce už má vlastní mezikrok
+  // (addAreaStep 'choose' s volbami "Z katalogu"/"Naklikat nové") -- tam
+  // přidáváme třetí tlačítko rovnou, bez dalšího vnořeného mezikroku.
+  function startAddAreaRiverFromChoice() {
+    setAddAreaStep(null)
+    riverResumeTargetRef.current = 'area-point-append'
+    setRiverError(null)
+    setRiverLineDraft({ points: [] })
+    setPlacementTarget('river-line-point')
   }
 
   function toggleAddAreaCatalogId(id) {
@@ -1641,14 +1760,20 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return `${prefix}${visibleSessions.length} výprav · ${catchCount} úlovků`
   }
 
-  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || placementTarget === 'new-location-point' || areaDraft || rodPointsDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
+  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || placementTarget === 'new-location-point' || areaDraft || riverLineDraft || rodPointsDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
 
   // --- postranní panel/mobilní lišta v režimu "📍 Revíry" — nezávislé na viewMode/activeId výprav, ty se drží beze změny v pozadí ---
   function renderLocationsList() {
     const q = normalizeSearchText(searchQuery)
     const sorted = [...locationsCatalog]
       .filter((l) => !q || normalizeSearchText(l.name).includes(q) || normalizeSearchText(l.revir).includes(q))
-      .sort((a, b) => a.name.localeCompare(b.name))
+      .sort((a, b) => {
+        // velké úseky (chytání z lodi) vždy nahoře, uvnitř obou skupin abecedně
+        const aReach = a.scope === 'reach' ? 0 : 1
+        const bReach = b.scope === 'reach' ? 0 : 1
+        if (aReach !== bReach) return aReach - bReach
+        return a.name.localeCompare(b.name)
+      })
     return (
       <>
         <div className="sb-head">
@@ -1679,11 +1804,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               <div key={l.id} className="record-row" onClick={() => { setLocationsReturnId(l.id); setBaitsInitialKey(null); setShowLocations(true) }}>
                 <div className="record-head">
                   <strong style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                    <IconRevir size={16} color="var(--water-deep)" dotColor="var(--paper)" /> {l.name}
+                    {l.scope === 'reach'
+                      ? <IconBoat size={16} color="var(--amber-deep)" />
+                      : <IconRevir size={16} color="var(--water-deep)" dotColor="var(--paper)" />} {l.name}
                   </strong>
                   {l.revir && <span className="revir-chip">{l.revir}</span>}
                 </div>
-                <div className="c-sub" style={{ marginTop: 4 }}>{linkedSessions.length} výprav · {catchCount} úlovků</div>
+                <div className="c-sub" style={{ marginTop: 4 }}>
+                  {l.scope === 'reach' && <span style={{ color: 'var(--amber-deep)', fontWeight: 600 }}>Velký úsek · </span>}
+                  {linkedSessions.length} výprav · {catchCount} úlovků
+                </div>
               </div>
             )
           })
@@ -2182,7 +2312,55 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               <div className="type-picker-title">Jak přidat oblast?</div>
               <button className="type-btn" onClick={() => setAddAreaStep('catalog')}><IconRevir size={14} /> Z katalogu</button>
               <button className="type-btn" onClick={startAddAreaManualFromChoice}><IconEdit size={13} /> Naklikat novou na mapě</button>
+              <button className="type-btn" onClick={startAddAreaRiverFromChoice}><IconRiverAuto size={14} /> Podle břehu (auto)</button>
               <button className="type-cancel" onClick={() => { setAddAreaStep(null); pendingAreaAppendRef.current = null }}>Zrušit</button>
+            </div>
+          )}
+
+          {areaDrawChoice && (
+            <div className="type-picker" style={{ zIndex: 700 }}>
+              <div className="type-picker-title">Jak nakreslit oblast?</div>
+              <button className="type-btn" onClick={chooseManualDrawing}><IconEdit size={13} /> Naklikat ručně</button>
+              <button className="type-btn" onClick={chooseRiverDrawing}><IconRiverAuto size={14} /> Podle břehu (auto)</button>
+              <button className="type-cancel" onClick={cancelAreaDrawChoice}>Zrušit</button>
+            </div>
+          )}
+
+          {riverLineDraft && (
+            <div className="type-picker area-hint" style={{ minWidth: 270, zIndex: 700 }}>
+              <div className="type-picker-title">Klikej body středem toku</div>
+              <p className="hint-text" style={{ margin: '0 0 8px' }}>
+                {riverLineDraft.points.length} {riverLineDraft.points.length === 1 ? 'bod' : 'body'} (potřeba aspoň 2). Appka najde skutečnou vodní plochu z OSM dat kolem tvé čáry.
+              </p>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                <label style={{ fontSize: 11, display: 'flex', flexDirection: 'column', gap: 2, color: 'var(--ink-soft)' }}>
+                  Šířka koridoru (m)
+                  <input
+                    type="number" className="text-input" style={{ width: 92 }}
+                    value={riverCorridorWidth}
+                    onChange={(e) => setRiverCorridorWidth(Number(e.target.value) || 80)}
+                  />
+                </label>
+                <label style={{ fontSize: 11, display: 'flex', flexDirection: 'column', gap: 2, color: 'var(--ink-soft)' }}>
+                  Přesah na konci (m)
+                  <input
+                    type="number" className="text-input" style={{ width: 92 }}
+                    value={riverOvershoot}
+                    onChange={(e) => setRiverOvershoot(Number(e.target.value) || 0)}
+                  />
+                </label>
+              </div>
+              {riverBusy && <p className="hint-text" style={{ margin: '4px 0' }}>Zjišťuji tvar vody z OSM dat…</p>}
+              {riverError && <p className="error-text" style={{ margin: '4px 0' }}>{riverError}</p>}
+              <div className="area-controls">
+                <button className="new-btn" onClick={undoRiverLinePoint} disabled={!riverLineDraft.points.length || riverBusy}>Zpět o bod</button>
+                <button
+                  className="btn-primary" style={{ margin: 0 }}
+                  onClick={generateRiverArea}
+                  disabled={riverLineDraft.points.length < 2 || riverBusy}
+                >{riverBusy ? 'Generuji…' : 'Vygenerovat'}</button>
+                <button className="new-btn" onClick={cancelRiverLine} disabled={riverBusy}>Zrušit</button>
+              </div>
             </div>
           )}
 
@@ -2575,12 +2753,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 function SaveLocationForm({ source, onCancel, onSave }) {
   const [name, setName] = useState(source.title || '')
   const [revir, setRevir] = useState(source.revir || '')
+  const [scope, setScope] = useState('spot')
   const [busy, setBusy] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
     setBusy(true)
-    await onSave(name, revir)
+    await onSave(name, revir, scope)
     setBusy(false)
   }
 
@@ -2602,6 +2781,24 @@ function SaveLocationForm({ source, onCancel, onSave }) {
             <input className="text-input" required autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="např. Labe - Vaflák" />
             <label className="field-label">Revír</label>
             <input className="text-input" value={revir} onChange={(e) => setRevir(e.target.value)} />
+            <label className="field-label">Typ místa</label>
+            <div className="tab-row">
+              <button
+                type="button"
+                className={`tab-btn ${scope === 'spot' ? 'active' : ''}`}
+                onClick={() => setScope('spot')}
+              ><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconRevir size={13} dotColor={scope === 'spot' ? '#fff' : 'var(--water-deep)'} /> Malé místo</span></button>
+              <button
+                type="button"
+                className={`tab-btn ${scope === 'reach' ? 'active' : ''}`}
+                onClick={() => setScope('reach')}
+              ><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconBoat size={13} /> Velký úsek (loď)</span></button>
+            </div>
+            {scope === 'reach' && (
+              <p className="help-note" style={{ marginTop: 6 }}>
+                Velké úseky se nezobrazují na přehledové mapě mezi malými místy (nepřekrývaly by je) — jen v seznamu katalogu, nahoře. Celou plochu uvidíš po otevření detailu a kliknutí „Zobrazit na hlavní mapě".
+              </p>
+            )}
             <button className="btn-primary" type="submit" disabled={busy} style={{ marginTop: 14 }}>{busy ? 'Ukládám…' : 'Uložit do katalogu'}</button>
           </form>
         </div>

@@ -256,6 +256,31 @@ export function IconMapEdit({ size = 20, color = 'currentColor' }) {
   )
 }
 
+// Malá loďka -- pro velké/úsekové revíry (chytání z lodi na delší trase),
+// aby šly v seznamu katalogu na první pohled odlišit od běžných malých míst.
+export function IconBoat({ size = 20, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 14.5h16l-2.2 4.3c-.2.4-.6.7-1 .7H7.2c-.4 0-.8-.3-1-.7L4 14.5Z" fill={color} />
+      <path d="M8 14.5V8.8c0-.4.3-.7.7-.6l6.6 1.8c.5.1.6.7.2 1L11 14.5" fill="none" stroke={color} strokeWidth="1.3" />
+      <path d="M2.5 17.3c1.6-1 3.2-.9 4.5.3s2.9 1.3 4.4.3 2.9-1 4.4-.1 2.9 1.2 4.4.2" stroke={color} strokeWidth="1.1" fill="none" strokeLinecap="round" opacity=".6" />
+    </svg>
+  )
+}
+
+// "Podle břehu (auto)" -- appka sama dopočítá tvar podle skutečné vodní
+// plochy (Overpass/OSM), na rozdíl od ručního klikání (IconMapEdit). Vlnky
+// + jiskřička jako vizuální náznak "appka to dopočítá sama".
+export function IconRiverAuto({ size = 20, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 15c1.8-1.1 3.6-1.1 5.4 0s3.6 1.1 5.4 0 3.6-1.1 5.4 0" stroke={color} strokeWidth="1.6" fill="none" strokeLinecap="round" />
+      <path d="M3 19c1.8-1.1 3.6-1.1 5.4 0s3.6 1.1 5.4 0 3.6-1.1 5.4 0" stroke={color} strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".5" />
+      <path d="M17 3.2l.9 2 2 .9-2 .9-.9 2-.9-2-2-.9 2-.9.9-2Z" fill={color} />
+    </svg>
+  )
+}
+
 export function IconBookmark({ size = 20, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">

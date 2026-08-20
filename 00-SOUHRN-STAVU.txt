@@ -17,14 +17,15 @@ TECH STACK
 
 STAV DATABÁZE
 -------------
-Migrace 1 (schema.sql) až migrace 12 jsou VŠECHNY spuštěné a appka na ně
+Migrace 1 (schema.sql) až migrace 14 jsou VŠECHNY spuštěné a appka na ně
 sedí. Přiložené soubory schema.sql.txt a migration_2.sql.txt až
-migration_12.sql.txt obsahují přesné SQL — spouštět v tomto pořadí,
+migration_14.sql.txt obsahují přesné SQL — spouštět v tomto pořadí,
 pokud by se appka stavěla znovu od nuly.
 
 Klíčové tabulky: profiles, groups, group_members, group_invites,
 sessions, rods, catches, baits (katalog nástrah), session_locations
-(propojení výprav s katalogem míst), locations (katalog míst/revírů).
+(propojení výprav s katalogem míst), locations (katalog míst/revírů,
+teď se sloupcem scope 'spot'/'reach' -- viz migrace 14).
 
 HLAVNÍ FUNKCE (aktuální stav)
 -----------------------------
@@ -160,6 +161,57 @@ ZNÁMÉ NEDODĚLANÉ VĚCI (co uživatel chce příště)
    když tím z výpravy zmizí poslední polygon patřící danému místu --
    výprava tak může zůstat "navázaná" na místo, ze kterého už fyzicky
    nic nezbylo. Neřešeno, drobné a nekritické.
+
+ZMĚNY PROTI PŘEDCHOZÍ DÁVCE (auto-tvar revíru podle břehu, velké úseky pro loď)
+--------------------------------------------------------------------------------
+1. NOVÁ FUNKCE: automatické generování tvaru revíru podél řeky (nová
+   knihovna src/lib/riverShape.js). Místo ručního klikání celého obvodu
+   uživatel nakliká jen pár bodů STŘEDEM TOKU -- appka najde skutečnou
+   vodní plochu z OpenStreetMap dat (Overpass API, s automatickým
+   fallbackem na záložní veřejný server při timeoutu/výpadku), prolne ji
+   s "koridorem" zadané šířky kolem čáry (turf.js buffer+intersect --
+   vzdálené zátoky/ramena mimo koridor odpadnou, i když jsou v OSM
+   součástí téhož polygonu), a usekne na délku čáry dvěma kolmými řezy
+   na jejích koncích (s volitelným přesahem v metrech).
+   Nová závislost v package.json: @turf/turf.
+   Dostupné všude, kde appka dřív nabízela jen ruční kreslení: katalog
+   míst ("+ Přidat místo"), nová výprava typu přívlač, "+ Přidat oblast"
+   u rozepsané i uložené výpravy, "Upravit oblasti" u katalogového místa.
+   Appka se vždy nejdřív zeptá "Jak nakreslit oblast?" (ručně / podle
+   břehu) -- výsledek auto-kreslení se vloží do STEJNÉHO mechanismu jako
+   ruční kreslení (areaDraft.areas), takže veškeré navazující kroky
+   (Hotovo/Přidat oblast(i)/Uložit) fungují beze změny.
+   Ověřeno v izolovaném prototypu na úseku Labe (Tuhaň, Kárané,
+   Čelákovice) předtím, než šlo do appky -- na místech s kvalitně
+   zmapovanou vodou v OSM dá appka realistický tvar břehu.
+2. NOVÁ FUNKCE: rozlišení "malých" míst (revírů) od "velkých" úseků pro
+   chytání z lodi. Nový sloupec locations.scope ('spot'/'reach',
+   migrace 14). Při ukládání nového místa (SaveLocationForm) i při
+   úpravě existujícího (EditLocationForm v LocationsModal.jsx) jde
+   zvolit typ místa přepínačem. Velké úseky (IconBoat):
+   - v seznamu katalogu jsou řazené NAHORU, odlišené ikonou lodi
+   - na přehledové mapě "všechny revíry najednou" (aktivní panel
+     Revíry) se NEKRESLÍ -- na dlouhé trase by překrývaly malá
+     místa. Vidět jsou jen v seznamu a po kliknutí "Zobrazit na hlavní
+     mapě" (focusOnLocation) -- to appka uměla už dřív, beze změny.
+3. NOVÉ ikony (src/lib/icons.jsx): IconBoat (velké úseky), IconRiverAuto
+   (tlačítko "Podle břehu (auto)") -- stejný organický styl jako zbytek
+   sady, žádná emoji.
+4. DOPLNĚNO: perzistence rozepsaného formuláře "Uložit místo do
+   katalogu" (savingLocationFor) do localStorage stejným způsobem jako
+   draftSession/draftCatch (klíč draft_location_${groupId}) -- dřív se
+   při přepnutí okna/appky na pozadí ztrácel i s už vyklikaným
+   bodem/oblastí, teď přežije stejně jako rozepsaná výprava/úlovek.
+
+ZNÁMÉ NEDODĚLANÉ VĚCI Z TÉTO DÁVKY (vědomě odloženo na příště)
+-----------------------------------------------------------------
+a. Hromadná aktualizace existujících výprav podle nově předělaného
+   katalogového místa (auto-tvar podle břehu) -- pořád jen ručně,
+   výprava po výpravě, přes "Aktualizovat podle katalogu" (viz bod 1
+   ve starší sekci "ZNÁMÉ NEDODĚLANÉ VĚCI" níže -- stejné omezení).
+b. Živé GPS trasování za jízdy na loďce (auto-sbírání bodů čáry podle
+   polohy, místo ručního klikání) -- navrhováno, ale vědomě odloženo na
+   samostatnou fázi až po ověření základního auto-kreslení v praxi.
 
 ZMĚNY PROTI PŘEDCHOZÍ DÁVCE (oprava buttonů, oprava párování úlovků,
 vazba polygon<->katalog, přepínač Revíry)
