@@ -149,8 +149,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // celé editace místa se resetuje, ať appka omylem nenaváže na cizí/starý
   // kontext z úplně jiného místa.
   const lastRiverCutRef = useRef(null)                           // {cutPoint, dirPoints} konce poslední vygenerované plochy
+  const sessionFirstStartCutRef = useRef(null)                   // start řezu PRVNÍ plochy vygenerované v týhle živé editaci -- uloží se s revírem, ať jde navázat i z jeho začátku
   const [riverSnapAvailable, setRiverSnapAvailable] = useState(false)
   const [riverSnapEnabled, setRiverSnapEnabled] = useState(true)
+  const [snapSourceLabel, setSnapSourceLabel] = useState(null)    // text pro uživatele, na co přesně se teď naváže ("Labe - Vaflák (konec)" apod.)
+  const [showCatalogSnapPicker, setShowCatalogSnapPicker] = useState(false)
   const pendingConfirmActionRef = useRef(null)                   // 'proceedToForm' | 'finishAppendArea' | 'proceedRelocateArea' — spustí se, až se areaDraft skutečně aktualizuje
   const suppressLocationsFitRef = useRef(false)                  // jednorázově potlačí "přeostři mapu na všechny revíry" hned po potvrzení/uložení konkrétní editované oblasti
   const [rodPointsDraft, setRodPointsDraft] = useState(null)     // [{lat,lng}, ...] během sbírání pozic prutů (bodové typy)
@@ -846,14 +849,34 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // nenabídne navázání na kontext z úplně jiného, nesouvisejícího revíru.
   function resetRiverSnapMemory() {
     lastRiverCutRef.current = null
+    sessionFirstStartCutRef.current = null
     setRiverSnapAvailable(false)
+    setSnapSourceLabel(null)
+    setShowCatalogSnapPicker(false)
+  }
+
+  // Vybere řez z JINÉHO, dřív uloženého revíru (locations.edge_cuts) jako
+  // zdroj navázání pro nově kreslenou plochu -- na rozdíl od lastRiverCutRef
+  // naplněného automaticky po vygenerování v týhle samé editaci, tohle
+  // funguje i napříč zcela samostatnými, dávno uloženými revíry.
+  function pickCatalogSnap(location, which) {
+    const cut = location.edge_cuts?.[which]
+    if (!cut) return
+    lastRiverCutRef.current = cut
+    setRiverSnapAvailable(true)
+    setRiverSnapEnabled(true)
+    setSnapSourceLabel(`${location.name} (${which === 'start' ? 'začátek' : 'konec'})`)
+    setShowCatalogSnapPicker(false)
   }
 
   async function saveLocationToCatalog(name, revir, scope = 'spot') {
     const s = savingLocationFor
+    const edgeCuts = (sessionFirstStartCutRef.current || lastRiverCutRef.current)
+      ? { start: sessionFirstStartCutRef.current || null, end: lastRiverCutRef.current || null }
+      : null
     const { error } = await supabase.from('locations').insert({
       group_id: groupId, created_by: userId, name, revir: revir || null,
-      area: s.area, lat: s.lat, lng: s.lng, scope,
+      area: s.area, lat: s.lat, lng: s.lng, scope, edge_cuts: edgeCuts,
     })
     if (error) { alert(error.message); return }
     setSavingLocationFor(null)
@@ -1138,7 +1161,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const safetyTimeout = setTimeout(() => controller.abort(), 45000)
     try {
       const useSnap = riverSnapEnabled && lastRiverCutRef.current
-      const { areas: polygons, endCut } = await buildRiverAreasFromLine(riverLineDraft.points, {
+      const { areas: polygons, startCut, endCut } = await buildRiverAreasFromLine(riverLineDraft.points, {
         corridorWidthMeters: Number(riverCorridorWidth) || 80,
         overshootMeters: Number(riverOvershoot) || 0,
         signal: controller.signal,
@@ -1147,10 +1170,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       if (!polygons || polygons.length === 0) {
         setRiverError('Nepodařilo se najít použitelnou vodní plochu podél tvé čáry. Zkus přidat víc bodů, zvětšit šířku koridoru, nebo nakresli oblast ručně.')
       } else {
+        // Start PRVNÍ plochy v týhle editaci appka uloží stranou -- bude to
+        // "začátek" celého revíru, uchovatelný pro navázání jiného revíru
+        // i mnohem později (viz sessionFirstStartCutRef, ukládá se do
+        // locations.edge_cuts při finálním uložení).
+        if (!sessionFirstStartCutRef.current) sessionFirstStartCutRef.current = startCut
         // Konec téhle plochy si appka zapamatuje -- kdyby uživatel hned
         // navazoval další plochou, půjde se na ni napojit stejně přesně.
         lastRiverCutRef.current = endCut
         setRiverSnapAvailable(!!endCut)
+        setSnapSourceLabel('tuto plochu (právě vygenerováno)')
         // Nemerguje se rovnou do areaDraft -- appka nejdřív ukáže výsledek
         // a nechá potvrdit "Použít", ať se needěje neprošená rovnou do
         // starého "Hotovo/Přidat oblast(i)" panelu bez možnosti si to
@@ -1734,6 +1763,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       const c = areaCentroid(areas.flat())
       updates.lat = c.lat
       updates.lng = c.lng
+    }
+    // Metadata řezu se přepíšou, jen pokud appka v týhle editaci fakt něco
+    // vygenerovala podle břehu -- jinak (čistě ruční úprava) appka nechá
+    // stávající edge_cuts v DB beze změny, ať omylem nesmaže platná
+    // metadata z dřívějška jen proto, že tentokrát nebyla použita.
+    if (sessionFirstStartCutRef.current || lastRiverCutRef.current) {
+      updates.edge_cuts = { start: sessionFirstStartCutRef.current || null, end: lastRiverCutRef.current || null }
     }
     await supabase.from('locations').update(updates).eq('id', id)
     setEditingAreasLocation(null)
@@ -2526,10 +2562,29 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                     </label>
                   </div>
                   {riverSnapAvailable && (
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, margin: '4px 0', cursor: 'pointer', color: 'rgba(255,255,255,.9)' }}>
-                      <input type="checkbox" checked={riverSnapEnabled} onChange={(e) => setRiverSnapEnabled(e.target.checked)} />
-                      Navázat přesně na konec předchozího úseku (stejný sklon řezu)
-                    </label>
+                    <>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, margin: '4px 0', cursor: 'pointer', color: 'rgba(255,255,255,.9)' }}>
+                        <input type="checkbox" checked={riverSnapEnabled} onChange={(e) => setRiverSnapEnabled(e.target.checked)} />
+                        Navázat přesně na: {snapSourceLabel || 'předchozí úsek'}
+                      </label>
+                    </>
+                  )}
+                  {!riverBusy && locationsCatalog.some((l) => l.edge_cuts && (l.edge_cuts.start || l.edge_cuts.end)) && (
+                    <button
+                      type="button" className="new-btn" style={{ margin: '2px 0 4px', width: '100%', justifyContent: 'center', color: '#fff', borderColor: 'rgba(255,255,255,.4)' }}
+                      onClick={() => setShowCatalogSnapPicker((v) => !v)}
+                    >{showCatalogSnapPicker ? 'Zavřít výběr revíru' : 'Navázat na revír z katalogu'}</button>
+                  )}
+                  {showCatalogSnapPicker && (
+                    <div style={{ maxHeight: 140, overflowY: 'auto', background: 'rgba(0,0,0,.15)', borderRadius: 8, padding: 6, margin: '0 0 6px' }}>
+                      {locationsCatalog.filter((l) => l.edge_cuts && (l.edge_cuts.start || l.edge_cuts.end)).map((l) => (
+                        <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', fontSize: 11.5, color: '#fff' }}>
+                          <span style={{ flex: 1, textAlign: 'left' }}>{l.name}</span>
+                          {l.edge_cuts.start && <button type="button" className="new-btn" style={{ color: '#fff', borderColor: 'rgba(255,255,255,.4)' }} onClick={() => pickCatalogSnap(l, 'start')}>Začátek</button>}
+                          {l.edge_cuts.end && <button type="button" className="new-btn" style={{ color: '#fff', borderColor: 'rgba(255,255,255,.4)' }} onClick={() => pickCatalogSnap(l, 'end')}>Konec</button>}
+                        </div>
+                      ))}
+                    </div>
                   )}
                   {riverBusy && <p className="hint-text" style={{ margin: '4px 0', fontSize: 11.5 }}>Zjišťuji tvar vody z OSM dat…</p>}
                   {riverError && <p className="hint-text" style={{ margin: '4px 0', fontSize: 11.5, color: '#B4432E', fontWeight: 600 }}>{riverError}</p>}
@@ -2548,7 +2603,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   Vypadá to dobře? Vygenerováno {riverConfirm.polygons.length} {riverConfirm.polygons.length === 1 ? 'plocha' : 'plochy'} — vykreslené na mapě.
                   {riverConfirm.usedSnap && (
                     <p className="hint-text" style={{ margin: '6px 0 0', fontSize: 11, fontWeight: 600 }}>
-                      ✓ Navázáno přesně na konec předchozího úseku — bez mezery, stejný sklon řezu.
+                      ✓ Navázáno přesně na: {snapSourceLabel} — bez mezery, stejný sklon řezu.
                     </p>
                   )}
                   <div className="area-controls">

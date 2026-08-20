@@ -17,15 +17,16 @@ TECH STACK
 
 STAV DATABÁZE
 -------------
-Migrace 1 (schema.sql) až migrace 14 jsou VŠECHNY spuštěné a appka na ně
+Migrace 1 (schema.sql) až migrace 15 jsou VŠECHNY spuštěné a appka na ně
 sedí. Přiložené soubory schema.sql.txt a migration_2.sql.txt až
-migration_14.sql.txt obsahují přesné SQL — spouštět v tomto pořadí,
+migration_15.sql.txt obsahují přesné SQL — spouštět v tomto pořadí,
 pokud by se appka stavěla znovu od nuly.
 
 Klíčové tabulky: profiles, groups, group_members, group_invites,
 sessions, rods, catches, baits (katalog nástrah), session_locations
 (propojení výprav s katalogem míst), locations (katalog míst/revírů,
-teď se sloupcem scope 'spot'/'reach' -- viz migrace 14).
+se sloupcem scope 'spot'/'reach' -- viz migrace 14 -- a edge_cuts
+jsonb pro trvalé navazování revírů beze švu -- viz migrace 15).
 
 HLAVNÍ FUNKCE (aktuální stav)
 -----------------------------
@@ -325,18 +326,33 @@ DOLADĚNÍ UX AUTO-KRESLENÍ PODLE BŘEHU (na základě zkoušení v provozu)
 - Timeout na jeden Overpass server v proxy zkrácen z 12s na 10s (funkční
   odpověď přijde rychle, nebo vůbec -- není důvod čekat déle). 4 servery
   x 10s = max ~40s worst-case, klientská pojistka zůstává na 45s.
-- Navazování revírů beze švu (bod 3 z diskuze) -- UŽ IMPLEMENTOVÁNO:
-  appka si po vygenerování plochy pamatuje přesnou polohu i sklon
-  KONCOVÉHO řezu (lastRiverCutRef, viz Dashboard.jsx + buildRiverAreasFromLine
-  v riverShape.js, parametr previousCut/návratová hodnota endCut). Při
-  kreslení NAVAZUJÍCÍ plochy appka tenhle řez PŘEVEZME 1:1 (stejný bod,
-  stejný sklon) místo počítání znovu z vlastní čáry -- hrana tak sedí
-  bez mezery i bez rozdílného úhlu. V UI přibyl viditelný přepínač
-  "Navázat přesně na konec předchozího úseku" (zobrazí se jen, když má
-  appka co nabídnout) a potvrzení "✓ Navázáno..." v kroku přehledu
-  výsledku. Paměť řezu se resetuje při uložení/zrušení editace míst
-  (resetRiverSnapMemory), ať appka nenabídne navázání na nesouvisející
-  revír z úplně jiné části appky.
+- Navazování revírů beze švu (bod 3 z diskuze) -- implementováno ve
+  dvou vrstvách:
+  1) V RÁMCI JEDNÉ ŽIVÉ EDITACE (jen v paměti prohlížeče): appka si po
+     vygenerování plochy pamatuje přesnou polohu i sklon KONCOVÉHO řezu
+     (lastRiverCutRef, viz Dashboard.jsx + buildRiverAreasFromLine v
+     riverShape.js, parametr previousCut/návratová hodnota endCut). Při
+     kreslení NAVAZUJÍCÍ plochy appka tenhle řez PŘEVEZME 1:1 (stejný
+     bod, stejný sklon) místo počítání znovu z vlastní čáry.
+  2) TRVALE, NAPŘÍČ SAMOSTATNĚ ULOŽENÝMI REVÍRY (migrace 15, sloupec
+     locations.edge_cuts jsonb): appka si při KAŽDÉM uložení revíru,
+     který vznikl (byť jen zčásti) přes auto-kreslení podle břehu,
+     zapíše metadata OBOU konců (start i konec, sessionFirstStartCutRef
+     + lastRiverCutRef) do DB. Při kreslení nové/upravované plochy appka
+     nabídne tlačítko "Navázat na revír z katalogu" (zobrazí se, jen
+     pokud aspoň jeden jiný revír má uložená edge_cuts metadata) --
+     seznam revírů s tlačítky Začátek/Konec u každého, kliknutím appka
+     natáhne jejich uložený řez jako zdroj navázání, úplně stejně jako
+     by šlo o "poslední vygenerovanou plochu" v (1). Při ruční úpravě
+     BEZ použití auto-kreslení appka NEPŘEPISUJE stávající edge_cuts u
+     dané položky (aby o metadata z dřívějška nepřišla jen kvůli
+     jednomu ryze ručnímu zásahu) -- pole se v update objektu vynechá.
+  V UI: viditelný přepínač "Navázat přesně na: <popisek zdroje>"
+  (zobrazí se jen, když má appka co nabídnout) a potvrzení
+  "✓ Navázáno přesně na: ..." v kroku přehledu výsledku. Paměť řezu
+  (obojí, session i výběr z katalogu) se resetuje při uložení/zrušení
+  editace míst (resetRiverSnapMemory), ať appka nenabídne navázání na
+  nesouvisející revír z úplně jiné části appky.
 
 ZMĚNY PROTI PŘEDCHOZÍ DÁVCE (oprava buttonů, oprava párování úlovků,
 vazba polygon<->katalog, přepínač Revíry)

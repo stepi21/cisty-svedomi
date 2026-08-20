@@ -120,13 +120,19 @@ function clipHalfPlane(poly, p0, normal) {
  *   i stejný sklon) pro start téhle nové plochy, místo aby ji počítala
  *   znovu z vlastního prvního úseku čáry -- zaručí to navazující hranu
  *   bez mezery i bez jiného sklonu řezu (viz Dashboard.jsx, lastRiverCutRef).
- * @returns {Promise<{areas: Array<Array<{lat:number,lng:number}>>, endCut: {cutPoint:{lat,lng}, dirPoints:[{lat,lng},{lat,lng}]} | null}>}
+ * @returns {Promise<{
+ *   areas: Array<Array<{lat:number,lng:number}>>,
+ *   startCut: {cutPoint:{lat,lng}, dirPoints:[{lat,lng},{lat,lng}]},
+ *   endCut: {cutPoint:{lat,lng}, dirPoints:[{lat,lng},{lat,lng}]},
+ * }>}
  *   areas -- pole polygonů, každý jako pole bodů {lat,lng} (stejný formát,
- *   jaký appka používá pro ručně naklikané oblasti); endCut -- metadata
- *   konce TÉTO vygenerované čáry, uchovatelná pro navázání DALŠÍ plochy.
+ *   jaký appka používá pro ručně naklikané oblasti); startCut/endCut --
+ *   metadata obou konců TÉTO vygenerované čáry, uchovatelná pro navázání
+ *   DALŠÍ plochy (ať už v rámci téže editace, nebo trvale uložená u
+ *   katalogového místa pro navázání i mnohem později).
  */
 export async function buildRiverAreasFromLine(points, options = {}) {
-  if (!points || points.length < 2) return { areas: [], endCut: null }
+  if (!points || points.length < 2) return { areas: [], startCut: null, endCut: null }
   const corridorWidthMeters = options.corridorWidthMeters ?? 80
   const overshootMeters = options.overshootMeters ?? 0
   const searchPadMeters = 400 // menší než hledaná šířka koridoru by neměla být
@@ -149,12 +155,12 @@ export async function buildRiverAreasFromLine(points, options = {}) {
   const nodesData = {}
   data.elements.filter((e) => e.type === 'node').forEach((n) => { nodesData[n.id] = { lat: n.lat, lng: n.lon } })
   const ways = data.elements.filter((e) => e.type === 'way' && e.nodes)
-  if (ways.length === 0) return { areas: [], endCut: null }
+  if (ways.length === 0) return { areas: [], startCut: null, endCut: null }
 
   const lineLngLat = points.map((p) => [p.lng, p.lat])
   const turfLine = turf.lineString(lineLngLat)
   const corridorPoly = turf.buffer(turfLine, corridorWidthMeters, { units: 'meters' })
-  if (!corridorPoly) return { areas: [], endCut: null }
+  if (!corridorPoly) return { areas: [], startCut: null, endCut: null }
 
   const midLat = points.reduce((s, p) => s + p.lat, 0) / points.length
   const proj = makeProjector(midLat)
@@ -222,10 +228,19 @@ export async function buildRiverAreasFromLine(points, options = {}) {
     })
   })
 
+  const startCutMeta = {
+    cutPoint: proj.toLatLng(startCut),
+    // Pokud se přebíral řez ze sousední plochy (previousCut), appka si
+    // pamatuje TU SAMOU dvojici bodů určujících sklon -- ne vlastní první
+    // úsek čáry -- ať metadata zůstanou konzistentní napříč navazujícími
+    // plochami, i kdyby se tahle konkrétní plocha jednou stala výchozím
+    // bodem pro DALŠÍ navazování.
+    dirPoints: options.previousCut ? options.previousCut.dirPoints : [points[0], points[1]],
+  }
   const endCutMeta = {
     cutPoint: proj.toLatLng(endCut),
     dirPoints: [points[points.length - 2], points[points.length - 1]],
   }
 
-  return { areas: result, endCut: endCutMeta }
+  return { areas: result, startCut: startCutMeta, endCut: endCutMeta }
 }
