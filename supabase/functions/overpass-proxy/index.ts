@@ -72,14 +72,14 @@ export default {
 
     let lastError: string | null = null;
     for (const server of OVERPASS_SERVERS) {
-      // Jeden pokus na server -- appka má teď 4 zrcadla v seznamu, takže
-      // je rychlejší a spolehlivější jít hned na další server než čekat
-      // a zkoušet ten samý znovu (a appka navíc na frontendu umožňuje
-      // celé generování kdykoli zrušit, worst-case čekání by tak i tak
-      // nemělo přerůst v řádu minut).
+      // Jeden pokus na server, krátký timeout (6s) -- funkční odpověď od
+      // Overpass přijde typicky rychle, nebo vůbec (viz i poznámka výše o
+      // blokovaných cloudových IP rozsazích). Delší čekání by nezvýšilo
+      // šanci na úspěch, jen by prodlužovalo dobu do zjištění, že se má jít
+      // na další server/zkusit to znovu. 4 servery x 6s = max ~24s worst-case.
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
         const upstream = await fetch(server, {
           method: "POST",
           headers: {

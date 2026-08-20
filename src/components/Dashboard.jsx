@@ -568,6 +568,26 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return Math.sqrt(dLat * dLat + dLng * dLng)
   }
 
+  // Úhel (ve stupních) mezi směrem uloženého řezu sousedního revíru a
+  // směrem PRVNÍHO úseku právě kreslené čáry -- appka podle tohohle pozná,
+  // jestli navázání dává geometrický smysl (revír pokračuje +- stejným
+  // směrem), nebo jestli by nasazení cizího sklonu řezu jen pokřivilo
+  // výslednou plochu (např. sousední revír míří jinam -- soutok, jiná
+  // zákruta apod.).
+  function angleBetweenDirectionsDegrees(dirPointsA, dirPointsB) {
+    function toVec(pts) {
+      const midLat = (pts[0].lat + pts[1].lat) / 2
+      const dLat = (pts[1].lat - pts[0].lat) * 111320
+      const dLng = (pts[1].lng - pts[0].lng) * 111320 * Math.cos((midLat * Math.PI) / 180)
+      const len = Math.sqrt(dLat * dLat + dLng * dLng) || 1
+      return [dLat / len, dLng / len]
+    }
+    const [a1, a2] = toVec(dirPointsA)
+    const [b1, b2] = toVec(dirPointsB)
+    const dot = Math.max(-1, Math.min(1, a1 * b1 + a2 * b2))
+    return (Math.acos(dot) * 180) / Math.PI
+  }
+
   // Vrátí konce (začátek/konec) katalogových revírů, které mají uložený řez
   // A JSOU BLÍZKO danému referenčnímu bodu (typicky první bod rozkreslované
   // čáry) -- appka tak nenabízí navázání na vzdálený, nesouvisející revír, a
@@ -1189,7 +1209,23 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     // vlastní serverovou logiku "visela" nepřiměřeně dlouho.
     const safetyTimeout = setTimeout(() => controller.abort(), 45000)
     try {
-      const useSnap = riverSnapEnabled && lastRiverCutRef.current
+      let useSnap = riverSnapEnabled && lastRiverCutRef.current
+      let snapSkippedReason = null
+      const snapLabelForThisGeneration = useSnap ? snapSourceLabel : null
+
+      // Než appka nasadí cizí sklon řezu, ověří, jestli vůbec dává smysl --
+      // porovná ho se směrem PRVNÍHO úseku téhle nové čáry. Velký rozdíl
+      // (sousední revír míří jinam -- soutok, jiná zákruta) by jinak vedl
+      // k pokřivené/uříznuté ploše, aniž by appka na to jakkoli upozornila.
+      if (useSnap && riverLineDraft.points.length >= 2) {
+        const ownDir = [riverLineDraft.points[0], riverLineDraft.points[1]]
+        const angle = angleBetweenDirectionsDegrees(lastRiverCutRef.current.dirPoints, ownDir)
+        if (angle > 45) {
+          useSnap = false
+          snapSkippedReason = `Zvolený revír míří jiným směrem (rozdíl ${Math.round(angle)}°) — navázání appka přeskočila, ať plochu nepokřiví. Vygenerováno normálně.`
+        }
+      }
+
       const { areas: polygons, startCut, endCut } = await buildRiverAreasFromLine(riverLineDraft.points, {
         corridorWidthMeters: Number(riverCorridorWidth) || 80,
         overshootMeters: Number(riverOvershoot) || 0,
@@ -1208,12 +1244,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         // navazoval další plochou, půjde se na ni napojit stejně přesně.
         lastRiverCutRef.current = endCut
         setRiverSnapAvailable(!!endCut)
-        setSnapSourceLabel('tuto plochu (právě vygenerováno)')
         // Nemerguje se rovnou do areaDraft -- appka nejdřív ukáže výsledek
         // a nechá potvrdit "Použít", ať se needěje neprošená rovnou do
         // starého "Hotovo/Přidat oblast(i)" panelu bez možnosti si to
         // nejdřív prohlédnout.
-        setRiverConfirm({ polygons, usedSnap: !!useSnap })
+        setRiverConfirm({ polygons, usedSnap: !!useSnap, usedSnapLabel: snapLabelForThisGeneration, snapSkippedReason })
+        // Popisek zdroje se aktualizuje na "právě vygenerováno" TEĎ, až po
+        // uložení do riverConfirm výše -- jinak by potvrzovací panel ukázal
+        // tenhle obecný text místo skutečného zdroje (revíru z katalogu),
+        // co appka pro tuhle konkrétní plochu opravdu použila.
+        setSnapSourceLabel('tuto plochu (právě vygenerováno)')
       }
     } catch (err) {
       if (err?.name === 'AbortError') {
@@ -2631,7 +2671,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   Vypadá to dobře? Vygenerováno {riverConfirm.polygons.length} {riverConfirm.polygons.length === 1 ? 'plocha' : 'plochy'} — vykreslené na mapě.
                   {riverConfirm.usedSnap && (
                     <p className="hint-text" style={{ margin: '6px 0 0', fontSize: 11, fontWeight: 600 }}>
-                      ✓ Navázáno přesně na: {snapSourceLabel} — bez mezery, stejný sklon řezu.
+                      ✓ Navázáno přesně na: {riverConfirm.usedSnapLabel} — bez mezery, stejný sklon řezu.
+                    </p>
+                  )}
+                  {riverConfirm.snapSkippedReason && (
+                    <p className="hint-text" style={{ margin: '6px 0 0', fontSize: 11, fontWeight: 600, color: '#B4432E' }}>
+                      ⚠ {riverConfirm.snapSkippedReason}
                     </p>
                   )}
                   <div className="area-controls">
