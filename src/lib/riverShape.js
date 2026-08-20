@@ -109,14 +109,24 @@ function clipHalfPlane(poly, p0, normal) {
  * s koridorem dané šířky, a usekne na délku čáry (s volitelným přesahem).
  *
  * @param {Array<{lat:number,lng:number}>} points -- čára, min. 2 body
- * @param {{corridorWidthMeters?: number, overshootMeters?: number}} options
- * @returns {Promise<Array<Array<{lat:number,lng:number}>>>} pole polygonů,
- *   každý jako pole bodů {lat,lng} -- stejný formát, jaký appka používá pro
- *   ručně naklikané oblasti (areaDraft.areas), takže jde rovnou vložit do
- *   existujícího zpracování beze změny.
+ * @param {{
+ *   corridorWidthMeters?: number,
+ *   overshootMeters?: number,
+ *   signal?: AbortSignal,
+ *   previousCut?: { cutPoint: {lat:number,lng:number}, dirPoints: [{lat,lng},{lat,lng}] },
+ * }} options
+ *   previousCut -- pokud appka dostane metadata konce SOUSEDNÍ, nedávno
+ *   vygenerované plochy, použije PŘESNĚ tu samou řeznou čáru (stejný bod
+ *   i stejný sklon) pro start téhle nové plochy, místo aby ji počítala
+ *   znovu z vlastního prvního úseku čáry -- zaručí to navazující hranu
+ *   bez mezery i bez jiného sklonu řezu (viz Dashboard.jsx, lastRiverCutRef).
+ * @returns {Promise<{areas: Array<Array<{lat:number,lng:number}>>, endCut: {cutPoint:{lat,lng}, dirPoints:[{lat,lng},{lat,lng}]} | null}>}
+ *   areas -- pole polygonů, každý jako pole bodů {lat,lng} (stejný formát,
+ *   jaký appka používá pro ručně naklikané oblasti); endCut -- metadata
+ *   konce TÉTO vygenerované čáry, uchovatelná pro navázání DALŠÍ plochy.
  */
 export async function buildRiverAreasFromLine(points, options = {}) {
-  if (!points || points.length < 2) return []
+  if (!points || points.length < 2) return { areas: [], endCut: null }
   const corridorWidthMeters = options.corridorWidthMeters ?? 80
   const overshootMeters = options.overshootMeters ?? 0
   const searchPadMeters = 400 // menší než hledaná šířka koridoru by neměla být
@@ -139,24 +149,37 @@ export async function buildRiverAreasFromLine(points, options = {}) {
   const nodesData = {}
   data.elements.filter((e) => e.type === 'node').forEach((n) => { nodesData[n.id] = { lat: n.lat, lng: n.lon } })
   const ways = data.elements.filter((e) => e.type === 'way' && e.nodes)
-  if (ways.length === 0) return []
+  if (ways.length === 0) return { areas: [], endCut: null }
 
   const lineLngLat = points.map((p) => [p.lng, p.lat])
   const turfLine = turf.lineString(lineLngLat)
   const corridorPoly = turf.buffer(turfLine, corridorWidthMeters, { units: 'meters' })
-  if (!corridorPoly) return []
+  if (!corridorPoly) return { areas: [], endCut: null }
 
   const midLat = points.reduce((s, p) => s + p.lat, 0) / points.length
   const proj = makeProjector(midLat)
   const ptsXY = points.map(proj.toXY)
   const start = ptsXY[0]
   const end = ptsXY[ptsXY.length - 1]
-  const dirStart = normalizeVec([ptsXY[1][0] - ptsXY[0][0], ptsXY[1][1] - ptsXY[0][1]])
+
+  let dirStart, startCut
+  if (options.previousCut) {
+    // Přebírá přesně stejnou řeznou čáru (bod i sklon) jako konec sousední
+    // plochy -- oba body se promítnou do TÉTO čáry místní projekce (proj),
+    // takže nezáleží na tom, jaká projekce se použila při generování té
+    // sousední plochy dřív (žádné křížové zkreslení mezi projekcemi).
+    const dPtsXY = options.previousCut.dirPoints.map(proj.toXY)
+    dirStart = normalizeVec([dPtsXY[1][0] - dPtsXY[0][0], dPtsXY[1][1] - dPtsXY[0][1]])
+    startCut = proj.toXY(options.previousCut.cutPoint)
+  } else {
+    dirStart = normalizeVec([ptsXY[1][0] - ptsXY[0][0], ptsXY[1][1] - ptsXY[0][1]])
+    startCut = [start[0] - dirStart[0] * overshootMeters, start[1] - dirStart[1] * overshootMeters]
+  }
+
   const dirEnd = normalizeVec([
     ptsXY[ptsXY.length - 1][0] - ptsXY[ptsXY.length - 2][0],
     ptsXY[ptsXY.length - 1][1] - ptsXY[ptsXY.length - 2][1],
   ])
-  const startCut = [start[0] - dirStart[0] * overshootMeters, start[1] - dirStart[1] * overshootMeters]
   const endCut = [end[0] + dirEnd[0] * overshootMeters, end[1] + dirEnd[1] * overshootMeters]
 
   const result = []
@@ -199,5 +222,10 @@ export async function buildRiverAreasFromLine(points, options = {}) {
     })
   })
 
-  return result
+  const endCutMeta = {
+    cutPoint: proj.toLatLng(endCut),
+    dirPoints: [points[points.length - 2], points[points.length - 1]],
+  }
+
+  return { areas: result, endCut: endCutMeta }
 }

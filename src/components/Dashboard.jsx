@@ -142,7 +142,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [autoAdvancingArea, setAutoAdvancingArea] = useState(false) // potlačí "starý" areaDraft panel při automatickém navázání po potvrzení
   const riverResumeTargetRef = useRef(null)                      // kam se appka vrátí (placementTarget) po dokončení auto-kreslení
   const riverAbortRef = useRef(null)                             // umožní zrušit rozjeté generování (tlačítko Zrušit i uprostřed čekání)
+  // Umožní přesně navázat novou vygenerovanou plochu na konec té PŘEDCHOZÍ
+  // (stejný bod i sklon řezu, žádná mezera ani jiný úhel) -- funguje jen
+  // v rámci jednoho běhu editace (paměť appky, ne uložené v DB), typicky
+  // "vygeneruj úsek A, hned na něj naviaž úsekem B". Po zavření/uložení
+  // celé editace místa se resetuje, ať appka omylem nenaváže na cizí/starý
+  // kontext z úplně jiného místa.
+  const lastRiverCutRef = useRef(null)                           // {cutPoint, dirPoints} konce poslední vygenerované plochy
+  const [riverSnapAvailable, setRiverSnapAvailable] = useState(false)
+  const [riverSnapEnabled, setRiverSnapEnabled] = useState(true)
   const pendingConfirmActionRef = useRef(null)                   // 'proceedToForm' | 'finishAppendArea' | 'proceedRelocateArea' — spustí se, až se areaDraft skutečně aktualizuje
+  const suppressLocationsFitRef = useRef(false)                  // jednorázově potlačí "přeostři mapu na všechny revíry" hned po potvrzení/uložení konkrétní editované oblasti
   const [rodPointsDraft, setRodPointsDraft] = useState(null)     // [{lat,lng}, ...] během sbírání pozic prutů (bodové typy)
   const [placementTarget, setPlacementTarget] = useState(null)   // 'session-point' | 'area-point' | 'rod-<i>' | 'catch-point'
   const [draftSession, setDraftSession] = useState(null)         // otevřený formulář nové výpravy
@@ -628,15 +638,31 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           bounds.push([loc.lat, loc.lng])
         }
       })
-      // Pohled mapy appka přeostří na všechny revíry JEN když zrovna nic
-      // nekreslí -- jinak by (kvůli tomu, že tenhle efekt teď musí běžet i
-      // při každém přidání bodu, aby se click handlery přepočítaly s
-      // aktuálním isPlacingSomething) appka po každém kliknutí bodu čáry
-      // znovu oddálila mapu na celý přehled a nešlo by tak vůbec naklikat.
-      const isDrawingNow = !!(placementTarget || areaDraft || riverLineDraft || rodPointsDraft)
+      // Pohled mapy appka přeostří na všechny revíry JEN když uživatel
+      // zrovna nic nekreslí ani needituje konkrétní místo -- jinak (třeba
+      // po kliknutí "Použít" u vygenerované plochy, kdy se areaDraft i
+      // placementTarget zase vynulují) by appka i uprostřed úpravy jednoho
+      // revíru zase oddálila mapu na celý katalog. suppressLocationsFitRef
+      // navíc pokryje přesně TEN okamžik "právě jsem potvrdil/uložil" --
+      // isDrawingNow už je v tu chvíli false (editace se zavřela), ale
+      // appka má zůstat přiblížená tam, kde uživatel pracoval, ne skočit
+      // zpátky na přehled hned při prvním renderu po uzavření editace.
+      const isDrawingNow = !!(
+        placementTarget || areaDraft || riverLineDraft || rodPointsDraft ||
+        riverConfirm || areaDrawChoice || editingAreasLocation || editingAreasSession || savingLocationFor
+      )
       if (!isDrawingNow) {
-        if (bounds.length) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 })
-        else map.setView([49.8, 15.5], 8)
+        if (suppressLocationsFitRef.current) {
+          // Spotřebuje se přesně tady -- na renderu, kde by appka jinak
+          // fitBounds fakt spustila. Pokud by se konzumovalo dřív (třeba
+          // hned na renderu, kde je isDrawingNow ještě true), pojistka by
+          // "vyprchala" moc brzy a pozdější reálné oddálení by neblokovala.
+          suppressLocationsFitRef.current = false
+        } else if (bounds.length) {
+          map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 })
+        } else {
+          map.setView([49.8, 15.5], 8)
+        }
       }
       return
     }
@@ -714,7 +740,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     } else {
       map.setView([49.8, 15.5], 8)
     }
-  }, [activeSession, activeCategory, activeUserFilter, viewMode, sessions, locationsCatalog, activePanel, placementTarget, areaDraft, riverLineDraft, rodPointsDraft])
+  }, [activeSession, activeCategory, activeUserFilter, viewMode, sessions, locationsCatalog, activePanel, placementTarget, areaDraft, riverLineDraft, rodPointsDraft, riverConfirm, areaDrawChoice, editingAreasLocation, editingAreasSession, savingLocationFor])
 
   async function backfillBaitPhoto(baitName, photoUrl) {
     const key = (baitName || '').trim().toLowerCase()
@@ -815,6 +841,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setPlacementTarget('new-location-point')
   }
 
+  // Resetuje paměť "navázat na předchozí úsek" -- volá se při skutečném
+  // uzavření editace místa (uložení i zrušení), ať appka příště omylem
+  // nenabídne navázání na kontext z úplně jiného, nesouvisejícího revíru.
+  function resetRiverSnapMemory() {
+    lastRiverCutRef.current = null
+    setRiverSnapAvailable(false)
+  }
+
   async function saveLocationToCatalog(name, revir, scope = 'spot') {
     const s = savingLocationFor
     const { error } = await supabase.from('locations').insert({
@@ -823,6 +857,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     })
     if (error) { alert(error.message); return }
     setSavingLocationFor(null)
+    resetRiverSnapMemory()
     await loadLocationsCatalog()
   }
 
@@ -1100,21 +1135,27 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     riverAbortRef.current = controller
     // Bezpečnostní pojistka navíc k ručnímu Zrušit -- kdyby appka i přes
     // vlastní serverovou logiku "visela" nepřiměřeně dlouho.
-    const safetyTimeout = setTimeout(() => controller.abort(), 60000)
+    const safetyTimeout = setTimeout(() => controller.abort(), 45000)
     try {
-      const polygons = await buildRiverAreasFromLine(riverLineDraft.points, {
+      const useSnap = riverSnapEnabled && lastRiverCutRef.current
+      const { areas: polygons, endCut } = await buildRiverAreasFromLine(riverLineDraft.points, {
         corridorWidthMeters: Number(riverCorridorWidth) || 80,
         overshootMeters: Number(riverOvershoot) || 0,
         signal: controller.signal,
+        previousCut: useSnap ? lastRiverCutRef.current : undefined,
       })
       if (!polygons || polygons.length === 0) {
         setRiverError('Nepodařilo se najít použitelnou vodní plochu podél tvé čáry. Zkus přidat víc bodů, zvětšit šířku koridoru, nebo nakresli oblast ručně.')
       } else {
+        // Konec téhle plochy si appka zapamatuje -- kdyby uživatel hned
+        // navazoval další plochou, půjde se na ni napojit stejně přesně.
+        lastRiverCutRef.current = endCut
+        setRiverSnapAvailable(!!endCut)
         // Nemerguje se rovnou do areaDraft -- appka nejdřív ukáže výsledek
         // a nechá potvrdit "Použít", ať se needěje neprošená rovnou do
         // starého "Hotovo/Přidat oblast(i)" panelu bez možnosti si to
         // nejdřív prohlédnout.
-        setRiverConfirm({ polygons })
+        setRiverConfirm({ polygons, usedSnap: !!useSnap })
       }
     } catch (err) {
       if (err?.name === 'AbortError') {
@@ -1144,6 +1185,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setRiverLineDraft(null)
     setPlacementTarget(null)
     setAutoAdvancingArea(true)
+    // Appka teď zůstane přiblížená tam, kde uživatel zrovna kreslil -- bez
+    // téhle pojistky by se hned po dokončení (areaDraft se vyprázdní) znovu
+    // spustilo "přeostři mapu na všechny revíry" a zoom by zase odskočil.
+    suppressLocationsFitRef.current = true
     pendingConfirmActionRef.current =
       resumeTarget === 'relocate-area-point' ? 'proceedRelocateArea'
       : resumeTarget === 'area-point-append' ? 'finishAppendArea'
@@ -1692,6 +1737,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     }
     await supabase.from('locations').update(updates).eq('id', id)
     setEditingAreasLocation(null)
+    resetRiverSnapMemory()
+    // Ať appka po uložení zůstane přiblížená na tomhle místě, ne že po
+    // znovunačtení katalogu (locationsCatalog se změní) skočí zpátky na
+    // přehled všech revírů.
+    suppressLocationsFitRef.current = true
     await loadLocationsCatalog()
     setShowLocations(true)
   }
@@ -2475,6 +2525,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                       </div>
                     </label>
                   </div>
+                  {riverSnapAvailable && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, margin: '4px 0', cursor: 'pointer', color: 'rgba(255,255,255,.9)' }}>
+                      <input type="checkbox" checked={riverSnapEnabled} onChange={(e) => setRiverSnapEnabled(e.target.checked)} />
+                      Navázat přesně na konec předchozího úseku (stejný sklon řezu)
+                    </label>
+                  )}
                   {riverBusy && <p className="hint-text" style={{ margin: '4px 0', fontSize: 11.5 }}>Zjišťuji tvar vody z OSM dat…</p>}
                   {riverError && <p className="hint-text" style={{ margin: '4px 0', fontSize: 11.5, color: '#B4432E', fontWeight: 600 }}>{riverError}</p>}
                   <div className="area-controls">
@@ -2490,6 +2546,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               ) : (
                 <>
                   Vypadá to dobře? Vygenerováno {riverConfirm.polygons.length} {riverConfirm.polygons.length === 1 ? 'plocha' : 'plochy'} — vykreslené na mapě.
+                  {riverConfirm.usedSnap && (
+                    <p className="hint-text" style={{ margin: '6px 0 0', fontSize: 11, fontWeight: 600 }}>
+                      ✓ Navázáno přesně na konec předchozího úseku — bez mezery, stejný sklon řezu.
+                    </p>
+                  )}
                   <div className="area-controls">
                     <button className="btn-primary" style={{ margin: 0 }} onClick={confirmRiverArea}>Použít</button>
                     <button className="new-btn" onClick={retryRiverGeneration}>Zkusit znovu</button>
@@ -2608,7 +2669,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               )}
               <button className="new-btn" onClick={() => startAddAreaPoint((newAreas) => addAreasToManagedLocation(newAreas))} style={{ marginTop: 6 }}>+ Přidat oblast</button>
               <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                <button className="new-btn" onClick={() => { setEditingAreasLocation(null); setShowLocations(true) }}>Zrušit</button>
+                <button className="new-btn" onClick={() => { setEditingAreasLocation(null); resetRiverSnapMemory(); setShowLocations(true) }}>Zrušit</button>
                 <button className="btn-primary" style={{ margin: 0 }} onClick={saveManagedLocationAreas} disabled={editingAreasLocation.areas.length === 0}>Uložit</button>
               </div>
             </div>
@@ -2751,7 +2812,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       {savingLocationFor && (
         <SaveLocationForm
           source={savingLocationFor}
-          onCancel={() => setSavingLocationFor(null)}
+          onCancel={() => { setSavingLocationFor(null); resetRiverSnapMemory() }}
           onSave={saveLocationToCatalog}
         />
       )}

@@ -313,6 +313,30 @@ DOLADĚNÍ UX AUTO-KRESLENÍ PODLE BŘEHU (na základě zkoušení v provozu)
   (onBlur), pokud zůstalo prázdné/neplatné. Navíc přidána malá +/-
   tlačítka vedle obou polí (koridor po 10 m, přesah po 5 m) pro
   spolehlivější ovládání na mobilu bez nutnosti mazat/přepisovat číslice.
+- OPRAVA: appka po potvrzení ("Použít") a hlavně po finálním uložení
+  editovaných oblastí revíru (saveManagedLocationAreas) pořád oddálila
+  mapu zpět na přehled všech revírů, i když isDrawingNow už bylo false
+  (editace se zrovna zavřela) -- statická kontrola stavu nemohla rozlišit
+  "právě jsem skončil, zůstaň tady" od "appka je dlouhodobě nečinná".
+  Přidána jednorázová pojistka suppressLocationsFitRef, nastavovaná v
+  confirmRiverArea() a saveManagedLocationAreas() -- příští fitBounds na
+  celý přehled se jednou přeskočí, appka zůstane přiblížená tam, kde
+  uživatel pracoval.
+- Timeout na jeden Overpass server v proxy zkrácen z 12s na 10s (funkční
+  odpověď přijde rychle, nebo vůbec -- není důvod čekat déle). 4 servery
+  x 10s = max ~40s worst-case, klientská pojistka zůstává na 45s.
+- Navazování revírů beze švu (bod 3 z diskuze) -- UŽ IMPLEMENTOVÁNO:
+  appka si po vygenerování plochy pamatuje přesnou polohu i sklon
+  KONCOVÉHO řezu (lastRiverCutRef, viz Dashboard.jsx + buildRiverAreasFromLine
+  v riverShape.js, parametr previousCut/návratová hodnota endCut). Při
+  kreslení NAVAZUJÍCÍ plochy appka tenhle řez PŘEVEZME 1:1 (stejný bod,
+  stejný sklon) místo počítání znovu z vlastní čáry -- hrana tak sedí
+  bez mezery i bez rozdílného úhlu. V UI přibyl viditelný přepínač
+  "Navázat přesně na konec předchozího úseku" (zobrazí se jen, když má
+  appka co nabídnout) a potvrzení "✓ Navázáno..." v kroku přehledu
+  výsledku. Paměť řezu se resetuje při uložení/zrušení editace míst
+  (resetRiverSnapMemory), ať appka nenabídne navázání na nesouvisející
+  revír z úplně jiné části appky.
 
 ZMĚNY PROTI PŘEDCHOZÍ DÁVCE (oprava buttonů, oprava párování úlovků,
 vazba polygon<->katalog, přepínač Revíry)
