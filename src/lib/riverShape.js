@@ -45,7 +45,10 @@ async function queryOverpassWithFallback(query) {
   for (const server of OVERPASS_SERVERS) {
     try {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 20000)
+      // O něco delší než server-side [timeout:25] v dotazu -- ať appka
+      // nezruší spojení dřív, než server sám stihne odpovědět (byť třeba
+      // chybou), a zbude i rezerva na přenos dat po síti.
+      const timeoutId = setTimeout(() => controller.abort(), 30000)
       const res = await fetch(server, {
         method: 'POST',
         body: 'data=' + encodeURIComponent(query),
@@ -55,7 +58,9 @@ async function queryOverpassWithFallback(query) {
       if (!res.ok) throw new Error(`server odpověděl chybou ${res.status}`)
       return await res.json()
     } catch (err) {
-      lastError = err
+      lastError = err.name === 'AbortError'
+        ? new Error('vypršel časový limit (server neodpověděl do 30 vteřin)')
+        : err
       // zkusí další server v seznamu, žádná další akce tady není potřeba
     }
   }
@@ -122,7 +127,7 @@ export async function buildRiverAreasFromLine(points, options = {}) {
 
   const searchBox = buildSearchBBox(points, searchPadMeters)
   const query = `
-    [out:json][timeout:20];
+    [out:json][timeout:25];
     (
       way["natural"="water"](${searchBox.south},${searchBox.west},${searchBox.north},${searchBox.east});
       way["waterway"="riverbank"](${searchBox.south},${searchBox.west},${searchBox.north},${searchBox.east});
