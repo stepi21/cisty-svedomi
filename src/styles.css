@@ -371,6 +371,16 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
 .area-controls{ display:flex; gap:8px; margin-top:8px; justify-content:center; }
 .area-controls .new-btn{ color:#fff; border-color:rgba(255,255,255,.4); }
 
+/* Malá +/- tlačítka vedle číselných polí (koridor/přesah u auto-kreslení
+   podle břehu) -- spolehlivější na mobilu než mazání a přepisování čísla. */
+.stepper-btn{
+  width:22px; height:22px; flex:none; border-radius:50%; border:1px solid rgba(255,255,255,.4);
+  background:transparent; color:#fff; font-size:14px; line-height:1; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; padding:0;
+}
+.stepper-btn:hover{ background:rgba(255,255,255,.15); }
+.stepper-btn:active{ background:rgba(255,255,255,.25); }
+
 .rod-edit-block{ border:1px solid var(--paper-line); border-radius:8px; padding:8px; margin-bottom:8px; background:var(--paper); }
 .rod-edit-row{ display:flex; gap:8px; margin-top:6px; flex-wrap:wrap; align-items:center; }
 .location-check-row{

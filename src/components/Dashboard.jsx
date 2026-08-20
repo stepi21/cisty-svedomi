@@ -628,8 +628,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           bounds.push([loc.lat, loc.lng])
         }
       })
-      if (bounds.length) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 })
-      else map.setView([49.8, 15.5], 8)
+      // Pohled mapy appka přeostří na všechny revíry JEN když zrovna nic
+      // nekreslí -- jinak by (kvůli tomu, že tenhle efekt teď musí běžet i
+      // při každém přidání bodu, aby se click handlery přepočítaly s
+      // aktuálním isPlacingSomething) appka po každém kliknutí bodu čáry
+      // znovu oddálila mapu na celý přehled a nešlo by tak vůbec naklikat.
+      const isDrawingNow = !!(placementTarget || areaDraft || riverLineDraft || rodPointsDraft)
+      if (!isDrawingNow) {
+        if (bounds.length) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 })
+        else map.setView([49.8, 15.5], 8)
+      }
       return
     }
 
@@ -1052,6 +1060,23 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setRiverLineDraft((prev) => (prev ? { points: prev.points.slice(0, -1) } : prev))
   }
 
+  // +/- tlačítka vedle číselných polí -- na mobilu je spolehlivější klikat
+  // na krok než mazat a přepisovat číslici (viz poznámka o vstupním poli
+  // koridoru, které se předtím při smazání okamžitě vracelo na výchozích 80).
+  function stepRiverCorridorWidth(delta) {
+    setRiverCorridorWidth((prev) => {
+      const n = Number(prev) || 80
+      return Math.max(5, n + delta)
+    })
+  }
+
+  function stepRiverOvershoot(delta) {
+    setRiverOvershoot((prev) => {
+      const n = Number(prev) || 0
+      return Math.max(0, n + delta)
+    })
+  }
+
   // Zrušit jde kdykoli -- i uprostřed čekání na Overpass. Přeruší i
   // případný rozjetý požadavek (viz riverAbortRef), ať appka nezůstane
   // "viset" bez možnosti se z toho dostat.
@@ -1078,8 +1103,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const safetyTimeout = setTimeout(() => controller.abort(), 60000)
     try {
       const polygons = await buildRiverAreasFromLine(riverLineDraft.points, {
-        corridorWidthMeters: riverCorridorWidth,
-        overshootMeters: riverOvershoot,
+        corridorWidthMeters: Number(riverCorridorWidth) || 80,
+        overshootMeters: Number(riverOvershoot) || 0,
         signal: controller.signal,
       })
       if (!polygons || polygons.length === 0) {
@@ -2422,22 +2447,32 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               {!riverConfirm ? (
                 <>
                   Klikej body středem toku ({riverLineDraft.points.length} {riverLineDraft.points.length === 1 ? 'bod' : 'body'}, potřeba aspoň 2).
-                  <div style={{ display: 'flex', gap: 6, justifyContent: 'center', margin: '8px 0 4px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'center', margin: '8px 0 4px', flexWrap: 'wrap' }}>
                     <label style={{ fontSize: 10.5, display: 'flex', flexDirection: 'column', gap: 2, color: 'rgba(255,255,255,.75)' }}>
                       Koridor (m)
-                      <input
-                        type="number" className="text-input" style={{ width: 68, padding: '5px 7px' }}
-                        value={riverCorridorWidth}
-                        onChange={(e) => setRiverCorridorWidth(Number(e.target.value) || 80)}
-                      />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <button type="button" className="stepper-btn" onClick={() => stepRiverCorridorWidth(-10)}>−</button>
+                        <input
+                          type="number" className="text-input" style={{ width: 52, padding: '5px 4px', textAlign: 'center' }}
+                          value={riverCorridorWidth}
+                          onChange={(e) => setRiverCorridorWidth(e.target.value)}
+                          onBlur={() => setRiverCorridorWidth((v) => (v === '' || Number.isNaN(Number(v)) || Number(v) <= 0) ? 80 : Number(v))}
+                        />
+                        <button type="button" className="stepper-btn" onClick={() => stepRiverCorridorWidth(10)}>+</button>
+                      </div>
                     </label>
                     <label style={{ fontSize: 10.5, display: 'flex', flexDirection: 'column', gap: 2, color: 'rgba(255,255,255,.75)' }}>
                       Přesah (m)
-                      <input
-                        type="number" className="text-input" style={{ width: 68, padding: '5px 7px' }}
-                        value={riverOvershoot}
-                        onChange={(e) => setRiverOvershoot(Number(e.target.value) || 0)}
-                      />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <button type="button" className="stepper-btn" onClick={() => stepRiverOvershoot(-5)}>−</button>
+                        <input
+                          type="number" className="text-input" style={{ width: 52, padding: '5px 4px', textAlign: 'center' }}
+                          value={riverOvershoot}
+                          onChange={(e) => setRiverOvershoot(e.target.value)}
+                          onBlur={() => setRiverOvershoot((v) => (v === '' || Number.isNaN(Number(v)) || Number(v) < 0) ? 0 : Number(v))}
+                        />
+                        <button type="button" className="stepper-btn" onClick={() => stepRiverOvershoot(5)}>+</button>
+                      </div>
                     </label>
                   </div>
                   {riverBusy && <p className="hint-text" style={{ margin: '4px 0', fontSize: 11.5 }}>Zjišťuji tvar vody z OSM dat…</p>}
