@@ -433,6 +433,20 @@ DOLADĚNÍ UX AUTO-KRESLENÍ PODLE BŘEHU (na základě zkoušení v provozu)
   metadatech je od teď čistě informativní (geometricky se nikde
   nepoužívá) a vždy odráží skutečný směr TÉ KONKRÉTNÍ čáry, ne zděděnou
   hodnotu z předchozího navázání.
+- DOTAŽENO (kompromis vyřešen): předchozí oprava (dirStart vždy z
+  vlastní čáry) sice spolehlivě zabránila katastrofálnímu oříznutí, ale
+  za cenu ztráty přesně sedícího úhlu na švu -- každá plocha měla svůj
+  vlastní sklon řezu, takže spoj už nebyl hladký (zjištěno v provozu:
+  "funguje, jen to teď nenavazuje tím řezem, každý má jiný sklon").
+  FINÁLNÍ ŘEŠENÍ: appka SI PŘEBÍRÁ SKLON (přímku) sousedního revíru
+  (dirPoints, i nadále čistě informativní hodnota z historie kreslení),
+  ale sama určí ZNAMÉNKO -- porovná ho (skalární součin) se skutečným
+  směrem pokračování nové čáry (ownDir), a pokud míří opačně, otočí ho.
+  Výsledek má tak vždy: (a) přesně stejný úhel řezu jako sousední
+  revír na švu (žádný kink/lom, přesně jak fungovalo předtím), a (b)
+  správnou stranu řezné roviny bez ohledu na to, jakým náhodným pořadím
+  byl ten druhý revír kdysi naklikaný (žádné katastrofální oříznutí).
+  Nejlepší z obou předchozích pokusů zkombinováno do jednoho řešení.
 
 ZMĚNY PROTI PŘEDCHOZÍ DÁVCE (oprava buttonů, oprava párování úlovků,
 vazba polygon<->katalog, přepínač Revíry)

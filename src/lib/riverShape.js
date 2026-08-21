@@ -168,23 +168,32 @@ export async function buildRiverAreasFromLine(points, options = {}) {
   const start = ptsXY[0]
   const end = ptsXY[ptsXY.length - 1]
 
-  // Směr řezné roviny (dirStart) se VŽDY počítá z VLASTNÍ právě kreslené
-  // čáry -- nikdy z uloženého směru sousedního revíru. Důvod (zjištěno v
-  // provozu): appka si u sousedního revíru pamatuje směr podle toho,
-  // JAKÝM POŘADÍM byly tehdy body naklikané -- to je čistě náhodné, ne
-  // pevná konvence (appka nezná "po/proti proudu"). Kdyby appka tenhle
-  // cizí směr přebírala 1:1, výsledek by závisel na tom, jestli sousední
-  // revír zrovna náhodou vyšel naklikaný "stejným" nebo "opačným" směrem,
-  // než jakým teď přirozeně pokračuje NOVÁ čára -- při opačném pořadí by
-  // appka udržela špatnou stranu a ořízla skoro celou novou plochu.
-  // Přebírá se proto JEN PŘESNÁ POLOHA bodu (cutPoint), aby hrana bez
-  // mezery navázala na sousední revír, ale směr řezu vychází vždy z toho,
-  // jak TEĎ skutečně klikáš -- appka tak spolehlivě pozná, kterým směrem
-  // má nová plocha růst, bez ohledu na historii sousedního revíru.
-  const dirStart = normalizeVec([ptsXY[1][0] - ptsXY[0][0], ptsXY[1][1] - ptsXY[0][1]])
-  const startCut = options.previousCut
-    ? proj.toXY(options.previousCut.cutPoint)
-    : [start[0] - dirStart[0] * overshootMeters, start[1] - dirStart[1] * overshootMeters]
+  // Vlastní směr právě kreslené čáry -- používá se vždy jako záložní
+  // varianta (bez navázání) a zároveň jako "kompas" pro správné otočení
+  // přebíraného sklonu při navázání (viz níže).
+  const ownDir = normalizeVec([ptsXY[1][0] - ptsXY[0][0], ptsXY[1][1] - ptsXY[0][1]])
+
+  let dirStart, startCut
+  if (options.previousCut) {
+    // Přebírá se SKLON (přímka) sousedního revíru -- appka tak zachová
+    // přesně stejný úhel řezu na švu (žádný "kink"/lom). Znaménko (kterou
+    // stranu té přímky appka bere jako "vpřed") se ale NEPŘEBÍRÁ slepě --
+    // appka si u sousedního revíru pamatuje směr podle toho, JAKÝM
+    // POŘADÍM byly tehdy jeho body naklikané, což je čistě náhodné (appka
+    // nezná "po/proti proudu"). Proto appka porovná přebíraný sklon s tím,
+    // kam SKUTEČNĚ pokračuje nová čára (ownDir), a pokud míří opačně,
+    // otočí ho -- výsledek tak má vždy správný sklon (žádná mezera, žádný
+    // rozdílný úhel) i správnou stranu (žádné katastrofální oříznutí),
+    // bez ohledu na historii/pořadí kreslení toho druhého revíru.
+    const dPtsXY = options.previousCut.dirPoints.map(proj.toXY)
+    const rawDir = normalizeVec([dPtsXY[1][0] - dPtsXY[0][0], dPtsXY[1][1] - dPtsXY[0][1]])
+    const dot = rawDir[0] * ownDir[0] + rawDir[1] * ownDir[1]
+    dirStart = dot < 0 ? [-rawDir[0], -rawDir[1]] : rawDir
+    startCut = proj.toXY(options.previousCut.cutPoint)
+  } else {
+    dirStart = ownDir
+    startCut = [start[0] - dirStart[0] * overshootMeters, start[1] - dirStart[1] * overshootMeters]
+  }
 
   const dirEnd = normalizeVec([
     ptsXY[ptsXY.length - 1][0] - ptsXY[ptsXY.length - 2][0],
