@@ -431,3 +431,14 @@ export function IconMoonPhase({ phase, size = 16, litColor = 'var(--amber)', sha
     </svg>
   )
 }
+
+// Zvoneček -- notifikace (nová výprava/úlovek kamaráda, upravený revír).
+// Stejný organický styl jako zbytek sady, ne generická čárová ikona.
+export function IconBell({ size = 20, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2.4c-.6 0-1 .5-1 1.1v.6C7.9 4.7 6.1 7.2 6.1 10.2v3.7c0 1.4-.6 2.6-1.6 3.6-.7.6-.3 1.7.6 1.7h13.8c.9 0 1.3-1.1.6-1.7-1-.9-1.6-2.2-1.6-3.6v-3.7c0-3-1.8-5.5-4.9-6.1v-.6c0-.6-.4-1.1-1-1.1Z" fill={color} />
+      <path d="M9.6 20c.3 1 1.2 1.7 2.4 1.7s2.1-.7 2.4-1.7" stroke={color} strokeWidth="1.3" fill="none" strokeLinecap="round" />
+    </svg>
+  )
+}

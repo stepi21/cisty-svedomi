@@ -5,7 +5,7 @@ import CatchTicket from './CatchTicket.jsx'
 import HelpModal from './HelpModal.jsx'
 import GalleryModal from './GalleryModal.jsx'
 import BaitsModal, { computeBaitsList } from './BaitsModal.jsx'
-import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconGallery, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconPlay, IconLocate, IconMoonPhase, IconPressureTrend, IconNewest, IconBoat, IconRiverAuto } from '../lib/icons.jsx'
+import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconGallery, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconPlay, IconLocate, IconMoonPhase, IconPressureTrend, IconNewest, IconBoat, IconRiverAuto, IconBell } from '../lib/icons.jsx'
 import BaitPicker from './BaitPicker.jsx'
 import LocationsModal from './LocationsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
@@ -105,6 +105,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [members, setMembers] = useState([])
   const [viewMode, setViewMode] = useState('aggregate') // 'aggregate' | 'detail'
   const [myProfile, setMyProfile] = useState(profile)
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [locallyHandledLocationIds, setLocallyHandledLocationIds] = useState(new Set()) // "vyřešeno" jen pro tuhle jednu otevřenou session appky, ať notifikace nezůstane viset jako "nevyřízená" hned po kliknutí na Potvrdit
+  const notificationsRef = useRef(null)
   const [showSettings, setShowSettings] = useState(false)
   const [showStats, setShowStats] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
@@ -177,6 +180,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showMoreMenu])
+  useEffect(() => {
+    if (!showNotifications) return
+    function handleClickOutside(e) {
+      if (notificationsRef.current && !notificationsRef.current.contains(e.target)) closeNotifications()
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showNotifications])
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
   const [toast, setToast] = useState(null) // krátké potvrzení "✓ Uloženo" po akci
   const [searchQuery, setSearchQuery] = useState('') // hledání ve výpravách (název, revír, druh, nástraha)
@@ -906,29 +917,87 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     await loadLocationsCatalog()
   }
 
-  async function updateSessionFromLocations(session) {
-    const linkedIds = (session.session_locations || []).map((sl) => sl.location_id)
-    if (linkedIds.length === 0) return
-    const linked = locationsCatalog.filter((l) => linkedIds.includes(l.id))
-    const areaLocations = linked.filter((l) => l.area)
-    const updates = {}
-    if (areaLocations.length > 0) {
-      const areas = areaLocations.flatMap((l) => normalizeAreas(l.area).map((points) => ({ location_id: l.id, points })))
-      updates.area = areas
-      const c = areaCentroid(areas.flatMap((a) => a.points))
-      updates.lat = c.lat
-      updates.lng = c.lng
-    } else if (linked[0]) {
-      updates.lat = linked[0].lat
-      updates.lng = linked[0].lng
-    }
-    const { error } = await supabase.from('sessions').update(updates).eq('id', session.id)
-    if (error) { alert(error.message); return }
-    // jednoznačný případ -> refresh revíru i u úlovků (kdyby se revír katalogového místa mezitím změnil)
-    if (linked.length === 1) {
-      await supabase.from('catches').update({ location_id: linked[0].id, revir: linked[0].revir || null }).eq('session_id', session.id)
+  // Sdílená logika pro přepočet area/lat/lng (a případně revíru u úlovků)
+  // podle AKTUÁLNÍ podoby propojených katalogových míst -- používá ji jak
+  // "🔄 Aktualizovat podle katalogu" u jedné výpravy, tak hromadná nabídka
+  // po uložení revíru (vlastní i cizí, přes notifikační zvoneček).
+  async function bulkUpdateSessionsForLocations(sessionsToUpdate) {
+    for (const session of sessionsToUpdate) {
+      const linkedIds = (session.session_locations || []).map((sl) => sl.location_id)
+      if (linkedIds.length === 0) continue
+      const linked = locationsCatalog.filter((l) => linkedIds.includes(l.id))
+      const areaLocations = linked.filter((l) => l.area)
+      const updates = {}
+      if (areaLocations.length > 0) {
+        const areas = areaLocations.flatMap((l) => normalizeAreas(l.area).map((points) => ({ location_id: l.id, points })))
+        updates.area = areas
+        const c = areaCentroid(areas.flatMap((a) => a.points))
+        updates.lat = c.lat
+        updates.lng = c.lng
+      } else if (linked[0]) {
+        updates.lat = linked[0].lat
+        updates.lng = linked[0].lng
+      }
+      await supabase.from('sessions').update(updates).eq('id', session.id)
+      if (linked.length === 1) {
+        await supabase.from('catches').update({ location_id: linked[0].id, revir: linked[0].revir || null }).eq('session_id', session.id)
+      }
     }
     await loadSessions()
+  }
+
+  async function updateSessionFromLocations(session) {
+    await bulkUpdateSessionsForLocations([session])
+  }
+
+  // Spočítá "novinky" pro zvoneček -- za běhu, z už načtených dat (žádná
+  // samostatná tabulka notifikací). Podle notifications_seen_at appka
+  // pozná, co je nové JEN PRO TOHOTO uživatele -- appka nikdy nedělá
+  // novinky zpětně, jen od poslední chvíle, kdy je uživatel viděl.
+  function computeNotifications() {
+    const seenAt = myProfile?.notifications_seen_at
+    if (!seenAt) return []
+    const seenTime = new Date(seenAt).getTime()
+    const items = []
+
+    sessions.forEach((s) => {
+      if (s.user_id === userId) return
+      if (s.created_at && new Date(s.created_at).getTime() > seenTime) {
+        items.push({ type: 'session', key: `session-${s.id}`, time: s.created_at, session: s })
+      }
+      ;(s.catches || []).forEach((c) => {
+        if (c.created_at && new Date(c.created_at).getTime() > seenTime) {
+          items.push({ type: 'catch', key: `catch-${c.id}`, time: c.created_at, catchData: c, session: s })
+        }
+      })
+    })
+
+    locationsCatalog.forEach((l) => {
+      if (l.created_by === userId) return // vlastní úpravy appka nabízí rovnou při ukládání, ne přes zvoneček
+      if (locallyHandledLocationIds.has(l.id)) return
+      if (!l.updated_at || new Date(l.updated_at).getTime() <= seenTime) return
+      const mySessions = sessions.filter((s) => s.user_id === userId && (s.session_locations || []).some((sl) => sl.location_id === l.id))
+      if (mySessions.length === 0) return
+      items.push({ type: 'location', key: `location-${l.id}-${l.updated_at}`, time: l.updated_at, location: l, mySessions })
+    })
+
+    return items.sort((a, b) => new Date(b.time) - new Date(a.time))
+  }
+
+  function openNotifications() {
+    setShowNotifications(true)
+  }
+
+  async function closeNotifications() {
+    setShowNotifications(false)
+    const now = new Date().toISOString()
+    setMyProfile((prev) => (prev ? { ...prev, notifications_seen_at: now } : prev))
+    await supabase.from('profiles').update({ notifications_seen_at: now }).eq('id', userId)
+  }
+
+  async function confirmLocationNotificationUpdate(item) {
+    await bulkUpdateSessionsForLocations(item.mySessions)
+    setLocallyHandledLocationIds((prev) => new Set(prev).add(item.location.id))
   }
 
   function openLocationMenu(session) {
@@ -1798,6 +1867,20 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     suppressLocationsFitRef.current = true
     await loadLocationsCatalog()
     setShowLocations(true)
+
+    // Rovnou při ukládání (ne přes zvoneček -- o týhle změně už uživatel
+    // ví, protože ji sám dělá) appka nabídne aktualizaci VLASTNÍCH výprav,
+    // co tenhle revír používají. Cizí výpravy appka takhle nabízet nesmí
+    // (RLS by update stejně odmítla) -- ty se dozví přes zvoneček sami.
+    const mySessions = sessions.filter(
+      (s) => s.user_id === userId && (s.session_locations || []).some((sl) => sl.location_id === id)
+    )
+    if (mySessions.length > 0) {
+      const ok = window.confirm(
+        `Tenhle revír používá ${mySessions.length} tvých ${mySessions.length === 1 ? 'výpravu' : mySessions.length < 5 ? 'výpravy' : 'výprav'}. Aktualizovat jejich pozici/tvar podle nové podoby?`
+      )
+      if (ok) await bulkUpdateSessionsForLocations(mySessions)
+    }
   }
 
   function proceedRelocateArea() {
@@ -2439,24 +2522,86 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       <header>
         <div className="head-row">
           <h1>Čistý<span className="accent">svědomí</span></h1>
-          <div style={{ position: 'relative' }} ref={moreMenuRef}>
-            <button className="new-btn hamburger-btn" onClick={() => setShowMoreMenu((v) => !v)} title="Více">
-              <IconMenu size={19} color="var(--water-deep)" />
-            </button>
-            {showMoreMenu && (
-              <div className="type-picker" style={{ position: 'absolute', top: '100%', right: 0, left: 'auto', transform: 'none', marginTop: 6, minWidth: 190, zIndex: 500 }}>
-                <div className="type-picker-title">{myProfile?.display_name}</div>
-                <button className="type-btn" onClick={() => { setShowMoreMenu(false); createInvite() }}>+ pozvat parťáka</button>
-                <button className="type-btn" onClick={() => { setShowMoreMenu(false); onSignOut() }}>Odhlásit</button>
-                <div style={{ height: 1, background: 'var(--paper-line)', margin: '6px 0' }} />
-                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowGallery(true) }}><IconGallery size={15} color="var(--water-deep)" /> Galerie</button>
-                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowRecords(true) }}><IconTrophy size={15} color="var(--amber)" /> Rekordy</button>
-                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowStats(true) }}><IconChart size={15} color="var(--water-deep)" /> Statistiky</button>
-                <button className="type-btn" onClick={() => { setShowMoreMenu(false); exportData() }}><IconDownload size={15} color="var(--water-deep)" /> Export dat</button>
-                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowHelp(true) }}><IconHelp size={15} color="var(--water-deep)" /> Návod</button>
-                <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowSettings(true) }}><IconSettings size={15} color="var(--water-deep)" /> Nastavení</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ position: 'relative' }} ref={notificationsRef}>
+              <button
+                className="new-btn hamburger-btn notif-bell-btn"
+                onClick={() => (showNotifications ? closeNotifications() : openNotifications())}
+                title="Novinky"
+              >
+                <IconBell size={18} color="var(--water-deep)" />
+                {computeNotifications().length > 0 && (
+                  <span className="notif-badge">{computeNotifications().length}</span>
+                )}
+              </button>
+              {showNotifications && (() => {
+                const items = computeNotifications()
+                return (
+                  <div className="type-picker" style={{ position: 'absolute', top: '100%', right: 0, left: 'auto', transform: 'none', marginTop: 6, minWidth: 260, maxWidth: 320, zIndex: 500 }}>
+                    <div className="type-picker-title">Novinky</div>
+                    {items.length === 0 ? (
+                      <p className="hint-text" style={{ margin: 0 }}>Zatím žádné novinky.</p>
+                    ) : (
+                      <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                        {items.map((item) => {
+                          if (item.type === 'session') {
+                            return (
+                              <div className="notif-item" key={item.key}>
+                                <div className="notif-item-title" onClick={async () => { await closeNotifications(); setActiveId(item.session.id); setViewMode('detail') }}>
+                                  <IconVyprava size={13} color="var(--water-deep)" /> Nová výprava: {item.session.title}
+                                </div>
+                                <div className="notif-item-sub">{userName(item.session.user_id)} · {item.session.session_date}</div>
+                              </div>
+                            )
+                          }
+                          if (item.type === 'catch') {
+                            return (
+                              <div className="notif-item" key={item.key}>
+                                <div className="notif-item-title" onClick={async () => { await closeNotifications(); setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(item.catchData) }}>
+                                  <IconUlovek size={13} color="var(--water-deep)" /> Nový úlovek: {item.catchData.species}
+                                </div>
+                                <div className="notif-item-sub">{userName(item.session.user_id)} · {item.session.title}</div>
+                              </div>
+                            )
+                          }
+                          // type === 'location'
+                          return (
+                            <div className="notif-item" key={item.key}>
+                              <div className="notif-item-title" style={{ cursor: 'default' }}>
+                                <IconRevir size={13} color="var(--water-deep)" dotColor="var(--paper)" /> Revír „{item.location.name}" byl upraven
+                              </div>
+                              <div className="notif-item-sub">
+                                Ovlivňuje {item.mySessions.length} {item.mySessions.length === 1 ? 'tvou výpravu' : item.mySessions.length < 5 ? 'tvé výpravy' : 'tvých výprav'}.
+                              </div>
+                              <button className="new-btn" style={{ marginTop: 6 }} onClick={() => confirmLocationNotificationUpdate(item)}>Potvrdit a aktualizovat</button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+            </div>
+            <div style={{ position: 'relative' }} ref={moreMenuRef}>
+              <button className="new-btn hamburger-btn" onClick={() => setShowMoreMenu((v) => !v)} title="Více">
+                <IconMenu size={19} color="var(--water-deep)" />
+              </button>
+              {showMoreMenu && (
+                <div className="type-picker" style={{ position: 'absolute', top: '100%', right: 0, left: 'auto', transform: 'none', marginTop: 6, minWidth: 190, zIndex: 500 }}>
+                  <div className="type-picker-title">{myProfile?.display_name}</div>
+                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); createInvite() }}>+ pozvat parťáka</button>
+                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); onSignOut() }}>Odhlásit</button>
+                  <div style={{ height: 1, background: 'var(--paper-line)', margin: '6px 0' }} />
+                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowGallery(true) }}><IconGallery size={15} color="var(--water-deep)" /> Galerie</button>
+                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowRecords(true) }}><IconTrophy size={15} color="var(--amber)" /> Rekordy</button>
+                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowStats(true) }}><IconChart size={15} color="var(--water-deep)" /> Statistiky</button>
+                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); exportData() }}><IconDownload size={15} color="var(--water-deep)" /> Export dat</button>
+                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowHelp(true) }}><IconHelp size={15} color="var(--water-deep)" /> Návod</button>
+                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowSettings(true) }}><IconSettings size={15} color="var(--water-deep)" /> Nastavení</button>
               </div>
             )}
+          </div>
           </div>
         </div>
         <div className="head-secondary-row">

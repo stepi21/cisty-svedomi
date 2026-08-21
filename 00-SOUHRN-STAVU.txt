@@ -511,8 +511,45 @@ DŮLEŽITÉ TECHNICKÉ POUČENÍ Z HISTORIE (nedělat znovu!)
   GitHubu — po každé úpravě je potřeba nahrát nový zip (rozbalený)
   na GitHub a počkat na rebuild.
 
+ZMĚNY PROTI PŘEDCHOZÍ DÁVCE (notifikační zvoneček)
+-----------------------------------------------------
+1. NOVÁ FUNKCE: notifikační zvoneček v hlavičce, vlevo od hamburger menu
+   (☰), ve vlastní ikoně (IconBell, žádná emoji). Červený odznak =
+   počet novinek, zmizí po zavření rozbaleného seznamu (appka si pamatuje
+   "naposledy zkontrolováno" -- profiles.notifications_seen_at, migrace
+   16). Appka novinky NEPOČÍTÁ ZPĚTNĚ -- jen od okamžiku, kdy migrace
+   proběhne (stávající uživatelé dostanou "naposledy zkontrolováno" = teď).
+   Novinky se počítají za běhu z už načtených dat (žádná samostatná
+   tabulka pro jednotlivé notifikace) -- computeNotifications() v
+   Dashboard.jsx:
+   - Nová výprava JINÉHO člena party (created_at > naposledy zkontrolováno)
+     -- klik naviguje rovnou na detail výpravy.
+   - Nový úlovek JINÉHO člena party -- klik otevře úlovkový lístek.
+   - Revír upravený JINÝM členem party (locations.updated_at > naposledy
+     zkontrolováno, migrace 16 + trigger locations_set_updated_at), ALE
+     jen pokud má appka propojené TVOJE VLASTNÍ výpravy na ten revír --
+     s tlačítkem "Potvrdit a aktualizovat" přímo v notifikaci (žádný
+     proklik jinam, rovnou akce). Revíry upravené TEBOU SAMÝM se sem
+     nedávají (viz bod 2 -- ty appka nabídne rovnou při ukládání).
+2. NOVÁ FUNKCE: když TY SÁM uložíš upravené oblasti revíru
+   (saveManagedLocationAreas), appka se HNED při ukládání zeptá (obyčejné
+   window.confirm, ne přes zvoneček -- o změně už víš, protože ji sám
+   děláš), jestli chceš aktualizovat i svoje vlastní výpravy, co ten
+   revír používají. Sdílí stejnou logiku (bulkUpdateSessionsForLocations)
+   jako zvoneček i jako existující "🔄 Aktualizovat podle katalogu" u
+   jedné výpravy (updateSessionFromLocations teď jen volá bulk verzi
+   s polem o jednom prvku -- beze změny chování, jen sdílený kód).
+3. Nová migrace 16: profiles.notifications_seen_at (timestamptz, default
+   now()) a locations.updated_at (timestamptz, default now()) + trigger
+   locations_set_updated_at (auto-aktualizuje při KAŽDÉM update revíru,
+   appka to nemusí nikde ručně nastavovat a nemůže na to zapomenout).
+4. Nová ikona IconBell v src/lib/icons.jsx, stejný organický styl jako
+   zbytek sady.
+
 SOUBORY V TÉTO PŘÍLOZE
 -----------------------
 Všechny .jsx/.js/.css/.sql soubory mají příponu .txt navíc (Projekty
 nepodporují .zip ani přímo .jsx/.sql), obsah je ale beze změny —
 klidně přejmenuj zpátky, pokud si je stáhneš pro editaci mimo appku.
+
+
