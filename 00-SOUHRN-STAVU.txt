@@ -545,6 +545,34 @@ ZMĚNY PROTI PŘEDCHOZÍ DÁVCE (notifikační zvoneček)
    appka to nemusí nikde ručně nastavovat a nemůže na to zapomenout).
 4. Nová ikona IconBell v src/lib/icons.jsx, stejný organický styl jako
    zbytek sady.
+5. OPRAVA (stale closure): saveManagedLocationAreas volala await
+   loadLocationsCatalog() a hned poté bulkUpdateSessionsForLocations(),
+   která ale četla "locationsCatalog" zachycené PŘI SPUŠTĚNÍ funkce --
+   React state update neopraví hodnotu už běžící funkce. Riziko: vlastní
+   výpravy by se mohly přepočítat podle PŘEDCHOZÍHO tvaru revíru, ne
+   podle právě uloženého nového. Opraveno: bulkUpdateSessionsForLocations
+   dostala volitelný parametr catalogOverride -- saveManagedLocationAreas
+   jí teď předává čerstvě sestavený katalog (locationsCatalog s ručně
+   opraveným právě uloženým záznamem), nezávisle na časování Reactu.
+6. OPRAVA (zásadní, zjištěno v provozu -- "vidím starý i nový tvar jako
+   dvě místa se stejným názvem"): addAreasToManaged (přidání DALŠÍ
+   oblasti k už rozepsané editaci VÝPRAVY, ne katalogového místa) plochy
+   jen PŘIDÁVALA za stávající, bez kontroly, jestli tam už neexistuje
+   plocha se STEJNÝM location_id. Pokud uživatel při editaci oblastí
+   výpravy znovu vygeneroval/přidal plochu vázanou na katalogové místo,
+   co výprava už měla, appka vytvořila DRUHOU, oddělenou položku se
+   stejným názvem místo nahrazení té staré (vidět v coord-listu jako
+   dva řádky "Název: mírně odlišné souřadnice"). OPRAVENO: addAreasToManaged
+   teď nejdřív z prev.areas odstraní všechny položky se STEJNÝM
+   location_id, jaké jsou mezi nově přidávanými, a teprve pak nové
+   přidá -- efektivně nahrazení, ne duplicita. Plochy bez location_id
+   (ryze ruční kreslení) se pořád jen přidávají beze změny chování.
+   ÚKLID STÁVAJÍCÍ DUPLICITY U JIŽ POSTIŽENÝCH VÝPRAV: není potřeba nic
+   opravovat ručně v datech -- stačí u postižené výpravy znovu kliknout
+   "🔄 Aktualizovat podle katalogu" (existující tlačítko), které vždy
+   počítá čerstvě jen z session_locations (tam duplicita fyzicky
+   nemůže vzniknout, primary key (session_id, location_id) v DB) a
+   VÝPRAVU celou area přepíše -- tím se stará zdvojená položka smaže.
 
 SOUBORY V TÉTO PŘÍLOZE
 -----------------------

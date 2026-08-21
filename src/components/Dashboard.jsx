@@ -921,11 +921,19 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // podle AKTUÁLNÍ podoby propojených katalogových míst -- používá ji jak
   // "🔄 Aktualizovat podle katalogu" u jedné výpravy, tak hromadná nabídka
   // po uložení revíru (vlastní i cizí, přes notifikační zvoneček).
-  async function bulkUpdateSessionsForLocations(sessionsToUpdate) {
+  async function bulkUpdateSessionsForLocations(sessionsToUpdate, catalogOverride) {
+    // catalogOverride: appka ho použije, když voláme HNED po vlastním
+    // uložení revíru -- await loadLocationsCatalog() sice pošle appce
+    // čerstvá data, ale samotná TATO funkce by pořád četla starou hodnotu
+    // "locationsCatalog" zachycenou při svém spuštění (React state se
+    // neaktualizuje uprostřed už běžící funkce). Bez override hrozí, že by
+    // se výprava přepočítala podle PŘEDCHOZÍHO tvaru revíru, ne podle
+    // právě uloženého nového.
+    const catalog = catalogOverride || locationsCatalog
     for (const session of sessionsToUpdate) {
       const linkedIds = (session.session_locations || []).map((sl) => sl.location_id)
       if (linkedIds.length === 0) continue
-      const linked = locationsCatalog.filter((l) => linkedIds.includes(l.id))
+      const linked = catalog.filter((l) => linkedIds.includes(l.id))
       const areaLocations = linked.filter((l) => l.area)
       const updates = {}
       if (areaLocations.length > 0) {
@@ -1802,7 +1810,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   function addAreasToManaged(newAreas) {
-    setEditingAreasSession((prev) => ({ ...prev, areas: [...prev.areas, ...normalizeAppendedAreas(newAreas)] }))
+    const incoming = normalizeAppendedAreas(newAreas)
+    setEditingAreasSession((prev) => {
+      // Pokud appka přidává plochu se STEJNÝM katalogovým místem (location_id),
+      // co už výprava má, appka ji NAHRADÍ, ne přidá vedle -- jinak by vznikla
+      // duplicita (dvě plochy se stejným názvem, mírně odlišné souřadnice,
+      // podle toho, kdy byla která vygenerovaná). Plochy bez location_id
+      // (ryze ruční kreslení) se vždy jen přidávají, tam kolize nehrozí.
+      const incomingIds = new Set(incoming.filter((a) => a.location_id).map((a) => a.location_id))
+      const kept = prev.areas.filter((a) => !(a.location_id && incomingIds.has(a.location_id)))
+      return { ...prev, areas: [...kept, ...incoming] }
+    })
   }
 
   async function saveManagedAreas() {
@@ -1879,7 +1897,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       const ok = window.confirm(
         `Tenhle revír používá ${mySessions.length} tvých ${mySessions.length === 1 ? 'výpravu' : mySessions.length < 5 ? 'výpravy' : 'výprav'}. Aktualizovat jejich pozici/tvar podle nové podoby?`
       )
-      if (ok) await bulkUpdateSessionsForLocations(mySessions)
+      if (ok) {
+        // Předá se čerstvě uložený tvar přímo (ne spoléhat na to, že
+        // "locationsCatalog" v Reactu už stihl doběhnout na nová data --
+        // viz komentář u bulkUpdateSessionsForLocations).
+        const freshCatalog = locationsCatalog.map((l) => (l.id === id ? { ...l, ...updates } : l))
+        await bulkUpdateSessionsForLocations(mySessions, freshCatalog)
+      }
     }
   }
 
