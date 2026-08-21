@@ -403,23 +403,36 @@ DOLADĚNÍ UX AUTO-KRESLENÍ PODLE BŘEHU (na základě zkoušení v provozu)
   (ne automatický výběr "nejbližšího"). Nepoužívané pomocné funkce
   (roughDistanceMeters, angleBetweenDirectionsDegrees,
   getNearbyCatalogSnaps, lastSnapWhichRef) byly z kódu odstraněny.
-- SKUTEČNÁ PŘÍČINA "nekdy hůř, někdy líp" (dovyšetřeno): geometrická
-  logika navázání (pickCatalogSnap, přebrání polohy i směru) byla po
-  celou dobu STEJNÁ a funkční -- problém byl čistě v UI prvního pokusu
-  o automatický výběr "nejbližší", kde appka místo explicitního
-  "Začátek"/"Konec" tlačítka u každého revíru ukazovala jen obecné
-  "Navázat" s odhadem vzdálenosti. Pokud byl revír krátký, OBA jeho
-  konce vyšly "blízko" nové čáře -- appka nezobrazovala, KTERÝ konec
-  konkrétní tlačítko představuje, takže šlo snadno kliknout na ten
-  špatný, aniž by si toho uživatel všiml (vypadalo to jako náhodná
-  geometrická chyba, ve skutečnosti to byl matoucí výběr).
-  ŘEŠENÍ: appka teď KOMBINUJE obojí -- seznam je seřazený od
+- Doplňující UI oprava (zůstává v platnosti nezávisle na výše popsané
+  geometrické opravě): seznam navázání byl zpřehledněn -- řadí se od
   nejbližšího KONCE (ne revíru jako celku, přes všechny revíry a oba
-  jejich konce dohromady), ALE u každé položky vždy explicitně napíše
+  jejich konce dohromady), a u každé položky vždy explicitně píše
   "Název — Začátek/Konec (X m)" -- žádné tlačítko není jen obecné
-  "Navázat" bez jasného popisku. Zachovává se tak pohodlí (nejbližší
-  první, ne nutnost scrollovat celý katalog), ale bez ztráty
-  jednoznačnosti, která způsobila předchozí nespolehlivost.
+  "Navázat" bez jasného popisku (to dřív vedlo k tomu, že šlo omylem
+  kliknout na špatný konec krátkého revíru, aniž by si toho uživatel
+  všiml). Zachovává se tak pohodlí (nejbližší první, ne nutnost
+  scrollovat celý katalog) i jednoznačnost výběru.
+- SKUTEČNÁ PŘÍČINA nalezena uživatelem vlastním testováním: appka si u
+  sousedního revíru pamatuje směr (dirPoints) podle toho, JAKÝM POŘADÍM
+  byly tehdy jeho body naklikané -- to je čistě náhodné, appka nemá
+  žádnou pevnou konvenci (nezná "po/proti proudu"). Plné přebírání
+  tohohle cizího směru (jak appka dělala po návratu k "původnímu
+  fungujícímu" postupu výše) proto fungovalo nebo nefungovalo NÁHODNĚ,
+  podle toho, jestli náhodou vyšlo, že byl sousední revír nakreslený
+  "stejným", nebo "opačným" pořadím, než jakým teď přirozeně pokračuje
+  NOVÁ čára. Při opačném pořadí appka udržela špatnou stranu řezné
+  roviny a ořízla skoro celou novou plochu (viditelně jako "oblouk
+  zasahující zpátky do starého území, nic nového nevytvoří").
+  DEFINITIVNÍ OPRAVA (riverShape.js, buildRiverAreasFromLine): dirStart
+  (směr řezné roviny na začátku čáry) se teď VŽDY počítá z VLASTNÍ,
+  právě kreslené čáry -- nikdy z uloženého směru sousedního revíru,
+  bez ohledu na to, jestli se navazuje, nebo ne. Přebírá se JEN PŘESNÁ
+  POLOHA bodu (cutPoint) sousedního revíru, aby hrana bez mezery
+  navázala -- ale výsledek už není závislý na historii/náhodném pořadí
+  kreslení TOHO druhého revíru. dirPoints v uložených edge_cuts
+  metadatech je od teď čistě informativní (geometricky se nikde
+  nepoužívá) a vždy odráží skutečný směr TÉ KONKRÉTNÍ čáry, ne zděděnou
+  hodnotu z předchozího navázání.
 
 ZMĚNY PROTI PŘEDCHOZÍ DÁVCE (oprava buttonů, oprava párování úlovků,
 vazba polygon<->katalog, přepínač Revíry)

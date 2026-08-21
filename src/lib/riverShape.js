@@ -168,25 +168,23 @@ export async function buildRiverAreasFromLine(points, options = {}) {
   const start = ptsXY[0]
   const end = ptsXY[ptsXY.length - 1]
 
-  let dirStart, startCut
-  if (options.previousCut) {
-    // Přebírá přesně stejnou řeznou čáru (bod i sklon) jako konec sousední
-    // plochy -- oba body se promítnou do TÉTO čáry místní projekce (proj),
-    // takže nezáleží na tom, jaká projekce se použila při generování té
-    // sousední plochy dřív (žádné křížové zkreslení mezi projekcemi).
-    // POZNÁMKA: appka to zkoušela i s přebíráním jen POLOHY (směr vždy z
-    // vlastní čáry) -- v provozu se to ale ukázalo jako horší (viz
-    // 00-SOUHRN-STAVU.txt), takže appka je zpátky u přebírání i směru.
-    // Ochranu proti špatně natočenému směru řeší kontrola úhlu v
-    // Dashboard.jsx (generateRiverArea) PŘED zavoláním týhle funkce --
-    // pokud se směr příliš liší, previousCut se sem vůbec nepředá.
-    const dPtsXY = options.previousCut.dirPoints.map(proj.toXY)
-    dirStart = normalizeVec([dPtsXY[1][0] - dPtsXY[0][0], dPtsXY[1][1] - dPtsXY[0][1]])
-    startCut = proj.toXY(options.previousCut.cutPoint)
-  } else {
-    dirStart = normalizeVec([ptsXY[1][0] - ptsXY[0][0], ptsXY[1][1] - ptsXY[0][1]])
-    startCut = [start[0] - dirStart[0] * overshootMeters, start[1] - dirStart[1] * overshootMeters]
-  }
+  // Směr řezné roviny (dirStart) se VŽDY počítá z VLASTNÍ právě kreslené
+  // čáry -- nikdy z uloženého směru sousedního revíru. Důvod (zjištěno v
+  // provozu): appka si u sousedního revíru pamatuje směr podle toho,
+  // JAKÝM POŘADÍM byly tehdy body naklikané -- to je čistě náhodné, ne
+  // pevná konvence (appka nezná "po/proti proudu"). Kdyby appka tenhle
+  // cizí směr přebírala 1:1, výsledek by závisel na tom, jestli sousední
+  // revír zrovna náhodou vyšel naklikaný "stejným" nebo "opačným" směrem,
+  // než jakým teď přirozeně pokračuje NOVÁ čára -- při opačném pořadí by
+  // appka udržela špatnou stranu a ořízla skoro celou novou plochu.
+  // Přebírá se proto JEN PŘESNÁ POLOHA bodu (cutPoint), aby hrana bez
+  // mezery navázala na sousední revír, ale směr řezu vychází vždy z toho,
+  // jak TEĎ skutečně klikáš -- appka tak spolehlivě pozná, kterým směrem
+  // má nová plocha růst, bez ohledu na historii sousedního revíru.
+  const dirStart = normalizeVec([ptsXY[1][0] - ptsXY[0][0], ptsXY[1][1] - ptsXY[0][1]])
+  const startCut = options.previousCut
+    ? proj.toXY(options.previousCut.cutPoint)
+    : [start[0] - dirStart[0] * overshootMeters, start[1] - dirStart[1] * overshootMeters]
 
   const dirEnd = normalizeVec([
     ptsXY[ptsXY.length - 1][0] - ptsXY[ptsXY.length - 2][0],
@@ -236,12 +234,10 @@ export async function buildRiverAreasFromLine(points, options = {}) {
 
   const startCutMeta = {
     cutPoint: proj.toLatLng(startCut),
-    // Pokud se přebíral řez ze sousední plochy (previousCut), appka si
-    // pamatuje TU SAMOU dvojici bodů určujících sklon -- ne vlastní první
-    // úsek čáry -- ať metadata zůstanou konzistentní napříč navazujícími
-    // plochami, i kdyby se tahle konkrétní plocha jednou stala výchozím
-    // bodem pro DALŠÍ navazování.
-    dirPoints: options.previousCut ? options.previousCut.dirPoints : [points[0], points[1]],
+    // dirPoints je teď čistě informativní záznam (geometricky se už nikde
+    // nepoužívá, viz vysvětlení u dirStart výše) -- vždy odráží skutečný
+    // směr TÉHLE konkrétní čáry, nezávisle na tom, jestli se navazovalo.
+    dirPoints: [points[0], points[1]],
   }
   const endCutMeta = {
     cutPoint: proj.toLatLng(endCut),
