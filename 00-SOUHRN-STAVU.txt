@@ -838,6 +838,35 @@ ZPĚTNÁ VAZBA Z PROVOZU (uživatel testoval Mapu se starými daty) -- opraveno:
    dělala map.setView bez ohledu na to, jestli se zrovna třeba
    přidával prut). Appka teď mapu přeostří jen tehdy, když uživatel
    fakt nic neumísťuje/nekreslí.
+8. OPRAVA (KOŘENOVÁ PŘÍČINA "nejbližší z historie nikdy nic nenajde",
+   zjištěno v provozu -- appka i po opravě prahu na 800m a přidání
+   testu bod-v-polygonu pořád nenacházela vůbec nic, ani u míst, kde
+   uživatel prokazatelně už chytal): appka registruje handleMapClick
+   na mapu přes map.on('click', ...) UVNITŘ useEffectu s PRÁZDNÝM
+   dependency polem (spustí se jen JEDNOU při načtení appky). Appka
+   volala handleMapClick PŘÍMO, takže si tahle vazba natrvalo
+   "zamrzla" na verzi funkce z PRVNÍHO renderu -- se sessions i
+   locationsCatalog takovými, jaké byly hned při načtení appky
+   (typicky prázdná pole, než doběhne async loadSessions/
+   loadLocationsCatalog). STARŠÍ větve uvnitř handleMapClick (klikání
+   prutů, kreslení oblastí) tohle nepocítily, protože používají
+   funkcionální zápis setX(prev => ...), který se zamrznutí uzávěru
+   vyhne -- ale NOVĚJŠÍ kód (findNearestHistoryMatches, volaný přímo
+   z větve 'shore-point-click') čte sessions/locationsCatalog PŘÍMO,
+   a proto appka vždycky prohledávala prázdná/zastaralá data, bez
+   ohledu na to, jak moc se ladil práh vzdálenosti nebo přesnost testu
+   uvnitř polygonu -- žádná z těch oprav nemohla pomoct, dokud appka
+   hledala v podstatě v ničem.
+   OPRAVENO: nový handleMapClickRef (useRef), do kterého appka po
+   KAŽDÉM renderu (useEffect BEZ dependency pole) zapíše nejčerstvější
+   verzi handleMapClick. Mapa appky teď volá
+   `(e) => handleMapClickRef.current?.(e.latlng)` -- stabilní
+   reference navenek (appka ji nemusí nikdy znovu registrovat), ale
+   OBSAH uvnitř je vždycky aktuální. Ověřeno, že appka nemá stejný
+   vzor (nativní Leaflet event registrovaný jednou navždy) nikde
+   jinde -- ostatní .on('click', ...) volání patří markerům, co appka
+   znovu vytváří při každém překreslení, takže mají vždycky čerstvý
+   uzávěr sami od sebe.
 
 
 

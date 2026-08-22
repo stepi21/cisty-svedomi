@@ -220,6 +220,19 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const placementTargetRef = useRef(null)
   useEffect(() => { placementTargetRef.current = placementTarget }, [placementTarget])
 
+  // handleMapClick appka registruje na mapu JEN JEDNOU (map.on('click', ...)
+  // uvnitř useEffectu s prázdným dependency polem, viz inicializace mapy
+  // níže) -- kdyby appka volala handleMapClick přímo, natrvalo by si
+  // "zamrzla" na verzi z PRVNÍHO renderu, se sessions/locationsCatalog
+  // takovými, jaké byly při načtení appky (typicky prázdné, než doběhne
+  // async načtení dat). Starší větve (klikání prutů, kreslení oblastí)
+  // tohle nepocítily, protože používají funkcionální setX(prev => ...)
+  // zápis, který se zamrznutí vyhne -- ale novější kód (findNearestHistoryMatches)
+  // čte sessions/locationsCatalog přímo, a proto vždycky viděl stará data.
+  // Řešení: appka na mapu registruje jen tenhle stabilní ref, a jeho
+  // OBSAH (handleMapClickRef.current) appka přepisuje po KAŽDÉM renderu.
+  const handleMapClickRef = useRef(null)
+
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
   const markersLayer = useRef(null)
@@ -409,7 +422,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     }).addTo(map)
     draftLayer.current = L.layerGroup().addTo(map)
 
-    map.on('click', (e) => handleMapClick(e.latlng))
+    map.on('click', (e) => handleMapClickRef.current?.(e.latlng))
     mapInstance.current = map
     return () => { map.remove(); mapInstance.current = null }
   }, [])
@@ -502,6 +515,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       return
     }
   }
+
+  // Žádné dependency pole -- appka tenhle efekt chce spustit po KAŽDÉM
+  // renderu, ať handleMapClickRef vždycky ukazuje na nejčerstvější verzi
+  // handleMapClick (se všemi aktuálními sessions/locationsCatalog v jejím
+  // uzávěru). Viz komentář u handleMapClickRef výše.
+  useEffect(() => {
+    handleMapClickRef.current = handleMapClick
+  })
 
   const pendingTypeRef = useRef('kapr')
   const pendingLiveRef = useRef(false)
