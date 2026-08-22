@@ -620,14 +620,34 @@ CELKOVÝ PLÁN (pro orientaci, i to, co ještě NENÍ hotové):
    škoda v tom nechat mrtvý kód, dokud se neověří, že appka novou
    Mapu nepotřebuje ještě něco z toho.
    Nová ikona IconMap (organický styl, žádná emoji).
-3. NEHOTOVO: nový model zápisu výpravy -- GPS tap jako výchozí cesta,
-   appka nabídne nejbližší podobná místa z historie (seskupené podle
-   jména, appka nikdy nerozhoduje sama kvůli případům jako soutok
-   dvou řek). Kapr/muška/plavaná: nový bod na břehu + zůstávají
-   pozice jednotlivých prutů ve vodě (beze změny). Přívlač: žádný
-   samostatný bod navíc, "místa" = znovupoužitý mechanismus dnešních
-   prutů (appka jen jinak pojmenuje), víc míst = "+ Další místo".
-   Úlovek u přívlače vyžaduje POVINNÝ klik na mapu (žádný pevný bod).
+3. ČÁSTEČNĚ HOTOVO (tahle dávka) -- jen KAPR/MUŠKA/PLAVANÁ: nový model
+   zápisu výpravy -- GPS tap ("📍 Jsem tady (GPS)", nová volba vedle
+   "Z katalogu"/"Naklikat nové na mapě" v mezikroku "Jak zadat místo?",
+   zobrazuje se jen u bodových typů). Appka po zjištění polohy
+   (navigator.geolocation) nabídne nejbližší podobná místa z historie
+   (findNearestHistoryMatches -- appka porovná se všemi POJMENOVANÝMI
+   výpravami I katalogovými místy, seskupí podle jména, appka NIKDY
+   nerozhoduje sama kvůli případům jako soutok dvou řek -- vždy jen
+   nabídne na výběr + možnost napsat úplně nové jméno ručně). Po výběru/
+   napsání appka spustí OBVYKLÉ klikání pozic prutů do vody (beze
+   změny, funguje přesně jako dřív) -- jen výsledný GPS bod appka
+   použije jako "kotvu" výpravy (draftSession.point, nový
+   pendingGpsShorePointRef) MÍSTO dřívějšího odvození z pozice
+   prvního prutu. Appka tak rozlišuje "kde stojím" (břeh, pro budoucí
+   dohledání revíru/vodního stavu) od "kam jsem hodil" (voda, pozice
+   prutu) jako dva různé, nezávislé body.
+   NEHOTOVO: PŘÍVLAČ -- žádný samostatný bod navíc, "místa" = znovu-
+   použitý mechanismus dnešních prutů (appka jen jinak pojmenuje), víc
+   míst = "+ Další místo". Úlovek u přívlače vyžaduje POVINNÝ klik na
+   mapu (žádný pevný bod). Vědomě odloženo na samostatnou dávku --
+   vyžaduje odstranění celé plochy/polygonu z AREA_TYPES logiky, což
+   je větší a rizikovější zásah než dnešní bodové typy, zaslouží si
+   vlastní pozornost, ne spěchat ve stejné dávce.
+   TAKÉ NEHOTOVO: appka zatím nepoužívá "upřednostnit ČHMÚ stanici na
+   správné řece" (bod 5 níže) ani "revír počítaný za běhu z historie"
+   (bod 4 níže) při GPS flow -- našeptávač zatím jen porovnává jména,
+   nenabízí live vodní stav u jednotlivé nabídky. Doplní se, až budou
+   hotové body 4 a 5.
 4. NEHOTOVO: katalog míst (`locations` tabulka) přestává být zdrojem
    pravdy pro nové zápisy -- appka "revír" počítá za běhu ze seskupení
    historie výprav podle jména. Stará tabulka/data se neničí (zůstávají

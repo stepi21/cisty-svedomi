@@ -108,6 +108,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [myProfile, setMyProfile] = useState(profile)
   const [showNotifications, setShowNotifications] = useState(false)
   const [mapLayers, setMapLayers] = useState({ myTrips: true, partyTrips: false, myCatches: true, partyCatches: true, locations: true })
+  const [gpsCapturing, setGpsCapturing] = useState(false)
+  const [gpsConfirmStep, setGpsConfirmStep] = useState(null) // {point, matches} -- appka čeká na potvrzení/napsání jména
+  const [gpsManualTitle, setGpsManualTitle] = useState('')
+  const [gpsManualRevir, setGpsManualRevir] = useState('')
+  const pendingGpsShorePointRef = useRef(null) // GPS bod na břehu -- použije se jako draftSession.point MÍSTO pozice prvního prutu
   const [locallyHandledLocationIds, setLocallyHandledLocationIds] = useState(new Set()) // "vyřešeno" jen pro tuhle jednu otevřenou session appky, ať notifikace nezůstane viset jako "nevyřízená" hned po kliknutí na Potvrdit
   const notificationsRef = useRef(null)
   const [showSettings, setShowSettings] = useState(false)
@@ -603,6 +608,89 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const midLat = (a.lat + b.lat) / 2
     const dLng = (a.lng - b.lng) * 111320 * Math.cos((midLat * Math.PI) / 180)
     return Math.sqrt(dLat * dLat + dLng * dLng)
+  }
+
+  // Najde nejbližší pojmenovaná místa z historie (výpravy i katalog) k
+  // danému GPS bodu -- appka appce nabídne jméno/revír k převzetí, ať se
+  // nemusí u známého místa psát pokaždé ručně znovu. Seskupuje podle jména,
+  // appka ukáže jen nejbližší výskyt každého odlišného jména (kvůli
+  // soutokům/blízkým, ale odlišným místům appka nikdy nerozhoduje sama --
+  // jen nabídne na výběr, poslední slovo má vždycky člověk).
+  function findNearestHistoryMatches(point, maxDistanceMeters = 300, maxResults = 5) {
+    const named = []
+    sessions.forEach((s) => {
+      if (!s.title || s.lat == null || s.lng == null) return
+      named.push({ title: s.title, revir: s.revir || '', lat: s.lat, lng: s.lng })
+    })
+    locationsCatalog.forEach((l) => {
+      if (l.lat == null || l.lng == null) return
+      named.push({ title: l.name, revir: l.revir || '', lat: l.lat, lng: l.lng })
+    })
+    const withDist = named
+      .map((n) => ({ ...n, distance: roughDistanceMeters(point, n) }))
+      .filter((n) => n.distance <= maxDistanceMeters)
+      .sort((a, b) => a.distance - b.distance)
+    const seen = new Set()
+    const grouped = []
+    for (const n of withDist) {
+      const key = normalizeSearchText(n.title)
+      if (seen.has(key)) continue
+      seen.add(key)
+      grouped.push(n)
+      if (grouped.length >= maxResults) break
+    }
+    return grouped
+  }
+
+  // --- GPS flow zakládání výpravy: appka zjistí polohu, nabídne nejbližší
+  // známá jména, a teprve pak appka spustí OBVYKLÉ klikání pozic prutů do
+  // vody (beze změny) -- GPS bod appka použije jako "kotvu" výpravy
+  // (draftSession.point) MÍSTO dřívějšího odvození z prvního prutu.
+  function startGpsFlow() {
+    setLocationPickerStep(null)
+    setGpsCapturing(true)
+    if (!navigator.geolocation) {
+      setGpsCapturing(false)
+      alert('Tento prohlížeč neumí zjistit polohu.')
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const point = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        setGpsCapturing(false)
+        mapInstance.current?.setView([point.lat, point.lng], 16)
+        setGpsManualTitle('')
+        setGpsManualRevir('')
+        setGpsConfirmStep({ point, matches: findNearestHistoryMatches(point) })
+      },
+      () => {
+        setGpsCapturing(false)
+        alert('Nepodařilo se zjistit polohu. Zkontroluj, že appka má povolení k lokaci.')
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    )
+  }
+
+  function pickGpsMatch(match) {
+    pendingGpsShorePointRef.current = gpsConfirmStep.point
+    pendingPointModeCatalogRef.current = { title: match.title, revir: match.revir, locationIds: [] }
+    setGpsConfirmStep(null)
+    setRodPointsDraft([])
+    setPlacementTarget('session-point')
+  }
+
+  function confirmGpsManual() {
+    if (!gpsManualTitle.trim()) return
+    pendingGpsShorePointRef.current = gpsConfirmStep.point
+    pendingPointModeCatalogRef.current = { title: gpsManualTitle.trim(), revir: gpsManualRevir.trim(), locationIds: [] }
+    setGpsConfirmStep(null)
+    setRodPointsDraft([])
+    setPlacementTarget('session-point')
+  }
+
+  function cancelGpsFlow() {
+    setGpsConfirmStep(null)
+    pendingGpsShorePointRef.current = null
   }
 
   function focusOnPoint(lat, lng) {
@@ -1502,6 +1590,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setRodPointsDraft(null)
     setPlacementTarget(null)
     pendingPointModeCatalogRef.current = null
+    pendingGpsShorePointRef.current = null
   }
 
   function undoRodPoint() {
@@ -1517,12 +1606,18 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const live = liveDefaults()
     const catalogInfo = pendingPointModeCatalogRef.current
     pendingPointModeCatalogRef.current = null
+    // GPS bod na břehu (pokud appka jím prošla přes "📍 Jsem tady") appka
+    // použije jako kotvu výpravy MÍSTO pozice prvního prutu -- appka tak
+    // rozlišuje "kde stojím" (břeh, pro dohledání revíru/vodního stavu) od
+    // "kam jsem hodil" (voda, pozice prutu) jako dva různé body.
+    const shorePoint = pendingGpsShorePointRef.current
+    pendingGpsShorePointRef.current = null
     setDraftSession({
       type: pendingTypeRef.current,
       title: catalogInfo?.title || '', date: live.date, timeFrom: live.timeFrom, timeTo: '',
       revir: catalogInfo?.revir || '', target_species: '',
       temp: '', pressure: '', wind: '', desc: '',
-      point: first, area: null,
+      point: shorePoint || first, area: null,
       rods,
       live: live.live,
       linkedLocationIds: catalogInfo?.locationIds || [],
@@ -2938,9 +3033,42 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           {locationPickerStep === 'choose' && (
             <div className="type-picker">
               <div className="type-picker-title">Jak zadat místo?</div>
+              {!AREA_TYPES.includes(pendingTypeRef.current) && (
+                <button className="type-btn" onClick={startGpsFlow}><IconLocate size={13} /> 📍 Jsem tady (GPS)</button>
+              )}
               <button className="type-btn" onClick={() => setLocationPickerStep('catalog')}><IconRevir size={14} /> Z katalogu</button>
               <button className="type-btn" onClick={startDrawNew}><IconEdit size={13} /> Naklikat nové na mapě</button>
               <button className="type-cancel" onClick={() => setLocationPickerStep(null)}>Zrušit</button>
+            </div>
+          )}
+
+          {gpsCapturing && (
+            <div className="place-hint">
+              Zjišťuji tvoji polohu…
+              <button className="ticket-close" onClick={() => setGpsCapturing(false)}><IconClose size={16} /></button>
+            </div>
+          )}
+
+          {gpsConfirmStep && (
+            <div className="type-picker" style={{ minWidth: 250 }}>
+              <div className="type-picker-title">Jak se tohle místo jmenuje?</div>
+              {gpsConfirmStep.matches.length > 0 && (
+                <>
+                  <p className="hint-text" style={{ margin: '0 0 6px' }}>Appka našla poblíž:</p>
+                  {gpsConfirmStep.matches.map((m, i) => (
+                    <button key={i} className="type-btn" onClick={() => pickGpsMatch(m)}>
+                      {m.title}{m.revir ? ` (${m.revir})` : ''} <span style={{ opacity: .6, marginLeft: 4 }}>· {Math.round(m.distance)} m</span>
+                    </button>
+                  ))}
+                  <div style={{ height: 1, background: 'var(--paper-line)', margin: '8px 0' }} />
+                </>
+              )}
+              <label className="field-label" style={{ marginTop: 0 }}>Nebo napiš nové jméno</label>
+              <input className="text-input" placeholder="např. Jizera - most" value={gpsManualTitle} onChange={(e) => setGpsManualTitle(e.target.value)} autoFocus />
+              <label className="field-label">Revír (nepovinné)</label>
+              <input className="text-input" placeholder="např. 411024" value={gpsManualRevir} onChange={(e) => setGpsManualRevir(e.target.value)} />
+              <button className="btn-primary" style={{ marginTop: 10 }} onClick={confirmGpsManual} disabled={!gpsManualTitle.trim()}>Pokračovat</button>
+              <button className="type-cancel" onClick={cancelGpsFlow}>Zrušit</button>
             </div>
           )}
 
@@ -3212,6 +3340,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
           {rodPointsDraft && (
             <div className="place-hint area-hint">
+              {pendingGpsShorePointRef.current && (
+                <div style={{ marginBottom: 4, opacity: .85 }}>📍 Bod na břehu nastaven — appka podle něj najde revír a vodní stav.</div>
+              )}
               Klikni na mapu, kam jsi nahodil Prut {rodPointsDraft.length + 1}{rodPointsDraft.length > 0 ? ` (zatím nastaveno: ${rodPointsDraft.length})` : ''}.
               <div className="area-controls">
                 <button className="new-btn" onClick={undoRodPoint} disabled={!rodPointsDraft.length}>Zpět o prut</button>
