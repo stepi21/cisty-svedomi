@@ -185,7 +185,10 @@ header h1 .accent{ color:var(--amber); }
 .record-row:hover{ background:#F7F4EA; }
 
 /* ---------- feed na Domů — fotka jako dominanta karty ---------- */
-.home-feed{ display:flex; flex-direction:column; gap:14px; padding:14px 18px; max-width:520px; margin:0 auto; width:100%; }
+.home-feed{
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));
+  gap:16px; padding:18px 24px; max-width:1200px; margin:0 auto; width:100%;
+}
 .feed-card{
   background:var(--white); border:1px solid var(--paper-line); border-radius:12px;
   overflow:hidden; cursor:pointer; box-shadow:0 2px 8px rgba(22,57,61,.06);
