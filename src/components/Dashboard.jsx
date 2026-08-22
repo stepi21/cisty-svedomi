@@ -420,6 +420,18 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       return
     }
 
+    if (target === 'shore-point-click') {
+      // Ruční ekvivalent GPS bodu na břehu (u zpětné výpravy, appka totiž
+      // GPS nevolá vůbec -- viz startManualShorePointPlacement). Appka
+      // odtud pokračuje STEJNÝM krokem "jak se místo jmenuje?" jako GPS
+      // cesta -- obě cesty se od tohohle bodu dál chovají identicky.
+      setPlacementTarget(null)
+      setGpsManualTitle('')
+      setGpsManualRevir('')
+      setGpsConfirmStep({ point, matches: findNearestHistoryMatches(point) })
+      return
+    }
+
     if (target === 'area-point' || target === 'relocate-area-point' || target === 'area-point-append') {
       setAreaDraft((prev) => ({ areas: prev?.areas || [], current: [...(prev?.current || []), point] }))
       return
@@ -654,7 +666,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const requestId = ++gpsRequestIdRef.current
     if (!navigator.geolocation) {
       setGpsCapturing(false)
-      startManualRodPlacement()
+      startManualShorePointPlacement()
       return
     }
     navigator.geolocation.getCurrentPosition(
@@ -665,39 +677,34 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         mapInstance.current?.setView([point.lat, point.lng], 16)
         setGpsManualTitle('')
         setGpsManualRevir('')
-        setGpsConfirmStep({ point, matches: findNearestHistoryMatches(point), mode: 'before-rods' })
+        setGpsConfirmStep({ point, matches: findNearestHistoryMatches(point) })
       },
       () => {
         if (gpsRequestIdRef.current !== requestId) return
         // GPS selhalo/zamítnuto -- appka rovnou nabídne ruční umístění bodu
         // na mapě, ať uživatel nezůstane bez cesty dál.
         setGpsCapturing(false)
-        startManualRodPlacement()
+        startManualShorePointPlacement()
       },
       { enableHighAccuracy: true, timeout: 8000 }
     )
   }
 
   // Ruční záložní cesta -- appka na ni přejde sama při selhání GPS, nebo
-  // na ni uživatel může přejít i dobrovolně (tlačítko v "Zjišťuji polohu…").
-  function startManualRodPlacement() {
+  // na ni uživatel může přejít i dobrovolně (tlačítko v "Zjišťuji polohu…"),
+  // NEBO appka na ni jde rovnou u zpětné výpravy (žádné GPS -- appka není
+  // fyzicky na místě). Appka nechá kliknout JEDEN bod na břehu (stejná role
+  // jako GPS bod u živé výpravy), a teprve pak appka pokračuje stejným
+  // krokem "jak se místo jmenuje?" jako GPS cesta -- obě cesty se odtud
+  // dál shodují, jen se liší v tom, JAK appka ten první bod získala.
+  function startManualShorePointPlacement() {
     gpsRequestIdRef.current++ // zneplatní případnou dobíhající GPS odpověď
     setGpsCapturing(false)
     setGpsConfirmStep(null)
-    setRodPointsDraft([])
-    setPlacementTarget('session-point')
+    setPlacementTarget('shore-point-click')
   }
 
-  // Dvě situace appka řeší tímhle stejným krokem "jak se místo jmenuje?":
-  // mode 'before-rods' (živá výprava přes GPS -- appka jméno zjistí PŘED
-  // klikáním prutů) a mode 'after-rods' (zpětná výprava -- appka jméno
-  // zjistí AŽ PO umístění bodu/prutů, protože GPS appka u zpětné výpravy
-  // vůbec nevolá).
   function pickGpsMatch(match) {
-    if (gpsConfirmStep.mode === 'after-rods') {
-      finishSessionWithName(match.title, match.revir, gpsConfirmStep.point)
-      return
-    }
     pendingGpsShorePointRef.current = gpsConfirmStep.point
     pendingPointModeCatalogRef.current = { title: match.title, revir: match.revir, locationIds: [] }
     setGpsConfirmStep(null)
@@ -707,54 +714,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function confirmGpsManual() {
     if (!gpsManualTitle.trim()) return
-    if (gpsConfirmStep.mode === 'after-rods') {
-      finishSessionWithName(gpsManualTitle.trim(), gpsManualRevir.trim(), gpsConfirmStep.point)
-      return
-    }
     pendingGpsShorePointRef.current = gpsConfirmStep.point
     pendingPointModeCatalogRef.current = { title: gpsManualTitle.trim(), revir: gpsManualRevir.trim(), locationIds: [] }
     setGpsConfirmStep(null)
     setRodPointsDraft([])
     setPlacementTarget('session-point')
-  }
-
-  // Postaví draftSession přímo z už NASBÍRANÝCH pozic prutů (rodPointsDraft)
-  // -- používá se pro mode 'after-rods' (zpětná výprava), kde appka body
-  // už má a chybí jen jméno/revír.
-  function finishSessionWithName(title, revir, anchorPoint) {
-    const rods = (rodPointsDraft || []).map((p, i) => ({ name: `Prut ${i + 1}`, lat: p.lat, lng: p.lng, baits: [{ name: '', photoFile: null }] }))
-    const first = rodPointsDraft?.[0]
-    setPlacementTarget(null)
-    setRodPointsDraft(null)
-    setGpsConfirmStep(null)
-    const live = liveDefaults()
-    setDraftSession({
-      type: pendingTypeRef.current,
-      title, date: live.date, timeFrom: live.timeFrom, timeTo: '',
-      revir, target_species: '',
-      temp: '', pressure: '', wind: '', desc: '',
-      point: anchorPoint || first, area: null,
-      rods,
-      live: live.live,
-      linkedLocationIds: [],
-    })
-  }
-
-  // Appka na tuhle funkci naváže tlačítko "Hotovo, pokračovat" u klikání
-  // prutů VŽDY (bez ohledu na to, jestli appka přišla přes GPS, katalog,
-  // nebo čistě ruční umístění) -- rozhodne se sama, jestli jméno/revír už
-  // zná (GPS/katalog), nebo se má na to teprve zeptat (čistě ruční cesta
-  // u zpětné výpravy).
-  function finishRodPointsManual() {
-    if (!rodPointsDraft || rodPointsDraft.length === 0) return
-    if (pendingGpsShorePointRef.current || pendingPointModeCatalogRef.current) {
-      finishRodPoints()
-      return
-    }
-    const first = rodPointsDraft[0]
-    setGpsManualTitle('')
-    setGpsManualRevir('')
-    setGpsConfirmStep({ point: first, matches: findNearestHistoryMatches(first), mode: 'after-rods' })
   }
 
   function cancelGpsFlow() {
@@ -1453,7 +1417,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       // místo, kam se výprava zpětně zapisuje. Appka proto rovnou nabídne
       // ruční umístění bodu na mapě -- "nejbližší z historie" se appka
       // stejně zeptá, jen AŽ PO umístění bodu (viz finishRodPointsManual).
-      startManualRodPlacement()
+      startManualShorePointPlacement()
     }
   }
 
@@ -2397,7 +2361,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return `${prefix}${visibleSessions.length} výprav · ${catchCount} úlovků`
   }
 
-  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || placementTarget === 'new-location-point' || areaDraft || riverLineDraft || rodPointsDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
+  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'shore-point-click' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || placementTarget === 'new-location-point' || areaDraft || riverLineDraft || rodPointsDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
 
   // --- postranní panel/mobilní lišta v režimu "🗺 Mapa" — přepínatelné vrstvy + hledání míst ---
   function renderMapControls() {
@@ -3129,9 +3093,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             <div className="place-hint area-hint">
               Zjišťuji tvoji polohu…
               <div className="area-controls">
-                <button className="new-btn" onClick={startManualRodPlacement}>Umístit ručně místo GPS</button>
+                <button className="new-btn" onClick={startManualShorePointPlacement}>Umístit ručně místo GPS</button>
                 <button className="new-btn" onClick={() => { gpsRequestIdRef.current++; setGpsCapturing(false) }}>Zrušit</button>
               </div>
+            </div>
+          )}
+
+          {placementTarget === 'shore-point-click' && (
+            <div className="place-hint">
+              Klikni na mapu, kde jsi stál na břehu.
+              <button className="ticket-close" onClick={() => setPlacementTarget(null)}><IconClose size={16} /></button>
             </div>
           )}
 
@@ -3424,7 +3395,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             </div>
           )}
 
-          {rodPointsDraft && !gpsConfirmStep && (
+          {rodPointsDraft && (
             <div className="place-hint area-hint">
               {pendingGpsShorePointRef.current && (
                 <div style={{ marginBottom: 4, opacity: .85 }}>📍 Bod na břehu nastaven — appka podle něj najde revír a vodní stav.</div>
@@ -3432,7 +3403,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               Klikni na mapu, kam jsi nahodil Prut {rodPointsDraft.length + 1}{rodPointsDraft.length > 0 ? ` (zatím nastaveno: ${rodPointsDraft.length})` : ''}.
               <div className="area-controls">
                 <button className="new-btn" onClick={undoRodPoint} disabled={!rodPointsDraft.length}>Zpět o prut</button>
-                <button className="btn-primary" style={{ margin: 0 }} onClick={finishRodPointsManual} disabled={!rodPointsDraft.length}>Hotovo, pokračovat</button>
+                <button className="btn-primary" style={{ margin: 0 }} onClick={finishRodPoints} disabled={!rodPointsDraft.length}>Hotovo, pokračovat</button>
                 <button className="new-btn" onClick={cancelAreaOrPoint}>Zrušit</button>
               </div>
             </div>

@@ -652,23 +652,28 @@ CELKOVÝ PLÁN (pro orientaci, i to, co ještě NENÍ hotové):
    vyžaduje odstranění celé plochy/polygonu z AREA_TYPES logiky, což
    je větší a rizikovější zásah než dnešní bodové typy, zaslouží si
    vlastní pozornost, ne spěchat ve stejné dávce.
-   DOPLNĚNO (oprava zjištěná v provozu -- GPS u zpětné výpravy dává
-   smysl jen omylem): appka teď rozlišuje ŽIVOU a ZPĚTNOU výpravu.
-   ŽIVÁ (▶️ Výprava teď, pendingLiveRef.current true): appka je
-   fyzicky na místě, GPS appka zkusí vždy (startGpsFlow, jméno/revír
-   appka zjišťuje PŘED klikáním prutů, mode 'before-rods').
-   ZPĚTNÁ (+ nová výprava, pendingLiveRef.current false): appka NENÍ
-   fyzicky na místě (zapisuje se třeba večer doma) -- GPS by zachytilo
-   jen AKTUÁLNÍ polohu appky, ne místo, kam se výprava zpětně zapisuje.
-   Appka proto u zpětné výpravy GPS vůbec nevolá, rovnou jde na ruční
-   klikání pozic prutů (startManualRodPlacement) -- ale "nejbližší z
-   historie" appka i tak nabídne, jen AŽ PO umístění bodů, ne před nimi
-   (finishRodPointsManual -- appka pozná, jestli už jméno/revír zná z
-   GPS/katalogu, a pokud ne, zeptá se teprve teď, mode 'after-rods',
-   sdílí stejný UI krok i handlery pickGpsMatch/confirmGpsManual s GPS
-   cestou, jen jinak navazuje na zbytek flow -- finishSessionWithName
-   pro 'after-rods' postaví draftSession přímo z už nasbíraných
-   rodPointsDraft, bez nutnosti znovu spouštět klikání prutů).
+   DOPLNĚNO (oprava zjištěná v provozu -- appka nejdřív nesprávně
+   navrhla u zpětné výpravy rovnou klikat pruty, bez odděleného bodu
+   na břehu): appka teď má OBĚ cesty (živá i zpětná) strukturálně
+   STEJNÉ, liší se jen v tom, JAK appka získá první bod ("kde jsem
+   stál na břehu"):
+   - ŽIVÁ (▶️ Výprava teď): appka je fyzicky na místě -> GPS
+     (startGpsFlow, navigator.geolocation).
+   - ZPĚTNÁ (+ nová výprava): appka NENÍ fyzicky na místě (zapisuje
+     se třeba večer doma) -- GPS by zachytilo jen AKTUÁLNÍ polohu
+     appky, ne místo, kam se výprava zpětně zapisuje. Appka proto
+     nechá kliknout JEDEN bod na břehu ručně (nový placementTarget
+     'shore-point-click', startManualShorePointPlacement) -- stejná
+     role jako GPS bod, jen jiný způsob získání.
+   Od tohohle bodu dál se OBĚ cesty chovají identicky: appka nabídne
+   "nejbližší z historie" (findNearestHistoryMatches, gpsConfirmStep
+   -- stejný krok i handlery pickGpsMatch/confirmGpsManual pro obě
+   cesty), a teprve PO potvrzení/napsání jména appka spustí OBVYKLÉ
+   klikání pozic prutů do vody (rodPointsDraft, beze změny). Appka
+   sdílí i tuhle logiku napříč cestami (GPS bod appka ukládá do
+   pendingGpsShorePointRef stejně u obou), takže finishRodPoints()
+   funguje pro obě cesty beze změny, bez potřeby rozlišovat "odkud
+   appka přišla".
    TAKÉ NEHOTOVO: appka zatím nepoužívá "upřednostnit ČHMÚ stanici na
    správné řece" (bod 5 níže) ani "revír počítaný za běhu z historie"
    (bod 4 níže) při GPS flow -- našeptávač zatím jen porovnává jména,
