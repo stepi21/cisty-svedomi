@@ -122,6 +122,8 @@ header h1 .accent{ color:var(--amber); }
 @keyframes toast-in{ from{ opacity:0; transform:translate(-50%,10px); } to{ opacity:1; transform:translate(-50%,0); } }
 
 .layout{ display:grid; grid-template-columns:300px 1fr; flex:1; min-height:0; }
+.layout.no-map{ grid-template-columns:1fr; }
+.layout.no-map main{ display:none; }
 @media (max-width:860px){
   html, body, #root{ height:100%; overflow:hidden; }
   .app{ position:fixed; inset:0; overflow:hidden; }
@@ -129,6 +131,11 @@ header h1 .accent{ color:var(--amber); }
   .sidebar{ display:none; }
   .desktop-detail-wrap{ display:none; }
   main{ position:absolute; inset:0; }
+  /* "Domů" (bez mapy): appka na mobilu obvykle sidebar schovává a obsah
+     ukazuje přes vysouvací mobile-sheet nad mapou -- tady žádná mapa
+     není, takže sidebar appka rovnou ukáže na celou obrazovku místo
+     schovávání a čekání na sheet, co by neměl co překrývat. */
+  .layout.no-map .sidebar{ display:block; position:absolute; inset:0; overflow-y:auto; max-height:none; z-index:5; background:var(--paper); }
 }
 
 /* ---------- mobile bottom sheet (map stays dominant underneath) ---------- */
@@ -178,7 +185,7 @@ header h1 .accent{ color:var(--amber); }
 .record-row:hover{ background:#F7F4EA; }
 
 /* ---------- feed na Domů — fotka jako dominanta karty ---------- */
-.home-feed{ display:flex; flex-direction:column; gap:14px; padding:14px 18px; }
+.home-feed{ display:flex; flex-direction:column; gap:14px; padding:14px 18px; max-width:520px; margin:0 auto; width:100%; }
 .feed-card{
   background:var(--white); border:1px solid var(--paper-line); border-radius:12px;
   overflow:hidden; cursor:pointer; box-shadow:0 2px 8px rgba(22,57,61,.06);

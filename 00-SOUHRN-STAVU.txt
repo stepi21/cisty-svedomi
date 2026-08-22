@@ -638,11 +638,20 @@ vyžadující potvrzení, ne obecné novinky, to dělá feed na Domů) · ☰ V�
 Více menu: Nástrahy, Měrné stanice (zatím nepřidáno), Galerie, Rekordy,
 Statistiky, Export dat, Nastavení, Návod, pozvat parťáka, odhlásit.
 
-ZNÁMÉ DOČASNÉ OMEZENÍ PO TÉHLE DÁVCE: záložka Domů zatím ukazuje feed
-VEDLE dnešní sdílené mapy (appka na "Domů" panel nijak neschovává/
-neupravuje <main> mapovou oblast) -- plnohodnotné rozdělení "Domů =
-bez mapy, na celou šířku" přijde až s fází 2 (Mapa), kdy se stejně
-bude sahat na layout/grid appky komplexněji.
+ZNÁMÉ DOČASNÉ OMEZENÍ PO TÉHLE DÁVCE: (VYŘEŠENO v následující dávce --
+viz níže, ponecháno pro historii) záložka Domů zatím ukazuje feed VEDLE
+dnešní sdílené mapy...
+
+VYŘEŠENO (další dávka): Domů teď appka zobrazuje BEZ mapy a bez
+vysouvacího panelu na mobilu -- na desktopu .layout dostane třídu
+"no-map" (grid-template-columns:1fr, <main> display:none), na mobilu
+appka sidebar rovnou ukáže na celou obrazovku (position:absolute,
+inset:0) místo schovávání za mobile-sheet, který se pro Domů vůbec
+nevykresluje. Mapová Leaflet instance zůstává živá (appka ji jen
+schovává přes CSS, neodpojuje z DOM), ale při návratu na panel s
+mapou appka zavolá mapInstance.current.invalidateSize() (nový
+useEffect), jinak by Leaflet mohl mít špatně spočítané rozměry
+kontejneru po opětovném zviditelnění a vykreslit dlaždice jen zčásti.
 
 
 

@@ -214,6 +214,18 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const markersLayer = useRef(null)
   const draftLayer = useRef(null)
 
+  // Na "Domů" appka mapu jen schová přes CSS (display:none), ne že by ji
+  // odpojila z DOM -- Leaflet instance tak zůstává živá, jen si při
+  // schování zapamatuje rozměry 0x0. Při návratu na panel s mapou je
+  // potřeba Leafletu říct "přepočítej si rozměry znovu", jinak by se
+  // dlaždice mohly vykreslit jen zčásti/špatně. Malé zpoždění, ať CSS
+  // stihne mapu zase zviditelnit dřív, než Leaflet měří kontejner.
+  useEffect(() => {
+    if (activePanel === 'home' || !mapInstance.current) return
+    const t = setTimeout(() => mapInstance.current?.invalidateSize(), 50)
+    return () => clearTimeout(t)
+  }, [activePanel])
+
   useEffect(() => { loadSessions(); loadMembers(); loadBaitCatalog(); loadLocationsCatalog() }, [groupId])
 
   async function loadBaitCatalog() {
@@ -2722,7 +2734,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         )}
       </header>
 
-      <div className="layout">
+      <div className={`layout ${activePanel === 'home' ? 'no-map' : ''}`}>
         <aside className="sidebar">
           {activePanel === 'home' ? renderHomeFeed()
             : activePanel === 'locations' ? renderLocationsList()
@@ -3071,26 +3083,27 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         </main>
       </div>
 
-      <div className={`mobile-sheet ${mobileSheetOpen ? 'expanded' : ''}`}>
-        <div className="mobile-peek-bar" onClick={() => setMobileSheetOpen((v) => !v)}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{peekLabel()}</span>
-          <span className="peek-chevron">{mobileSheetOpen ? '▾' : '▴'}</span>
+      {activePanel !== 'home' && (
+        <div className={`mobile-sheet ${mobileSheetOpen ? 'expanded' : ''}`}>
+          <div className="mobile-peek-bar" onClick={() => setMobileSheetOpen((v) => !v)}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{peekLabel()}</span>
+            <span className="peek-chevron">{mobileSheetOpen ? '▾' : '▴'}</span>
+          </div>
+          <div className="mobile-sheet-body">
+            {activePanel === 'locations' ? renderLocationsList()
+              : activePanel === 'baits' ? renderBaitsList()
+              : activePanel === 'catches' ? renderCatchesList()
+              : (
+                viewMode === 'detail' && activeSession && !draftSession ? (
+                  <>
+                    <button className="new-btn" onClick={() => setViewMode('aggregate')} style={{ margin: '0 18px 8px' }}>← Zpět na seznam</button>
+                    {renderDetailStrip()}
+                  </>
+                ) : renderSessionList()
+              )}
+          </div>
         </div>
-        <div className="mobile-sheet-body">
-          {activePanel === 'home' ? renderHomeFeed()
-            : activePanel === 'locations' ? renderLocationsList()
-            : activePanel === 'baits' ? renderBaitsList()
-            : activePanel === 'catches' ? renderCatchesList()
-            : (
-              viewMode === 'detail' && activeSession && !draftSession ? (
-                <>
-                  <button className="new-btn" onClick={() => setViewMode('aggregate')} style={{ margin: '0 18px 8px' }}>← Zpět na seznam</button>
-                  {renderDetailStrip()}
-                </>
-              ) : renderSessionList()
-            )}
-        </div>
-      </div>
+      )}
 
       {draftSession && (
         <SessionFormPanel
