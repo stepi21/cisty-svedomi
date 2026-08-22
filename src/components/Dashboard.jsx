@@ -843,7 +843,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     // agregovaný pohled na konci efektu.
     const isDrawingNow = !!(
       placementTarget || areaDraft || riverLineDraft || rodPointsDraft ||
-      riverConfirm || areaDrawChoice || editingAreasLocation || editingAreasSession || savingLocationFor
+      riverConfirm || areaDrawChoice || editingAreasLocation || editingAreasSession || savingLocationFor ||
+      gpsConfirmStep || gpsCapturing
     )
 
     // Záložka Mapa má vlastní, samostatný useEffect (přepínatelné vrstvy

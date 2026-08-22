@@ -867,6 +867,16 @@ ZPĚTNÁ VAZBA Z PROVOZU (uživatel testoval Mapu se starými daty) -- opraveno:
    jinde -- ostatní .on('click', ...) volání patří markerům, co appka
    znovu vytváří při každém překreslení, takže mají vždycky čerstvý
    uzávěr sami od sebe.
+9. OPRAVA (navazující na bod 7 -- appka se pořád oddalovala, tentokrát
+   konkrétně mezi kliknutím bodu na břehu a potvrzením jména): isDrawingNow
+   nezahrnovalo stavy gpsConfirmStep ani gpsCapturing. Appka tak po kliknutí
+   'shore-point-click' nejdřív vynuluje placementTarget (na null) a teprve
+   pak nastaví gpsConfirmStep -- v tom mezikroku (dokud appka čeká na
+   potvrzení jména/výběr z nabídky) byl isDrawingNow FALSE, takže mapový
+   efekt (spuštěný změnou placementTarget) přeostřil/oddálil mapu, a
+   appka zůstala oddálená po celou dobu zobrazení kroku "jak se místo
+   jmenuje?" -- až do chvíle, kdy klikáním prutů placementTarget zase
+   nabylo hodnoty. Doplněno gpsConfirmStep a gpsCapturing do isDrawingNow.
 
 
 
