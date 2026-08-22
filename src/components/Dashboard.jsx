@@ -642,6 +642,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return grouped
   }
 
+  const gpsRequestIdRef = useRef(0) // zneplatní dobíhající odpověď GPS, když uživatel mezitím přešel na ruční umístění
+
   // --- GPS flow zakládání výpravy: appka zjistí polohu, nabídne nejbližší
   // známá jména, a teprve pak appka spustí OBVYKLÉ klikání pozic prutů do
   // vody (beze změny) -- GPS bod appka použije jako "kotvu" výpravy
@@ -649,13 +651,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   function startGpsFlow() {
     setLocationPickerStep(null)
     setGpsCapturing(true)
+    const requestId = ++gpsRequestIdRef.current
     if (!navigator.geolocation) {
       setGpsCapturing(false)
-      alert('Tento prohlížeč neumí zjistit polohu.')
+      startManualRodPlacement()
       return
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (gpsRequestIdRef.current !== requestId) return // uživatel mezitím zvolil ruční umístění
         const point = { lat: pos.coords.latitude, lng: pos.coords.longitude }
         setGpsCapturing(false)
         mapInstance.current?.setView([point.lat, point.lng], 16)
@@ -664,11 +668,24 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         setGpsConfirmStep({ point, matches: findNearestHistoryMatches(point) })
       },
       () => {
+        if (gpsRequestIdRef.current !== requestId) return
+        // GPS selhalo/zamítnuto -- appka rovnou nabídne ruční umístění bodu
+        // na mapě, ať uživatel nezůstane bez cesty dál.
         setGpsCapturing(false)
-        alert('Nepodařilo se zjistit polohu. Zkontroluj, že appka má povolení k lokaci.')
+        startManualRodPlacement()
       },
       { enableHighAccuracy: true, timeout: 8000 }
     )
+  }
+
+  // Ruční záložní cesta -- appka na ni přejde sama při selhání GPS, nebo
+  // na ni uživatel může přejít i dobrovolně (tlačítko v "Zjišťuji polohu…").
+  function startManualRodPlacement() {
+    gpsRequestIdRef.current++ // zneplatní případnou dobíhající GPS odpověď
+    setGpsCapturing(false)
+    setGpsConfirmStep(null)
+    setRodPointsDraft([])
+    setPlacementTarget('session-point')
   }
 
   function pickGpsMatch(match) {
@@ -1369,7 +1386,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   function chooseType(type) {
     setPickingType(false)
     pendingTypeRef.current = type
-    setLocationPickerStep('choose')
+    if (AREA_TYPES.includes(type)) {
+      // Přívlač zatím beze změny -- řeší se v příští dávce (celé odstranění
+      // plochy/polygonu je větší zásah, zaslouží si vlastní pozornost).
+      setLocationPickerStep('choose')
+    } else {
+      // Bodové typy: appka rovnou zkusí GPS, žádný mezikrok s tlačítky navíc.
+      // Katalog appka u nového zápisu záměrně nenabízí -- nahrazuje ho
+      // "nejbližší z historie" v rámci GPS flow (findNearestHistoryMatches).
+      startGpsFlow()
+    }
   }
 
   function startDrawNew() {
@@ -3033,9 +3059,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           {locationPickerStep === 'choose' && (
             <div className="type-picker">
               <div className="type-picker-title">Jak zadat místo?</div>
-              {!AREA_TYPES.includes(pendingTypeRef.current) && (
-                <button className="type-btn" onClick={startGpsFlow}><IconLocate size={13} /> 📍 Jsem tady (GPS)</button>
-              )}
               <button className="type-btn" onClick={() => setLocationPickerStep('catalog')}><IconRevir size={14} /> Z katalogu</button>
               <button className="type-btn" onClick={startDrawNew}><IconEdit size={13} /> Naklikat nové na mapě</button>
               <button className="type-cancel" onClick={() => setLocationPickerStep(null)}>Zrušit</button>
@@ -3043,9 +3066,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           )}
 
           {gpsCapturing && (
-            <div className="place-hint">
+            <div className="place-hint area-hint">
               Zjišťuji tvoji polohu…
-              <button className="ticket-close" onClick={() => setGpsCapturing(false)}><IconClose size={16} /></button>
+              <div className="area-controls">
+                <button className="new-btn" onClick={startManualRodPlacement}>Umístit ručně místo GPS</button>
+                <button className="new-btn" onClick={() => { gpsRequestIdRef.current++; setGpsCapturing(false) }}>Zrušit</button>
+              </div>
             </div>
           )}
 

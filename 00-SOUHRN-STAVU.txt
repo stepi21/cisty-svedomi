@@ -621,9 +621,12 @@ CELKOVÝ PLÁN (pro orientaci, i to, co ještě NENÍ hotové):
    Mapu nepotřebuje ještě něco z toho.
    Nová ikona IconMap (organický styl, žádná emoji).
 3. ČÁSTEČNĚ HOTOVO (tahle dávka) -- jen KAPR/MUŠKA/PLAVANÁ: nový model
-   zápisu výpravy -- GPS tap ("📍 Jsem tady (GPS)", nová volba vedle
-   "Z katalogu"/"Naklikat nové na mapě" v mezikroku "Jak zadat místo?",
-   zobrazuje se jen u bodových typů). Appka po zjištění polohy
+   zápisu výpravy -- GPS appka zkusí ROVNOU, jako JEDINOU/výchozí cestu,
+   žádný mezikrok s tlačítky navíc (chooseType() u bodových typů volá
+   startGpsFlow() přímo, ne locationPickerStep('choose')). Katalog appka
+   u NOVÉHO zápisu záměrně nenabízí vůbec (nahrazuje ho "nejbližší z
+   historie" v rámci GPS flow) -- katalog jako mezikrok zůstává jen u
+   PŘÍVLAČE (viz níže, zatím beze změny). Appka po zjištění polohy
    (navigator.geolocation) nabídne nejbližší podobná místa z historie
    (findNearestHistoryMatches -- appka porovná se všemi POJMENOVANÝMI
    výpravami I katalogovými místy, seskupí podle jména, appka NIKDY
@@ -636,6 +639,12 @@ CELKOVÝ PLÁN (pro orientaci, i to, co ještě NENÍ hotové):
    prvního prutu. Appka tak rozlišuje "kde stojím" (břeh, pro budoucí
    dohledání revíru/vodního stavu) od "kam jsem hodil" (voda, pozice
    prutu) jako dva různé, nezávislé body.
+   POKUD appka GPS nezíská (zamítnuto/timeout/nepodporováno) NEBO
+   uživatel dobrovolně klikne "Umístit ručně místo GPS" (tlačítko v
+   panelu "Zjišťuji polohu…"), appka AUTOMATICKY přejde na ruční
+   klikání pozic prutů (startManualRodPlacement) -- žádný alert,
+   žádná slepá ulička. Ochrana gpsRequestIdRef proti dobíhající GPS
+   odpovědi, kdyby uživatel mezitím přešel na ruční cestu.
    NEHOTOVO: PŘÍVLAČ -- žádný samostatný bod navíc, "místa" = znovu-
    použitý mechanismus dnešních prutů (appka jen jinak pojmenuje), víc
    míst = "+ Další místo". Úlovek u přívlače vyžaduje POVINNÝ klik na
