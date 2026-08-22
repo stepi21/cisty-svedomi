@@ -807,6 +807,21 @@ ZPĚTNÁ VAZBA Z PROVOZU (uživatel testoval Mapu se starými daty) -- opraveno:
    posledních dvou nasazených oprav (sám to zmínil). Nechává se na
    retest po nasazení aktuální verze, než se bude dál pátrat -- nemá
    smysl opravovat naslepo něco, co může být už vyřešené jinde.
+   -> VYŘEŠENO v dalším kole: klikatelnost už funguje (potvrzeno).
+5. VYJASNĚNO (funkce už existovala, jen matoucí název): appka umí
+   ruční přesun bodu výpravy (sessions.lat/lng) už dnes -- tlačítko
+   v ✏️ Upravit výpravu, jen se dřív jmenovalo "Změnit bod nahození
+   na mapě" (staré pojmenování z doby, kdy tenhle bod znamenal "kam
+   dopadl první prut ve vodě"). Přejmenováno na "Přesunout bod na
+   břehu na mapě" -- funkce (handleRelocateSession, update
+   sessions.lat/lng) beze změny, jen jasnější popisek odpovídající
+   novému významu.
+6. POTVRZENO (odpověď na dotaz, žádná změna kódu): appka pořád u
+   editace výpravy nabízí staré ikonky "Aktualizovat podle katalogu"
+   / "Přidat a změnit místa" (otevře katalog revírů) -- to je záměrně
+   zatím ponecháno, protože katalog jako zdroj pravdy appka ještě
+   nezrušila (bod 4 celkového plánu, viz výše, zatím NEHOTOVO). Až se
+   ta fáze udělá, tyhle staré volby appka nahradí/odstraní.
 
 
 

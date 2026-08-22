@@ -4167,7 +4167,7 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
               </button>
             ) : (
               <button type="button" className="new-btn" onClick={onRelocate} style={{ marginBottom: 10 }}>
-                <IconMapEdit size={13} /> Změnit bod nahození na mapě
+                <IconMapEdit size={13} /> Přesunout bod na břehu na mapě
               </button>
             )}
 
