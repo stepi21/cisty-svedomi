@@ -16,36 +16,38 @@ export default function HelpModal({ onClose }) {
 
           <h3>2. Základní pojmy</h3>
           <div className="help-def"><strong>Výprava</strong> — jedna návštěva u vody (datum, čas, počasí, vodní stav, revír, u přívlače i cíl)</div>
-          <div className="help-def"><strong>Prut</strong> — nastavení/technika, může mít víc nástrah v čase</div>
-          <div className="help-def"><strong>Oblast</strong> — u přívlače: vyšrafovaná plocha/trasa, klidně i víc oddělených ploch v jedné výpravě</div>
+          <div className="help-def"><strong>Bod na břehu</strong> — kde stojíš při chytání (appka podle něj hledá revír a vodní stav); u kapra/mušky/plavané odděleně od pozic prutů ve vodě</div>
+          <div className="help-def"><strong>Prut</strong> — u kapra/mušky/plavané: nastavení/technika ve vodě, může mít víc nástrah v čase</div>
+          <div className="help-def"><strong>Místo</strong> — u přívlače: stanoviště, odkud házíš (žádná přesná pozice záběru, tu appka zjišťuje zvlášť u každého úlovku)</div>
           <div className="help-def"><strong>Úlovek</strong> — konkrétní chycená ryba, vlastní přesná pozice, čas, foto</div>
           <div className="help-def"><strong>Cíl</strong> — u přívlače: buď zaškrtneš „Obecně dravci", nebo napíšeš konkrétní druh — appka počítá úspěšnost</div>
-          <div className="help-def"><strong>Katalogové místo (revír)</strong> — uložený bod nebo oblast v katalogu, který jde znovu použít u víc výprav, ať nezadáváš pořád to samé</div>
+          <div className="help-def"><strong>Katalogové místo (revír)</strong> — uložené jméno/revír, appka ho nabídne automaticky, když jsi poblíž místa, kde už jednou appka o tobě/partě ví</div>
 
-          <h3>3. Čtyři panely v hlavičce</h3>
-          <p>Appka má čtyři přepínače: <strong>Výpravy</strong> (výchozí pohled), <strong>Revíry</strong> (katalog míst, mapa ukáže jen revíry), <strong>Nástrahy</strong> a <strong>Úlovky</strong> (plochý seznam se stejným hledáním jako u výprav). Zapnutí jednoho panelu automaticky vypne předchozí. Hledací pole se při přepnutí panelu vždy vyprázdní. Zbytek (Galerie, Rekordy, Statistiky, Export, Návod, Nastavení) najdeš v menu <strong>☰</strong> vpravo nahoře — zavře se kliknutím mimo něj, ne jen opětovným kliknutím na ☰.</p>
+          <h3>3. Panely v hlavičce</h3>
+          <p>Appka má čtyři hlavní záložky: <strong>Domů</strong> (feed posledních úlovků party), <strong>Mapa</strong> (přepínatelné vrstvy — moje/party výpravy, moje/party úlovky, revíry — s hledáním míst), <strong>Výpravy</strong> a <strong>Úlovky</strong> (plochý seznam s hledáním). Zbytek (Nástrahy, Měrné stanice, Galerie, Rekordy, Statistiky, Export, Návod, Nastavení) najdeš v menu <strong>☰</strong> vpravo nahoře — zavře se kliknutím mimo něj, ne jen opětovným kliknutím na ☰. Zvoneček 🔔 appka ukazuje jen pro věci vyžadující tvoje potvrzení (revír upravený kamarádem, co se týká tvých výprav) — obecné novinky appka nechává na Domů.</p>
 
           <h3>4. Výprava — bod (kapr, muška, plavaná, jiné)</h3>
           <ol>
             <li>„+ nová výprava“ → vyber typ</li>
-            <li>Appka se zeptá na místo — buď <strong>vyber z katalogu</strong> (revír/název se předvyplní), nebo <strong>naklikej nové</strong> na mapě</li>
-            <li>Klikáš na mapu — pro Prut 1, pak „+ Další prut“ a klikáš pro Prut 2, atd. → „Hotovo, pokračovat“</li>
-            <li>Vyplň název, revír, datum, čas</li>
-            <li>Podmínky (počasí i vodní stav) appka zkusí natáhnout sama, jakmile vyplníš datum; tlačítko zůstává pro ruční přepočet</li>
+            <li><strong>Živá výprava</strong> (▶️ Výprava teď): appka rovnou zkusí zjistit tvoji GPS polohu.<br/>
+            <strong>Zpětná výprava</strong>: appka GPS nevolá (nejsi fyzicky na místě) — necháš appku kliknout bod na břehu ručně na mapě.</li>
+            <li>Appka nabídne nejbližší podobná místa z historie (appka nikdy nerozhoduje sama, jen nabídne na výběr — u soutoku dvou řek uvidíš obě možnosti) — vyber, nebo napiš nové jméno</li>
+            <li>Appka spustí klikání pozic prutů do vody — Prut 1, pak „+ Další prut“, atd. → „Hotovo, pokračovat“</li>
+            <li>Podmínky (počasí i vodní stav) appka zkusí natáhnout sama, jakmile appka pozná datum; tlačítko zůstává pro ruční přepočet</li>
             <li>U prutu nástraha (klidně „+ další nástraha“, foto se zapamatuje pro příště)</li>
           </ol>
 
-          <h3>5. Výprava — oblast (přívlač)</h3>
+          <h3>5. Výprava — místa (přívlač)</h3>
+          <p>Stejný GPS/klikací mechanismus jako u bodových typů výše (appka nabídne nejbližší z historie), jen appka místo prutů ve vodě pracuje s <strong>místy na břehu</strong> — žádná plocha, žádné kreslení.</p>
           <ol>
-            <li>„+ nová výprava“ → typ Přívlač → z katalogu (klidně víc míst najednou) nebo klikej podél trasy (aspoň 3 body)</li>
-            <li>Chytal jsi i jinde? „+ Další oblast“ — appka se zeptá, jestli chceš vybrat další místo z katalogu, nebo naklikat novou plochu ručně</li>
-            <li>„Hotovo, pokračovat“ → formulář, volitelně zaškrtni <strong>Obecně dravci</strong> nebo napiš konkrétní druh jako cíl</li>
+            <li>„+ nová výprava“ → typ Přívlač → appka zjistí polohu (živá), nebo necháš appku kliknout ručně (zpětná)</li>
+            <li>Chytal jsi i jinde? „+ další místo“ ve formuláři — appka přidá další stanoviště, pozici mu nastavíš kliknutím na mapu</li>
+            <li>Formulář: volitelně zaškrtni <strong>Obecně dravci</strong> nebo napiš konkrétní druh jako cíl</li>
+            <li>U úlovku appka <strong>vždy</strong> vyžaduje přesný klik na mapu — místo appce neříká, kde přesně došlo k záběru, jen odkud jsi házel</li>
           </ol>
 
           <h3>6. Katalog míst (Revíry)</h3>
-          <p>Panel <strong>Revíry</strong> přepne appku do režimu katalogu: seznam míst vlevo/dole, na mapě jen vyšrafované revíry a body (bez úlovků a výprav), s hledáním v názvu i čísle revíru. Klikni na místo → detail s úlovky a výpravami, co se k němu vážou, aktuálním vodním stavem a možností zobrazit na hlavní mapě.</p>
-          <p><strong>+ Přidat místo</strong> — naklikáš bod nebo oblast stejně jako u nové výpravy.<br/>
-          <strong>Zpětné napojení už existující výpravy na katalog:</strong> u výpravy „Místo“ → buď „Aktualizovat podle katalogu“ (osvěží souřadnice/tvar podle katalogu, když ses jednou napojil), nebo „+ Přidat/změnit místa“ (checklist, vybereš znovu) — appka podle výběru přepíše název i revír (např. dvě místa na Labi → „Labe – Vaflák, soutok“; místa z různých řek → vyjmenuje obě zvlášť).</p>
+          <p>Appka katalog míst nabízí přes záložku <strong>Mapa</strong> — hledací pole nahoře najde místo podle jména/čísla revíru, klik na výsledek (nebo na tečku přímo na mapě) otevře detail s úlovky a výpravami, co se k němu vážou, a aktuálním vodním stavem. Appka katalog u NOVÉ výpravy sama nevyžaduje — funguje jen jako podklad pro "nejbližší z historie" (viz body 4-5 výše).</p>
           <p className="help-note">U úlovku na výpravě s víc revíry přibude tlačítko „Revír“ — vybereš, na kterém z nich jsi konkrétně chytal. Při jediném navázaném místě se to nastaví samo.</p>
 
           <h3>7. Počasí a vodní stav</h3>
@@ -59,10 +61,10 @@ export default function HelpModal({ onClose }) {
           <p>Appka nabízí při psaní jen nástrahy z výprav <strong>stejné kategorie</strong> (u přívlače neuvidíš boilies z kapří výpravy). Foto k nástraze přidáš jednou, appka ho doplní i ke starším záznamům se stejným jménem (jen u tvých vlastních).</p>
 
           <h3>9. Zápis a úprava úlovku</h3>
-          <p>„+ úlovek“ → pokud je ve výpravě jen jeden prut, appka ho rovnou přiřadí bez ptaní; při víc prutech zvol pozici nebo klikni na jinou pozici mapy → druh, kategorie, míry, čas, revír, foto ryby i nástrahy. Nabídka nástrah je omezená jen na ty, co jsou <strong>zapsané u prutů téhle výpravy</strong> — ne celý katalog. Podmínky se dotáhnou samy, jakmile vyplníš čas. V detailu úlovku: Upravit, Změnit pozici na mapě, Smazat. Klik na „Lokace“ nebo „Výprava" tě zavede přímo na mapu k té výpravě a konkrétnímu bodu.</p>
+          <p>„+ úlovek“ → u kapra/mušky/plavané appka rovnou přiřadí pozici jediného prutu bez ptaní; při víc prutech zvol pozici nebo klikni na jinou pozici mapy. <strong>U přívlače appka vždy vyžaduje přesný klik na mapu</strong> — místo appce neříká, kde přesně došlo k záběru. Dál appka chce druh, kategorii, míry, čas, revír, foto ryby i nástrahy. Nabídka nástrah je omezená jen na ty, co jsou <strong>zapsané u prutů/míst téhle výpravy</strong> — ne celý katalog. Podmínky se dotáhnou samy, jakmile vyplníš čas. V detailu úlovku: Upravit, Změnit pozici na mapě, Smazat. Klik na „Lokace“ nebo „Výprava" tě zavede přímo na mapu k té výpravě a konkrétnímu bodu.</p>
 
           <h3>10. Úprava, mazání, rychlý zápis</h3>
-          <p><strong>Celá výprava:</strong> „Upravit výpravu“ — název, datum, počasí, cíl, přesun bodu/překreslení oblasti, smazat.<br/>
+          <p><strong>Celá výprava:</strong> „Upravit výpravu“ — název, datum, počasí, cíl, přesun bodu na břehu na mapě, smazat.<br/>
           <strong>„Nová jako tahle“</strong> — předvyplní novou výpravu stejnou lokací, pruty i nástrahami — hodí se pro opakovaná místa, jen doplníš datum a čas.</p>
           <p className="help-note">Upravit/smazat může jen ten, komu záznam patří. Ostatní vidí všechno, ale měnit si můžou jen svoje.</p>
 

@@ -620,38 +620,43 @@ CELKOVÝ PLÁN (pro orientaci, i to, co ještě NENÍ hotové):
    škoda v tom nechat mrtvý kód, dokud se neověří, že appka novou
    Mapu nepotřebuje ještě něco z toho.
    Nová ikona IconMap (organický styl, žádná emoji).
-3. ČÁSTEČNĚ HOTOVO (tahle dávka) -- jen KAPR/MUŠKA/PLAVANÁ: nový model
-   zápisu výpravy -- GPS appka zkusí ROVNOU, jako JEDINOU/výchozí cestu,
-   žádný mezikrok s tlačítky navíc (chooseType() u bodových typů volá
-   startGpsFlow() přímo, ne locationPickerStep('choose')). Katalog appka
-   u NOVÉHO zápisu záměrně nenabízí vůbec (nahrazuje ho "nejbližší z
-   historie" v rámci GPS flow) -- katalog jako mezikrok zůstává jen u
-   PŘÍVLAČE (viz níže, zatím beze změny). Appka po zjištění polohy
-   (navigator.geolocation) nabídne nejbližší podobná místa z historie
-   (findNearestHistoryMatches -- appka porovná se všemi POJMENOVANÝMI
-   výpravami I katalogovými místy, seskupí podle jména, appka NIKDY
-   nerozhoduje sama kvůli případům jako soutok dvou řek -- vždy jen
-   nabídne na výběr + možnost napsat úplně nové jméno ručně). Po výběru/
-   napsání appka spustí OBVYKLÉ klikání pozic prutů do vody (beze
-   změny, funguje přesně jako dřív) -- jen výsledný GPS bod appka
-   použije jako "kotvu" výpravy (draftSession.point, nový
-   pendingGpsShorePointRef) MÍSTO dřívějšího odvození z pozice
-   prvního prutu. Appka tak rozlišuje "kde stojím" (břeh, pro budoucí
-   dohledání revíru/vodního stavu) od "kam jsem hodil" (voda, pozice
-   prutu) jako dva různé, nezávislé body.
-   POKUD appka GPS nezíská (zamítnuto/timeout/nepodporováno) NEBO
-   uživatel dobrovolně klikne "Umístit ručně místo GPS" (tlačítko v
-   panelu "Zjišťuji polohu…"), appka AUTOMATICKY přejde na ruční
-   klikání pozic prutů (startManualRodPlacement) -- žádný alert,
-   žádná slepá ulička. Ochrana gpsRequestIdRef proti dobíhající GPS
-   odpovědi, kdyby uživatel mezitím přešel na ruční cestu.
-   NEHOTOVO: PŘÍVLAČ -- žádný samostatný bod navíc, "místa" = znovu-
-   použitý mechanismus dnešních prutů (appka jen jinak pojmenuje), víc
-   míst = "+ Další místo". Úlovek u přívlače vyžaduje POVINNÝ klik na
-   mapu (žádný pevný bod). Vědomě odloženo na samostatnou dávku --
-   vyžaduje odstranění celé plochy/polygonu z AREA_TYPES logiky, což
-   je větší a rizikovější zásah než dnešní bodové typy, zaslouží si
-   vlastní pozornost, ne spěchat ve stejné dávce.
+3. HOTOVO (dokončeno touto dávkou -- předtím ČÁSTEČNĚ jen KAPR/MUŠKA/
+   PLAVANÁ, teď i PŘÍVLAČ): nový model zápisu výpravy pro VŠECHNY typy.
+   GPS appka zkusí ROVNOU u živé výpravy, jako JEDINOU/výchozí cestu,
+   žádný mezikrok s tlačítky navíc. U zpětné appka GPS nevolá (nejsi
+   fyzicky na místě), rovnou nechá kliknout bod na břehu ručně. Katalog
+   appka u NOVÉHO zápisu záměrně nenabízí vůbec (nahrazuje ho "nejbližší
+   z historie" -- omezeno na 2 nejbližší nabídky, velké úseky pro loďky
+   scope='reach' appka z nabídky vylučuje úplně, protože by kvůli testu
+   "jsem uvnitř?" skoro vždycky vyhrály nad malým konkrétním místem).
+   PŘÍVLAČ (dokončeno tuto dávku): AREA_TYPES appka vyprázdnila úplně
+   (žádný typ už nekreslí plochu u NOVÝCH výprav) -- přívlač tak
+   přirozeně prochází STEJNÝM GPS/click + "nejbližší z historie"
+   mechanismem jako kapr/muška/plavaná, jen:
+   - appka pruty přejmenovává na "místa" (LURE_TYPES konstanta,
+     NEZÁVISLÁ na AREA_TYPES -- appka ji používá i pro pole "Cíl",
+     co s kreslením nesouvisí a nesmělo s AREA_TYPES zmizet)
+   - žádný samostatný krok "klikej pruty do vody" navíc -- appka rovnou
+     nabídne "+ další místo" ve formuláři, pozici appka nastaví
+     kliknutím na mapu (RodEditRow.onArmPosition, appka to už uměla)
+   - úlovek u přívlače appka VŽDY vyžaduje přesný klik na mapu
+     (startAddCatch pro LURE_TYPES vždycky volá chooseCatchOnMap,
+     nikdy nenabídne zkratku "vyber místo", i kdyby appka měla jen
+     jedno místo) -- appka navíc schovala dropdown "Prut" v
+     CatchFormPanel pro LURE_TYPES, aby appka pozici nemohla omylem
+     převzít odjinud než z explicitního kliknutí
+   STARÉ PŘÍVLAČ VÝPRAVY (už uložené plochy) appka nijak nezničila ani
+   nepřepočítala -- plocha se dál appce normálně zobrazuje na mapě
+   (kreslení plochy appka nikdy neodstranila, jen appka novým výpravám
+   plochu nenabízí). JEDINÁ ztráta: appka v editaci výpravy u starých
+   přívlač záznamů ztrácí tlačítko "Upravit oblasti" (appka teď vždycky
+   nabízí "Přesunout bod na břehu" bez ohledu na typ, protože AREA_TYPES
+   je prázdné) -- plochu appka pořád VIDÍ, jen appka ji přes tohle
+   tlačítko už needituje. Přijatelný kompromis, appka o něm uživatele
+   informovala předem.
+   Aktualizován i Návod (HelpModal.jsx) -- popis panelů, bodové i
+   přívlačové výpravy, katalog míst, zápis úlovku, vše odpovídá
+   novému stavu appky po celé dnešní přestavbě.
    DOPLNĚNO (oprava zjištěná v provozu -- appka nejdřív nesprávně
    navrhla u zpětné výpravy rovnou klikat pruty, bez odděleného bodu
    na břehu): appka teď má OBĚ cesty (živá i zpětná) strukturálně
@@ -888,6 +893,42 @@ ZPĚTNÁ VAZBA Z PROVOZU (uživatel testoval Mapu se starými daty) -- opraveno:
     (locations.scope === 'reach') appka z nabídky vylučuje úplně --
     u tak velké plochy by test "jsem uvnitř?" skoro vždycky vyhrál nad
     malým konkrétním místem, které je pro jednotlivou výpravu užitečnější.
+
+PŘÍVLAČ -- DOKONČENO (navazuje na dřívější, z velké části už hotovou práci)
+------------------------------------------------------------------------------
+Při kontrole stavu před touto dávkou se zjistilo, že AREA_TYPES je už
+prázdné (přívlač byl dřív převeden na body/"místa" stejným mechanismem
+jako pruty u kapra, s LURE_TYPES řídícím popisky "Místo"/"Prut" napříč
+appkou -- detail výpravy, editace, formulář nové výpravy, i to, že
+úlovek u přívlače VŽDY vyžaduje přesný klik na mapu, žádný výběr z
+pevné pozice). Tahle dřívější práce byla důkladně ověřena procházením
+kódu (ne jen důvěrou v komentáře) a je funkční.
+
+CHYBĚJÍCÍ KUS, DOPLNĚNO TEĎ: appka po potvrzení jména (GPS i ruční bod
+na břehu) VŽDY vynulovala rodPointsDraft na prázdné pole -- u přívlače
+to znamenalo, že by se muselo klikat/GPSovat ZNOVU pro "Místo 1", i
+když ten samý bod uživatel právě označil jako "kde stojím". Opraveno:
+pickGpsMatch a confirmGpsManual teď u LURE_TYPES (přívlač) předvyplní
+rodPointsDraft rovnou tímhle bodem jako Místo 1 -- appka se dál ptá jen
+na PŘÍPADNÁ další místa ("+ Další místo"/klik na mapu), ne na to první.
+U bodových typů (kapr/muška/plavaná) beze změny -- tam zůstává bod na
+břehu a pozice prutu ve vodě jako dva different, nezávislé body.
+
+Doplněno i podmíněné popisky v hint panelu při klikání dalších míst
+(dřív napevno "Prut"/"Zpět o prut" bez ohledu na typ) a potlačena
+zpráva "Bod na břehu nastaven" pro přívlač (tam by byla matoucí --
+u přívlače žádný SAMOSTATNÝ bod na břehu není, je to jen Místo 1).
+
+ZNÁMÁ DROBNOST, NEOPRAVENO (okrajový případ, jen editace už uložené
+výpravy, ne založení nové): tlačítko "Přesunout bod na břehu na mapě"
+v editaci existující výpravy u přívlače přesune jen sessions.lat/lng,
+ne zároveň pozici "Místa 1" (u přívlače koncepčně to samé, ale appka
+je ukládá odděleně -- sessions.lat/lng a rods[0].lat/lng). Jednotlivá
+místa jde přesunout zvlášť přes vlastní "📍 pozice na mapě" u každého
+místa v editaci prutů/míst, takže appka na to obchozí cestu má, jen
+tohle JEDNO konkrétní tlačítko by v tomhle úzkém případě mohlo appku
+nechat mírně nekonzistentní. Vědomě neřešeno teď kvůli riziku/přínosu.
+
 
 
 

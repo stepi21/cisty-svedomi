@@ -30,12 +30,20 @@ const USER_PALETTE = [
 const CATEGORY_COLOR = { dravec: '#5C7A85', bila: '#C4A572' }
 const SESSION_TYPES = [
   { value: 'kapr', label: 'Kapři (bod)' },
-  { value: 'privlac', label: 'Přívlač (oblast)' },
+  { value: 'privlac', label: 'Přívlač (místa)' },
   { value: 'muska', label: 'Muška (bod)' },
   { value: 'plavana', label: 'Plavaná (bod)' },
   { value: 'jine', label: 'Jiné (bod)' },
 ]
-const AREA_TYPES = ['privlac'] // typy, kde se místo bodu kreslí oblast
+// AREA_TYPES zůstává prázdné -- appka už u ŽÁDNÉHO typu nekreslí plochu u
+// NOVÝCH výprav (přívlač byl poslední, co ji používal). Staré výpravy s už
+// uloženou plochou appka nijak neničí ani nepřepočítává, jen appka u nich
+// přes tenhle seznam (teď prázdný) víc nenabízí "Upravit oblasti" -- appka
+// zůstává čitelná/zobrazitelná beze změny.
+const AREA_TYPES = []
+// LURE_TYPES je nezávislé na kreslení -- appka ho používá jen pro věci,
+// co s plochou/bodem nesouvisí (pole "Cíl", popisek "Místo" místo "Prut").
+const LURE_TYPES = ['privlac']
 const TYPE_CATEGORY = { kapr: 'bila', privlac: 'dravec', muska: 'dravec', plavana: 'bila', jine: null }
 
 // --- sloučení názvu/revíru víc katalogových míst do jednoho popisku výpravy ---
@@ -761,19 +769,26 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   function pickGpsMatch(match) {
-    pendingGpsShorePointRef.current = gpsConfirmStep.point
+    const point = gpsConfirmStep.point
+    pendingGpsShorePointRef.current = point
     pendingPointModeCatalogRef.current = { title: match.title, revir: match.revir, locationIds: [] }
     setGpsConfirmStep(null)
-    setRodPointsDraft([])
+    // Přívlač nemá samostatný bod na břehu navíc -- ten první bod appka
+    // rovnou bere jako první MÍSTO, ne jako oddělenou "kotvu", kterou by
+    // bylo potřeba znovu klikat/GPSovat pro místo 1. U bodových typů
+    // (kapr/muška/plavaná) appka naopak seznam prutů nechává prázdný --
+    // bod na břehu a pozice prutu ve vodě jsou tam dva různé body.
+    setRodPointsDraft(LURE_TYPES.includes(pendingTypeRef.current) ? [point] : [])
     setPlacementTarget('session-point')
   }
 
   function confirmGpsManual() {
     if (!gpsManualTitle.trim()) return
-    pendingGpsShorePointRef.current = gpsConfirmStep.point
+    const point = gpsConfirmStep.point
+    pendingGpsShorePointRef.current = point
     pendingPointModeCatalogRef.current = { title: gpsManualTitle.trim(), revir: gpsManualRevir.trim(), locationIds: [] }
     setGpsConfirmStep(null)
-    setRodPointsDraft([])
+    setRodPointsDraft(LURE_TYPES.includes(pendingTypeRef.current) ? [point] : [])
     setPlacementTarget('session-point')
   }
 
@@ -1726,7 +1741,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   function finishRodPoints() {
     if (!rodPointsDraft || rodPointsDraft.length === 0) return
     const first = rodPointsDraft[0]
-    const rods = rodPointsDraft.map((p, i) => ({ name: `Prut ${i + 1}`, lat: p.lat, lng: p.lng, baits: [{ name: '', photoFile: null }] }))
+    const label = LURE_TYPES.includes(pendingTypeRef.current) ? 'Místo' : 'Prut'
+    const rods = rodPointsDraft.map((p, i) => ({ name: `${label} ${i + 1}`, lat: p.lat, lng: p.lng, baits: [{ name: '', photoFile: null }] }))
     setPlacementTarget(null)
     setRodPointsDraft(null)
     const live = liveDefaults()
@@ -1842,6 +1858,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function startAddCatch() {
     const rods = activeSession?.rods || []
+    if (LURE_TYPES.includes(activeSession?.type)) {
+      // Přívlač: appka VŽDY vyžaduje přesný klik na mapu -- "místo" u
+      // přívlače je jen obecné stanoviště (odkud se házelo všemi směry),
+      // ne přesná poloha záběru, takže appka ho nikdy nenabídne jako zkratku.
+      chooseCatchOnMap()
+      setMobileSheetOpen(false)
+      return
+    }
     if (rods.length === 1) {
       // jediný prut ve výpravě -- appka ho rovnou přiřadí, ať se nemusí zbytečně
       // potvrzovat "na jaké pozici?", když stejně není z čeho vybírat
@@ -2990,7 +3014,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 </div>
               </div>
               <div className="det-block">
-                <h3>Pruty a nástrahy</h3>
+                <h3>{LURE_TYPES.includes(activeSession.type) ? 'Místa a nástrahy' : 'Pruty a nástrahy'}</h3>
                 {(activeSession.rods || []).map((r, i) => (
                   editingRodId === r.id && canEdit ? (
                     <RodEditRow
@@ -3025,7 +3049,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   )
                 ))}
                 {(!activeSession.rods || activeSession.rods.length === 0) && (
-                  <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Bez prutů</div>
+                  <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{LURE_TYPES.includes(activeSession.type) ? 'Bez míst' : 'Bez prutů'}</div>
                 )}
                 <div className="coord-list">
                   {AREA_TYPES.includes(activeSession.type) ? (
@@ -3557,19 +3581,23 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             </div>
           )}
 
-          {rodPointsDraft && (
-            <div className="place-hint area-hint">
-              {pendingGpsShorePointRef.current && (
-                <div style={{ marginBottom: 4, opacity: .85 }}>📍 Bod na břehu nastaven — appka podle něj najde revír a vodní stav.</div>
-              )}
-              Klikni na mapu, kam jsi nahodil Prut {rodPointsDraft.length + 1}{rodPointsDraft.length > 0 ? ` (zatím nastaveno: ${rodPointsDraft.length})` : ''}.
-              <div className="area-controls">
-                <button className="new-btn" onClick={undoRodPoint} disabled={!rodPointsDraft.length}>Zpět o prut</button>
-                <button className="btn-primary" style={{ margin: 0 }} onClick={finishRodPoints} disabled={!rodPointsDraft.length}>Hotovo, pokračovat</button>
-                <button className="new-btn" onClick={cancelAreaOrPoint}>Zrušit</button>
+          {rodPointsDraft && (() => {
+            const isLure = LURE_TYPES.includes(pendingTypeRef.current)
+            const label = isLure ? 'Místo' : 'Prut'
+            return (
+              <div className="place-hint area-hint">
+                {pendingGpsShorePointRef.current && !isLure && (
+                  <div style={{ marginBottom: 4, opacity: .85 }}>📍 Bod na břehu nastaven — appka podle něj najde revír a vodní stav.</div>
+                )}
+                Klikni na mapu, kam jsi {isLure ? 'šel dál' : 'nahodil'} {label} {rodPointsDraft.length + 1}{rodPointsDraft.length > 0 ? ` (zatím nastaveno: ${rodPointsDraft.length})` : ''}.
+                <div className="area-controls">
+                  <button className="new-btn" onClick={undoRodPoint} disabled={!rodPointsDraft.length}>Zpět o {isLure ? 'místo' : 'prut'}</button>
+                  <button className="btn-primary" style={{ margin: 0 }} onClick={finishRodPoints} disabled={!rodPointsDraft.length}>Hotovo, pokračovat</button>
+                  <button className="new-btn" onClick={cancelAreaOrPoint}>Zrušit</button>
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
 
           {(placementTarget === 'catch-point' || placementTarget === 'relocate-catch') && (
             <div className="place-hint">
@@ -3598,7 +3626,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
           {placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')) && (
             <div className="place-hint">
-              Klikni na mapu pro pozici prutu.
+              Klikni na mapu pro pozici {LURE_TYPES.includes(editingSession?.type || activeSession?.type) ? 'místa' : 'prutu'}.
               <button className="ticket-close" onClick={() => setPlacementTarget(null)}><IconClose size={16} /></button>
             </div>
           )}
@@ -4166,7 +4194,7 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
             <input className="text-input" required value={draft.title} onChange={(e) => set('title', e.target.value)} />
             <label className="field-label">Revír / lokalita</label>
             <input className="text-input" value={draft.revir} onChange={(e) => set('revir', e.target.value)} placeholder="např. Labe 19, Jizera - Kárany" />
-            {AREA_TYPES.includes(draft.type) && (
+            {LURE_TYPES.includes(draft.type) && (
               <>
                 <label className="field-label">Cíl (nepovinné)</label>
                 <label className="location-check-row" style={{ marginBottom: 6 }}>
@@ -4554,7 +4582,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
             <input className="text-input" required value={draft.title} onChange={(e) => set('title', e.target.value)} placeholder="např. Orlík — zátoka pod hrází" />
             <label className="field-label">Revír / lokalita</label>
             <input className="text-input" value={draft.revir} onChange={(e) => set('revir', e.target.value)} placeholder="např. Labe 19, Jizera - Kárany" />
-            {AREA_TYPES.includes(draft.type) && (
+            {LURE_TYPES.includes(draft.type) && (
               <>
                 <label className="field-label">Cíl (nepovinné)</label>
                 <label className="location-check-row" style={{ marginBottom: 6 }}>
@@ -4630,10 +4658,10 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
             <label className="field-label">Popis počasí</label>
             <input className="text-input" value={draft.desc} onChange={(e) => set('desc', e.target.value)} placeholder="jasno, ráno mlha" />
 
-            <label className="field-label">Pruty</label>
+            <label className="field-label">{LURE_TYPES.includes(draft.type) ? 'Místa' : 'Pruty'}</label>
             {draft.rods.map((r, i) => (
               <div key={i} className="rod-edit-block">
-                <input className="text-input" value={r.name} onChange={(e) => setRod(i, 'name', e.target.value)} placeholder="Prut 1" style={{ marginBottom: 8 }} />
+                <input className="text-input" value={r.name} onChange={(e) => setRod(i, 'name', e.target.value)} placeholder={LURE_TYPES.includes(draft.type) ? 'Místo 1' : 'Prut 1'} style={{ marginBottom: 8 }} />
                 {r.baits.map((b, bi) => (
                   <div key={bi} className="bait-edit-row">
                     <BaitPicker
@@ -4658,7 +4686,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
                 </div>
               </div>
             ))}
-            <button type="button" className="new-btn" onClick={addRod} style={{ marginBottom: 12 }}>+ další prut</button>
+            <button type="button" className="new-btn" onClick={addRod} style={{ marginBottom: 12 }}>+ {LURE_TYPES.includes(draft.type) ? 'další místo' : 'další prut'}</button>
 
             <button className="btn-primary" type="submit" disabled={busy}>{busy ? 'Ukládám…' : 'Uložit výpravu'}</button>
           </form>
@@ -4796,7 +4824,7 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
               <input type="file" accept="image/*" hidden onChange={(e) => set('photoFile', e.target.files[0])} />
             </label>
             <br />
-            {rods.length > 0 && (
+            {rods.length > 0 && !LURE_TYPES.includes(session?.type) && (
               <>
                 <label className="field-label">Prut</label>
                 <select className="text-input" value={draft.rodId} onChange={(e) => set('rodId', e.target.value)}>
