@@ -596,13 +596,30 @@ CELKOVÝ PLÁN (pro orientaci, i to, co ještě NENÍ hotové):
    posledních úlovků party, fotka jako dominanta karty, klik -> detail
    úlovku), Nástrahy přesunuty z hlavního přepínacího řádku do "Více"
    menu. Nová ikona IconHome (organický styl, žádná emoji).
-2. NEHOTOVO: záložka "Mapa" -- sloučení dnešních Revírů do mapy
-   (klik na tečku = karta místa s vodním stavem), shlukování bodů
-   (Leaflet.markercluster, ne vlastní řešení), přepínatelné vrstvy
-   (moje/party výpravy, moje/party úlovky), vyhledávací pole míst.
-   Vědomě odloženo -- zásah do dnešní logiky vykreslování mapy
-   (aggregate view), kterou appka dnes večer hodně ladila, nechci to
-   měnit ve stejné dávce jako ostatní věci.
+2. HOTOVO (tahle dávka): záložka "Mapa" -- nahradila tlačítko "Revíry"
+   v hlavním přepínacím řádku (activePanel='map'). Obsahuje:
+   - 5 přepínatelných vrstev (checkboxy): Moje výpravy, Výpravy party,
+     Moje úlovky, Úlovky party, Revíry -- výchozí stav: obojí úlovky +
+     moje výpravy + revíry zapnuté, party výpravy vypnuté (aby se mapa
+     hned napoprvé nezaplnila).
+   - Shlukování úlovků přes leaflet.markercluster (knihovna byla už
+     dřív přidaná do package.json a napojená na dnešní agregovaný
+     pohled přes nový ref aggregateClusterLayer -- teď ji nová záložka
+     Mapa znovupoužívá). Výpravy a revíry appka NESHLUKUJE (jejich
+     počet bývá řádově menší, shlukování by spíš překáželo).
+   - Vyhledávací pole míst (nahrazuje dnešní horní pole v Revírech),
+     klik na výsledek přiblíží mapu a otevře detailní kartu místa
+     (nová funkce openLocationDetail, doplňuje starší focusOnLocation).
+   Implementace: nový samostatný useEffect (ne zásah do staršího
+   velkého mapového efektu, jen přidán early-return pro activePanel
+   === 'map' hned na jeho začátku) -- kvůli riziku, že zásah do už
+   složité staré logiky agregovaného pohledu by mohl něco rozbít.
+   Stará "Revíry" logika (activePanel === 'locations') zůstává v kódu
+   funkční, ale nedosažitelná přes žádné tlačítko (dřívější jediný
+   vstupní bod byl nahrazen) -- neodstraňováno kvůli riziku, žádná
+   škoda v tom nechat mrtvý kód, dokud se neověří, že appka novou
+   Mapu nepotřebuje ještě něco z toho.
+   Nová ikona IconMap (organický styl, žádná emoji).
 3. NEHOTOVO: nový model zápisu výpravy -- GPS tap jako výchozí cesta,
    appka nabídne nejbližší podobná místa z historie (seskupené podle
    jména, appka nikdy nerozhoduje sama kvůli případům jako soutok
@@ -652,6 +669,44 @@ schovává přes CSS, neodpojuje z DOM), ale při návratu na panel s
 mapou appka zavolá mapInstance.current.invalidateSize() (nový
 useEffect), jinak by Leaflet mohl mít špatně spočítané rozměry
 kontejneru po opětovném zviditelnění a vykreslit dlaždice jen zčásti.
+Feed na Domů navíc přepnut z jednoho úzkého sloupce (na širokém
+desktopu zbytečně malý uprostřed) na responzivní mřížku
+(grid-template-columns:repeat(auto-fill, minmax(280px,1fr))) -- víc
+kartiček vedle sebe na širokém displeji, na mobilu se samo srovná
+zpátky na jeden sloupec, žádná speciální media query podmínka
+potřeba, o to se postará auto-fill sám podle dostupné šířky.
+
+FÁZE 2 (Mapa) — ZAČÁTEK: SHLUKOVÁNÍ BODŮ (marker clustering)
+------------------------------------------------------------
+První krok k nové záložce Mapa -- přidána knihovna leaflet.markercluster
+(nová závislost v package.json, appka ji zatím používá jen pro shlukování
+bodů úlovků v AGREGOVANÉM pohledu, ne pro celou appku). Vlastní styl
+shluku (kolečko s číslem, appka je barevně sedí -- var(--water-deep) +
+bílý okraj), ne výchozí žluto-zelená paleta pluginu.
+
+TECHNICKY: appka měla dosud JEDNU sdílenou vrstvu (markersLayer) pro
+úplně všechno kreslené na mapě -- polygony revírů, kruhové markery,
+body úlovků v detailu i v agregovaném pohledu. Shlukovací plugin ale
+funguje jen s L.Marker instancemi (ne s polygony/L.circleMarker), a
+navíc má appka jinam ukázat všechno najednou, jinam jen konkrétní
+podmnožinu -- proto vznikla NOVÁ, samostatná vrstva
+(aggregateClusterLayer), použitá VÝHRADNĚ pro body úlovků v
+agregovaném pohledu (ten, co appka ukazuje jako výchozí "Výpravy"
+pohled bez detailu jedné konkrétní výpravy). Katalog míst (polygony,
+kruhové markery) a detail jedné výpravy (rody, oblasti) zůstávají na
+původní markersLayer beze změny -- tam shlukování nedává smysl (málo
+bodů, nebo polygony, co plugin stejně neumí).
+Obě vrstvy se čistí na začátku stejného vykreslovacího useEffectu,
+takže při přepnutí na jiný panel/pohled se ta nepoužívaná vrstva
+prostě vyprázdní a zůstane neviditelná.
+
+NEHOTOVO Z FÁZE 2 (příští kroky): samotná nová záložka "Mapa" jako
+taková zatím NEEXISTUJE -- shlukování appka zatím jen zapojila do
+DNEŠNÍHO agregovaného pohledu (výchozí "Výpravy" panel). Zbývá:
+přepínatelné vrstvy (moje/party výpravy, moje/party úlovky),
+vyhledávací pole pro místa (sloučení dnešních Revírů do Mapy),
+samotná nová záložka v navigaci. Vědomě rozděleno na menší kroky
+kvůli riziku -- shlukování je jeden samostatný, testovatelný krok.
 
 
 

@@ -453,3 +453,14 @@ export function IconHome({ size = 20, color = 'currentColor' }) {
     </svg>
   )
 }
+
+// Mapa -- ne dokonalý geometrický čtverec, mírně "poskládaná" jako
+// papírová mapa se záhybem uprostřed, stejný ručně kreslený duch.
+export function IconMap({ size = 20, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M9 4 3.6 5.9c-.4.1-.6.5-.6.9v11.7c0 .6.6 1 1.1.8L9 17.5l6 2 5.4-1.9c.4-.1.6-.5.6-.9V5c0-.6-.6-1-1.1-.8L15 6.2 9 4Z" fill={color} opacity=".9" />
+      <path d="M9 4v13.5M15 6.2v13.3" stroke="rgba(255,255,255,.5)" strokeWidth="1" />
+    </svg>
+  )
+}

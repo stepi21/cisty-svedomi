@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
+import 'leaflet.markercluster'
 import { supabase } from '../supabaseClient'
 import CatchTicket from './CatchTicket.jsx'
 import HelpModal from './HelpModal.jsx'
 import GalleryModal from './GalleryModal.jsx'
 import BaitsModal, { computeBaitsList } from './BaitsModal.jsx'
-import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconGallery, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconPlay, IconLocate, IconMoonPhase, IconPressureTrend, IconNewest, IconBoat, IconRiverAuto, IconBell, IconHome } from '../lib/icons.jsx'
+import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconGallery, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconPlay, IconLocate, IconMoonPhase, IconPressureTrend, IconNewest, IconBoat, IconRiverAuto, IconBell, IconHome, IconMap } from '../lib/icons.jsx'
 import BaitPicker from './BaitPicker.jsx'
 import LocationsModal from './LocationsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
@@ -106,6 +107,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [viewMode, setViewMode] = useState('aggregate') // 'aggregate' | 'detail'
   const [myProfile, setMyProfile] = useState(profile)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [mapLayers, setMapLayers] = useState({ myTrips: true, partyTrips: false, myCatches: true, partyCatches: true, locations: true })
   const [locallyHandledLocationIds, setLocallyHandledLocationIds] = useState(new Set()) // "vyřešeno" jen pro tuhle jednu otevřenou session appky, ať notifikace nezůstane viset jako "nevyřízená" hned po kliknutí na Potvrdit
   const notificationsRef = useRef(null)
   const [showSettings, setShowSettings] = useState(false)
@@ -168,7 +170,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [editingSession, setEditingSession] = useState(null)     // rozepsaná editace výpravy (datum, počasí...)
   const [editingAreasSession, setEditingAreasSession] = useState(null) // {id, areas:[]} — správa oblastí u uložené výpravy
   const [editingAreasLocation, setEditingAreasLocation] = useState(null) // {id, areas:[]} — správa oblastí u místa v katalogu
-  const [activePanel, setActivePanel] = useState(null) // null | 'locations' | 'baits' | 'catches' — jen jeden panel může být aktivní najednou
+  const [activePanel, setActivePanel] = useState(null) // null | 'home' | 'map' | 'locations' | 'baits' | 'catches' — jen jeden panel může být aktivní najednou
   const [baitsStartAdding, setBaitsStartAdding] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false) // "☰ Více" — méně časté akce schované z hlavičky
   const moreMenuRef = useRef(null)
@@ -212,6 +214,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
   const markersLayer = useRef(null)
+  const aggregateClusterLayer = useRef(null) // shlukovaná vrstva úlovků v souhrnném pohledu -- oddělená od markersLayer, protože ten drží i polygony/kruhy (revíry, detail výpravy), co shlukování nepodporuje
   const draftLayer = useRef(null)
 
   // Na "Domů" appka mapu jen schová přes CSS (display:none), ne že by ji
@@ -385,6 +388,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       maxZoom: 19,
     }).addTo(map)
     markersLayer.current = L.layerGroup().addTo(map)
+    // Vlastní styl shluku (kolečko s číslem) -- appka barevně sedí, ne
+    // výchozí žluto-zelená paleta pluginu.
+    aggregateClusterLayer.current = L.markerClusterGroup({
+      maxClusterRadius: 50,
+      iconCreateFunction: (cluster) => L.divIcon({
+        html: `<div style="width:36px;height:36px;background:var(--water-deep);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:13px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)">${cluster.getChildCount()}</div>`,
+        className: '',
+        iconSize: [36, 36],
+      }),
+    }).addTo(map)
     draftLayer.current = L.layerGroup().addTo(map)
 
     map.on('click', (e) => handleMapClick(e.latlng))
@@ -605,6 +618,23 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     mapInstance.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 })
   }
 
+  // Použito při kliknutí na výsledek hledání v záložce Mapa -- přiblíží
+  // mapu NA to místo a rovnou otevře jeho detailní kartu (na rozdíl od
+  // focusOnLocation níže, co jen přeostří mapu v rámci už otevřeného detailu).
+  function openLocationDetail(loc) {
+    if (loc.area && mapInstance.current) {
+      const areas = normalizeAreas(loc.area)
+      const bounds = areas.flat().map((p) => [p.lat, p.lng])
+      if (bounds.length) mapInstance.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 })
+    } else if (loc.lat != null && loc.lng != null && mapInstance.current) {
+      mapInstance.current.setView([loc.lat, loc.lng], 16)
+    }
+    setLocationsReturnId(loc.id)
+    setBaitsInitialKey(null)
+    setShowLocations(true)
+  }
+
+
   // Přiblíží dominantní mapu na katalogové místo, ALE zůstává v režimu
   // "📍 Revíry" (na rozdíl od otevření konkrétní výpravy, které režim opouští).
   function focusOnLocation(location) {
@@ -625,7 +655,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   useEffect(() => {
     if (!mapInstance.current || !markersLayer.current) return
     markersLayer.current.clearLayers()
+    if (aggregateClusterLayer.current) aggregateClusterLayer.current.clearLayers()
     const map = mapInstance.current
+
+    // Záložka Mapa má vlastní, samostatný useEffect (přepínatelné vrstvy
+    // moje/party výpravy, moje/party úlovky, revíry) -- tenhle starší,
+    // velký efekt jen vyčistil vrstvy výše a dál pro 'map' nic nedělá.
+    if (activePanel === 'map') return
 
     if (activePanel === 'locations') {
       const bounds = []
@@ -767,7 +803,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       const icon = L.divIcon({ html, className: '', iconSize: [28, 28], iconAnchor: [14, 14] })
       const marker = L.marker([c.lat ?? s.lat, c.lng ?? s.lng], { icon })
       marker.on('click', () => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c) })
-      marker.addTo(markersLayer.current)
+      marker.addTo(aggregateClusterLayer.current)
     })
 
     if (matches.length > 0) {
@@ -777,6 +813,85 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       map.setView([49.8, 15.5], 8)
     }
   }, [activeSession, activeCategory, activeUserFilter, viewMode, sessions, locationsCatalog, activePanel, placementTarget, areaDraft, riverLineDraft, rodPointsDraft, riverConfirm, areaDrawChoice, editingAreasLocation, editingAreasSession, savingLocationFor])
+
+  // --- záložka 🗺 Mapa: přepínatelné vrstvy (moje/party výpravy, moje/party
+  // úlovky, revíry), samostatně od agregovaného pohledu výše. Úlovky appka
+  // shlukuje (aggregateClusterLayer, sdílený plugin leaflet.markercluster),
+  // výpravy a revíry ne (jejich počet bývá výrazně menší, shlukování by tam
+  // spíš překáželo než pomáhalo).
+  useEffect(() => {
+    if (activePanel !== 'map' || !mapInstance.current || !markersLayer.current || !aggregateClusterLayer.current) return
+    const map = mapInstance.current
+    markersLayer.current.clearLayers()
+    aggregateClusterLayer.current.clearLayers()
+    const bounds = []
+
+    if (mapLayers.locations) {
+      locationsCatalog.filter((loc) => loc.scope !== 'reach').forEach((loc) => {
+        if (loc.area) {
+          const areas = normalizeAreas(loc.area)
+          areas.forEach((pts) => {
+            L.polygon(pts.map((p) => [p.lat, p.lng]), { color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.18 })
+              .bindPopup(`${loc.name}${loc.revir ? ` (${loc.revir})` : ''}`)
+              .on('click', () => { setLocationsReturnId(loc.id); setBaitsInitialKey(null); setShowLocations(true) })
+              .addTo(markersLayer.current)
+            pts.forEach((p) => bounds.push([p.lat, p.lng]))
+          })
+          const c = areaCentroid(areas.flat())
+          bounds.push([c.lat, c.lng])
+          L.circleMarker([c.lat, c.lng], { radius: 7, color: '#6B7A4F', weight: 2, fillColor: '#EDE9DC', fillOpacity: 1 })
+            .bindPopup(`${loc.name}${loc.revir ? ` (${loc.revir})` : ''}`)
+            .on('click', () => { setLocationsReturnId(loc.id); setBaitsInitialKey(null); setShowLocations(true) })
+            .addTo(markersLayer.current)
+        } else if (loc.lat != null && loc.lng != null) {
+          L.circleMarker([loc.lat, loc.lng], { radius: 8, color: '#B97F35', weight: 2, fillColor: '#D9A054', fillOpacity: 0.8 })
+            .bindPopup(`${loc.name}${loc.revir ? ` (${loc.revir})` : ''}`)
+            .on('click', () => { setLocationsReturnId(loc.id); setBaitsInitialKey(null); setShowLocations(true) })
+            .addTo(markersLayer.current)
+          bounds.push([loc.lat, loc.lng])
+        }
+      })
+    }
+
+    if (mapLayers.myTrips || mapLayers.partyTrips) {
+      sessions.forEach((s) => {
+        const isMine = s.user_id === userId
+        if (isMine && !mapLayers.myTrips) return
+        if (!isMine && !mapLayers.partyTrips) return
+        if (s.lat == null || s.lng == null) return
+        const color = userColor(s.user_id)
+        L.circleMarker([s.lat, s.lng], { radius: 7, color, weight: 2, fillColor: '#fff', fillOpacity: 0.9 })
+          .bindPopup(`${s.title} — ${userName(s.user_id)}`)
+          .on('click', () => { setActivePanel(null); setActiveId(s.id); setViewMode('detail') })
+          .addTo(markersLayer.current)
+        bounds.push([s.lat, s.lng])
+      })
+    }
+
+    if (mapLayers.myCatches || mapLayers.partyCatches) {
+      sessions.forEach((s) => {
+        const isMine = s.user_id === userId
+        if (isMine && !mapLayers.myCatches) return
+        if (!isMine && !mapLayers.partyCatches) return
+        ;(s.catches || []).forEach((c) => {
+          const fillColor = CATEGORY_COLOR[c.category]
+          const ringColor = userColor(s.user_id)
+          const html = `<div style="width:28px;height:28px;background:${fillColor};border-radius:50%;display:flex;align-items:center;justify-content:center;border:5px solid ${ringColor};box-shadow:0 2px 6px rgba(0,0,0,.35)">${fishSVG('#fff')}</div>`
+          const icon = L.divIcon({ html, className: '', iconSize: [28, 28], iconAnchor: [14, 14] })
+          L.marker([c.lat ?? s.lat, c.lng ?? s.lng], { icon })
+            .on('click', () => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c) })
+            .addTo(aggregateClusterLayer.current)
+          bounds.push([c.lat ?? s.lat, c.lng ?? s.lng])
+        })
+      })
+    }
+
+    if (bounds.length > 0) {
+      map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
+    } else {
+      map.setView([49.8, 15.5], 8)
+    }
+  }, [activePanel, mapLayers, sessions, locationsCatalog, userId, members])
 
   async function backfillBaitPhoto(baitName, photoUrl) {
     const key = (baitName || '').trim().toLowerCase()
@@ -2088,6 +2203,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function peekLabel() {
     if (activePanel === 'home') return <><IconHome size={15} color="var(--water-deep)" /> Domů</>
+    if (activePanel === 'map') return <><IconMap size={15} color="var(--water-deep)" /> Mapa</>
     if (activePanel === 'locations') return <><IconRevir size={15} color="var(--water-deep)" dotColor="#fff" /> Revíry · {locationsCatalog.length}</>
     if (activePanel === 'baits') return <><IconNastraha size={15} color="var(--water-deep)" /> Nástrahy</>
     if (activePanel === 'catches') return <><IconUlovek size={15} color="var(--water-deep)" /> Úlovky</>
@@ -2101,6 +2217,65 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || placementTarget === 'new-location-point' || areaDraft || riverLineDraft || rodPointsDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
+
+  // --- postranní panel/mobilní lišta v režimu "🗺 Mapa" — přepínatelné vrstvy + hledání míst ---
+  function renderMapControls() {
+    const q = normalizeSearchText(searchQuery)
+    const results = q
+      ? locationsCatalog.filter((l) => normalizeSearchText(l.name).includes(q) || normalizeSearchText(l.revir).includes(q))
+      : []
+    return (
+      <>
+        <div className="sb-head"><span>Mapa</span></div>
+        <div style={{ padding: '0 18px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <label className="location-check-row">
+            <input type="checkbox" checked={mapLayers.myTrips} onChange={(e) => setMapLayers((p) => ({ ...p, myTrips: e.target.checked }))} />
+            <span>Moje výpravy</span>
+          </label>
+          <label className="location-check-row">
+            <input type="checkbox" checked={mapLayers.partyTrips} onChange={(e) => setMapLayers((p) => ({ ...p, partyTrips: e.target.checked }))} />
+            <span>Výpravy party</span>
+          </label>
+          <label className="location-check-row">
+            <input type="checkbox" checked={mapLayers.myCatches} onChange={(e) => setMapLayers((p) => ({ ...p, myCatches: e.target.checked }))} />
+            <span>Moje úlovky</span>
+          </label>
+          <label className="location-check-row">
+            <input type="checkbox" checked={mapLayers.partyCatches} onChange={(e) => setMapLayers((p) => ({ ...p, partyCatches: e.target.checked }))} />
+            <span>Úlovky party</span>
+          </label>
+          <label className="location-check-row">
+            <input type="checkbox" checked={mapLayers.locations} onChange={(e) => setMapLayers((p) => ({ ...p, locations: e.target.checked }))} />
+            <span>Revíry</span>
+          </label>
+        </div>
+        <div style={{ padding: '0 18px 10px', position: 'relative' }}>
+          <span style={{ position: 'absolute', left: 28, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-soft)', display: 'flex', pointerEvents: 'none' }}>
+            <IconSearch size={15} />
+          </span>
+          <input
+            className="text-input"
+            style={{ paddingLeft: 34 }}
+            placeholder="Hledat revír (jméno, číslo)…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        {q && (
+          results.length === 0 ? (
+            <div style={{ padding: '0 18px 10px', color: 'var(--ink-soft)', fontSize: 13 }}>Nic nenalezeno.</div>
+          ) : (
+            results.map((l) => (
+              <div key={l.id} className="record-row" onClick={() => { setSearchQuery(''); openLocationDetail(l) }}>
+                <div className="record-head"><strong>{l.name}</strong></div>
+                {l.revir && <div className="c-sub">{l.revir}</div>}
+              </div>
+            ))
+          )
+        )}
+      </>
+    )
+  }
 
   // --- postranní panel/mobilní lišta v režimu "📍 Revíry" — nezávislé na viewMode/activeId výprav, ty se drží beze změny v pozadí ---
   function renderLocationsList() {
@@ -2712,10 +2887,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               title="Výpravy"
             ><IconVyprava size={15} /> Výpravy</button>
             <button
-              className={`new-btn ${activePanel === 'locations' ? 'active-toggle' : ''}`}
-              onClick={() => switchPanel('locations')}
-              title="Revíry"
-            ><IconRevir size={15} dotColor="var(--water-deep)" /> Revíry</button>
+              className={`new-btn ${activePanel === 'map' ? 'active-toggle' : ''}`}
+              onClick={() => switchPanel('map')}
+              title="Mapa"
+            ><IconMap size={15} /> Mapa</button>
             <button
               className={`new-btn ${activePanel === 'catches' ? 'active-toggle' : ''}`}
               onClick={() => switchPanel('catches')}
@@ -2737,6 +2912,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       <div className={`layout ${activePanel === 'home' ? 'no-map' : ''}`}>
         <aside className="sidebar">
           {activePanel === 'home' ? renderHomeFeed()
+            : activePanel === 'map' ? renderMapControls()
             : activePanel === 'locations' ? renderLocationsList()
             : activePanel === 'baits' ? renderBaitsList()
             : activePanel === 'catches' ? renderCatchesList()
@@ -3090,7 +3266,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             <span className="peek-chevron">{mobileSheetOpen ? '▾' : '▴'}</span>
           </div>
           <div className="mobile-sheet-body">
-            {activePanel === 'locations' ? renderLocationsList()
+            {activePanel === 'map' ? renderMapControls()
+              : activePanel === 'locations' ? renderLocationsList()
               : activePanel === 'baits' ? renderBaitsList()
               : activePanel === 'catches' ? renderCatchesList()
               : (
