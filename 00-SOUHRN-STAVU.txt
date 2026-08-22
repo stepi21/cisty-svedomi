@@ -822,6 +822,23 @@ ZPĚTNÁ VAZBA Z PROVOZU (uživatel testoval Mapu se starými daty) -- opraveno:
    zatím ponecháno, protože katalog jako zdroj pravdy appka ještě
    nezrušila (bod 4 celkového plánu, viz výše, zatím NEHOTOVO). Až se
    ta fáze udělá, tyhle staré volby appka nahradí/odstraní.
+7. OPRAVA (zásadní, zjištěno v provozu -- appka se při GPS/ručním
+   umístění bodu výpravy pořád oddalovala/posouvala): appka měla
+   "nepřeostřuj mapu, dokud uživatel čeká na klik" (isDrawingNow)
+   vyřešené JEN pro záložku Revíry -- výchozí souhrnný pohled
+   (sdílený Výpravami/Úlovky/Nástrahami, tedy i celý GPS flow zápisu
+   nové výpravy) tenhle guard NEMĚL, takže appka při KAŽDÉ změně
+   placementTarget (nový bod na břehu čeká na klik, pak čeká na
+   klikání prutů...) znovu spustila fitBounds/setView a smazala
+   uživateli jeho vlastní přiblížení mapy. isDrawingNow přesunuto na
+   začátek celého mapového useEffectu (dřív počítáno JEN uvnitř větve
+   'locations'), a stejný guard doplněn i do (a) souhrnného
+   agregovaného pohledu (matches.length > 0 blok) a (b) detailu jedné
+   konkrétní výpravy (viewMode === 'detail', dřív appka odsud vždycky
+   dělala map.setView bez ohledu na to, jestli se zrovna třeba
+   přidával prut). Appka teď mapu přeostří jen tehdy, když uživatel
+   fakt nic neumísťuje/nekreslí.
+
 
 
 

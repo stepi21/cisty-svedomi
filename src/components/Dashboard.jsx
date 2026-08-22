@@ -814,6 +814,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (aggregateClusterLayer.current) aggregateClusterLayer.current.clearLayers()
     const map = mapInstance.current
 
+    // Appka mapu NEPŘEOSTŘUJE ("fitBounds"/"setView"), když uživatel zrovna
+    // něco kreslí/umísťuje (čeká se na jeho klik) -- jinak by appka při
+    // KAŽDÉ změně placementTarget (a ten je v dependency poli níže) zase
+    // oddálila/posunula mapu na "co se teď vejde", a smazala tak uživateli
+    // jeho vlastní přiblížení. Sdílí ho 'locations' větev i souhrnný
+    // agregovaný pohled na konci efektu.
+    const isDrawingNow = !!(
+      placementTarget || areaDraft || riverLineDraft || rodPointsDraft ||
+      riverConfirm || areaDrawChoice || editingAreasLocation || editingAreasSession || savingLocationFor
+    )
+
     // Záložka Mapa má vlastní, samostatný useEffect (přepínatelné vrstvy
     // moje/party výpravy, moje/party úlovky, revíry) -- tenhle starší,
     // velký efekt jen vyčistil vrstvy výše a dál pro 'map' nic nedělá.
@@ -875,10 +886,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       // isDrawingNow už je v tu chvíli false (editace se zavřela), ale
       // appka má zůstat přiblížená tam, kde uživatel pracoval, ne skočit
       // zpátky na přehled hned při prvním renderu po uzavření editace.
-      const isDrawingNow = !!(
-        placementTarget || areaDraft || riverLineDraft || rodPointsDraft ||
-        riverConfirm || areaDrawChoice || editingAreasLocation || editingAreasSession || savingLocationFor
-      )
       if (!isDrawingNow) {
         if (suppressLocationsFitRef.current) {
           // Spotřebuje se přesně tady -- na renderu, kde by appka jinak
@@ -896,12 +903,18 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     }
 
     if (viewMode === 'detail' && activeSession) {
-      if (pendingMapFocusRef.current && pendingMapFocusRef.current.sessionId === activeSession.id) {
-        const f = pendingMapFocusRef.current
-        map.setView([f.lat, f.lng], f.zoom || 16)
-        pendingMapFocusRef.current = null
-      } else {
-        map.setView([activeSession.lat, activeSession.lng], 14)
+      // Appka mapu nepřeostří, dokud uživatel čeká na klik (přidávání
+      // prutu, přesun úlovku...) -- stejný důvod jako u agregovaného
+      // pohledu výše, jinak by appka smazala uživateli jeho přiblížení
+      // pokaždé, když appka jen začne čekat na další klik.
+      if (!isDrawingNow) {
+        if (pendingMapFocusRef.current && pendingMapFocusRef.current.sessionId === activeSession.id) {
+          const f = pendingMapFocusRef.current
+          map.setView([f.lat, f.lng], f.zoom || 16)
+          pendingMapFocusRef.current = null
+        } else {
+          map.setView([activeSession.lat, activeSession.lng], 14)
+        }
       }
 
       normalizeSessionAreas(activeSession.area).forEach((entry, ai) => {
@@ -962,11 +975,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       marker.addTo(aggregateClusterLayer.current)
     })
 
-    if (matches.length > 0) {
-      const bounds = L.latLngBounds(matches.map(({ c, s }) => [c.lat ?? s.lat, c.lng ?? s.lng]))
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 })
-    } else {
-      map.setView([49.8, 15.5], 8)
+    // Appka mapu nepřeostří, dokud uživatel čeká na klik (viz isDrawingNow
+    // výše) -- jinak by appka při zápisu nové výpravy (GPS/ruční bod na
+    // břehu, pozice prutů...) opakovaně smazala uživateli jeho vlastní
+    // přiblížení pokaždé, když appka jen začne čekat na další klik.
+    if (!isDrawingNow) {
+      if (matches.length > 0) {
+        const bounds = L.latLngBounds(matches.map(({ c, s }) => [c.lat ?? s.lat, c.lng ?? s.lng]))
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 })
+      } else {
+        map.setView([49.8, 15.5], 8)
+      }
     }
   }, [activeSession, activeCategory, activeUserFilter, viewMode, sessions, locationsCatalog, activePanel, placementTarget, areaDraft, riverLineDraft, rodPointsDraft, riverConfirm, areaDrawChoice, editingAreasLocation, editingAreasSession, savingLocationFor])
 
