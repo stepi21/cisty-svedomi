@@ -5,7 +5,7 @@ import CatchTicket from './CatchTicket.jsx'
 import HelpModal from './HelpModal.jsx'
 import GalleryModal from './GalleryModal.jsx'
 import BaitsModal, { computeBaitsList } from './BaitsModal.jsx'
-import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconGallery, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconPlay, IconLocate, IconMoonPhase, IconPressureTrend, IconNewest, IconBoat, IconRiverAuto, IconBell } from '../lib/icons.jsx'
+import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconGallery, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconPlay, IconLocate, IconMoonPhase, IconPressureTrend, IconNewest, IconBoat, IconRiverAuto, IconBell, IconHome } from '../lib/icons.jsx'
 import BaitPicker from './BaitPicker.jsx'
 import LocationsModal from './LocationsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
@@ -2075,6 +2075,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   })
 
   function peekLabel() {
+    if (activePanel === 'home') return <><IconHome size={15} color="var(--water-deep)" /> Domů</>
     if (activePanel === 'locations') return <><IconRevir size={15} color="var(--water-deep)" dotColor="#fff" /> Revíry · {locationsCatalog.length}</>
     if (activePanel === 'baits') return <><IconNastraha size={15} color="var(--water-deep)" /> Nástrahy</>
     if (activePanel === 'catches') return <><IconUlovek size={15} color="var(--water-deep)" /> Úlovky</>
@@ -2200,6 +2201,63 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   // --- postranní panel "🐟 Úlovky" — plochý seznam (bez seskupení podle měsíce), hledání jako primární způsob navigace ---
+  // Jednoduchý "před X hodinami/dny" popisek pro feed na Domů -- appka nikde
+  // jinde relativní čas nepotřebovala, proto vlastní malá funkce tady.
+  function relativeTimeLabel(isoString) {
+    if (!isoString) return ''
+    const diffMs = Date.now() - new Date(isoString).getTime()
+    const minutes = Math.floor(diffMs / 60000)
+    if (minutes < 1) return 'právě teď'
+    if (minutes < 60) return `před ${minutes} min`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `před ${hours} h`
+    const days = Math.floor(hours / 24)
+    if (days < 7) return `před ${days} ${days === 1 ? 'dnem' : 'dny'}`
+    return new Date(isoString).toLocaleDateString('cs-CZ')
+  }
+
+  // --- Domů: feed posledních úlovků party, fotka jako dominanta karty ---
+  function renderHomeFeed() {
+    const all = []
+    sessions.forEach((s) => {
+      ;(s.catches || []).forEach((c) => all.push({ ...c, sessionRef: s }))
+    })
+    const sorted = all.sort((a, b) =>
+      (b.caught_at || b.created_at || b.sessionRef.session_date || '').localeCompare(a.caught_at || a.created_at || b.sessionRef.session_date || '')
+    )
+    return (
+      <>
+        <div className="sb-head"><span>Domů</span></div>
+        {sorted.length === 0 ? (
+          <div style={{ padding: '20px 18px', color: 'var(--ink-soft)', fontSize: 13 }}>
+            Zatím žádný úlovek — až někdo z party něco chytí, objeví se tady.
+          </div>
+        ) : (
+          <div className="home-feed">
+            {sorted.map((c) => (
+              <div
+                key={c.id} className="feed-card"
+                onClick={() => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c) }}
+              >
+                <div className="feed-card-photo">
+                  {c.photo_url
+                    ? <img src={c.photo_url} alt={c.species} />
+                    : <div className="feed-card-photo-fallback" dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />}
+                </div>
+                <div className="feed-card-body">
+                  <div className="feed-card-title">{c.species} {c.length_cm ? <span className="feed-card-length">{c.length_cm} cm</span> : null}</div>
+                  <div className="feed-card-sub">
+                    {userName(c.sessionRef.user_id)} · {c.sessionRef.title} · {relativeTimeLabel(c.caught_at || c.created_at)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </>
+    )
+  }
+
   function renderCatchesList() {
     const q = normalizeSearchText(searchQuery)
     const all = []
@@ -2617,6 +2675,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); createInvite() }}>+ pozvat parťáka</button>
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); onSignOut() }}>Odhlásit</button>
                   <div style={{ height: 1, background: 'var(--paper-line)', margin: '6px 0' }} />
+                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); switchPanel('baits') }}><IconNastraha size={15} color="var(--water-deep)" /> Nástrahy</button>
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowGallery(true) }}><IconGallery size={15} color="var(--water-deep)" /> Galerie</button>
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowRecords(true) }}><IconTrophy size={15} color="var(--amber)" /> Rekordy</button>
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowStats(true) }}><IconChart size={15} color="var(--water-deep)" /> Statistiky</button>
@@ -2631,6 +2690,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         <div className="head-secondary-row">
           <div className="head-actions-primary">
             <button
+              className={`new-btn ${activePanel === 'home' ? 'active-toggle' : ''}`}
+              onClick={() => switchPanel('home')}
+              title="Domů"
+            ><IconHome size={15} /> Domů</button>
+            <button
               className={`new-btn ${activePanel === null ? 'active-toggle' : ''}`}
               onClick={() => switchPanel(null)}
               title="Výpravy"
@@ -2640,11 +2704,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               onClick={() => switchPanel('locations')}
               title="Revíry"
             ><IconRevir size={15} dotColor="var(--water-deep)" /> Revíry</button>
-            <button
-              className={`new-btn ${activePanel === 'baits' ? 'active-toggle' : ''}`}
-              onClick={() => switchPanel('baits')}
-              title="Nástrahy"
-            ><IconNastraha size={15} /> Nástrahy</button>
             <button
               className={`new-btn ${activePanel === 'catches' ? 'active-toggle' : ''}`}
               onClick={() => switchPanel('catches')}
@@ -2665,7 +2724,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
       <div className="layout">
         <aside className="sidebar">
-          {activePanel === 'locations' ? renderLocationsList()
+          {activePanel === 'home' ? renderHomeFeed()
+            : activePanel === 'locations' ? renderLocationsList()
             : activePanel === 'baits' ? renderBaitsList()
             : activePanel === 'catches' ? renderCatchesList()
             : renderSessionList()}
@@ -3017,7 +3077,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           <span className="peek-chevron">{mobileSheetOpen ? '▾' : '▴'}</span>
         </div>
         <div className="mobile-sheet-body">
-          {activePanel === 'locations' ? renderLocationsList()
+          {activePanel === 'home' ? renderHomeFeed()
+            : activePanel === 'locations' ? renderLocationsList()
             : activePanel === 'baits' ? renderBaitsList()
             : activePanel === 'catches' ? renderCatchesList()
             : (

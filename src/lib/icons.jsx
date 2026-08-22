@@ -442,3 +442,14 @@ export function IconBell({ size = 20, color = 'currentColor' }) {
     </svg>
   )
 }
+
+// Domeček -- návrat na domovskou stránku (feed úlovků). Mírně nepravidelný
+// tvar střechy, ne dokonalý geometrický trojúhelník -- stejný "ručně
+// kreslený" duch jako zbytek sady.
+export function IconHome({ size = 20, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2.6 21.3 10.2c.5.4.2 1.2-.4 1.2h-1.4v8.4c0 .5-.4 1-1 1h-4.3v-6.1h-4.4v6.1H5.6c-.6 0-1-.5-1-1v-8.4H3.2c-.6 0-.9-.8-.4-1.2Z" fill={color} />
+    </svg>
+  )
+}

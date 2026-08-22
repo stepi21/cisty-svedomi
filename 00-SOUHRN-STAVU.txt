@@ -578,6 +578,72 @@ SOUBORY V TÉTO PŘÍLOZE
 -----------------------
 Všechny .jsx/.js/.css/.sql soubory mají příponu .txt navíc (Projekty
 nepodporují .zip ani přímo .jsx/.sql), obsah je ale beze změny —
-klidně přejmenuj zpátky, pokud si je stáhneš pro editaci mimo appku.
+ZAČÁTEK PŘESTAVBY NA "GPS-FIRST" MODEL (fáze 1 z několika plánovaných)
+-----------------------------------------------------------------------
+Appka prochází větší přestavbou na základě zpětné vazby z testování s
+partou -- appka byla příliš složitá na běžné použití u vody (nutnost
+řešit katalog/tvary revírů dřív, než šlo zapsat rybu). Celý nový návrh
+je promyšlený a odsouhlasený (viz konverzace v Claude), rozdělený na
+fáze kvůli riziku -- najednou psát celou přestavbu by bylo nebezpečné.
+
+ZÁLOHA PŘED ZAČÁTKEM: appka i databáze byly kompletně zazálohovány
+(kód jako cisty-svedomi-PRED-PRESTAVBOU.zip, data přes samostatný
+nástroj backup-database.html) -- kdyby se nový model neosvědčil, jde
+se vrátit.
+
+CELKOVÝ PLÁN (pro orientaci, i to, co ještě NENÍ hotové):
+1. HOTOVO (tahle dávka): kostra navigace -- nová záložka "Domů" (feed
+   posledních úlovků party, fotka jako dominanta karty, klik -> detail
+   úlovku), Nástrahy přesunuty z hlavního přepínacího řádku do "Více"
+   menu. Nová ikona IconHome (organický styl, žádná emoji).
+2. NEHOTOVO: záložka "Mapa" -- sloučení dnešních Revírů do mapy
+   (klik na tečku = karta místa s vodním stavem), shlukování bodů
+   (Leaflet.markercluster, ne vlastní řešení), přepínatelné vrstvy
+   (moje/party výpravy, moje/party úlovky), vyhledávací pole míst.
+   Vědomě odloženo -- zásah do dnešní logiky vykreslování mapy
+   (aggregate view), kterou appka dnes večer hodně ladila, nechci to
+   měnit ve stejné dávce jako ostatní věci.
+3. NEHOTOVO: nový model zápisu výpravy -- GPS tap jako výchozí cesta,
+   appka nabídne nejbližší podobná místa z historie (seskupené podle
+   jména, appka nikdy nerozhoduje sama kvůli případům jako soutok
+   dvou řek). Kapr/muška/plavaná: nový bod na břehu + zůstávají
+   pozice jednotlivých prutů ve vodě (beze změny). Přívlač: žádný
+   samostatný bod navíc, "místa" = znovupoužitý mechanismus dnešních
+   prutů (appka jen jinak pojmenuje), víc míst = "+ Další místo".
+   Úlovek u přívlače vyžaduje POVINNÝ klik na mapu (žádný pevný bod).
+4. NEHOTOVO: katalog míst (`locations` tabulka) přestává být zdrojem
+   pravdy pro nové zápisy -- appka "revír" počítá za běhu ze seskupení
+   historie výprav podle jména. Stará tabulka/data se neničí (zůstávají
+   pro zpětnou kompatibilitu a jako zdroj pro appku, dokud se
+   nedopočítá nahrazení), jen appka přestává vyžadovat jejich ruční
+   vyplňování u nových záznamů.
+5. NEHOTOVO: ČHMÚ stanice -- upřednostnit stanici na SPRÁVNÉ řece
+   (appka už zná stream u každé stanice z meta1.json), ne jen čistě
+   nejbližší vzdušnou čarou. Malá, izolovaná oprava, jde udělat
+   kdykoli nezávisle na zbytku plánu.
+6. NEHOTOVO: úklid -- pokud se ukáže, že appka auto-tvar podle břehu
+   (riverShape.js, overpass-proxy, turf.js závislost) v novém modelu
+   vůbec nepotřebuje, odstranit. Zatím NEODSTRAŇOVÁNO -- staré výpravy
+   s dřív nakreslenými plochami by o svá data přišly, řeší se, až
+   bude jasné, jak appka bude se starými plochami zacházet.
+7. NEHOTOVO: migrace starých dat -- appka NEBUDE nic chytře
+   přepočítávat automaticky. Staré výpravy si ponechají dnešní
+   sessions.lat/lng jako aproximaci nového "bodu na břehu" -- uživatel
+   si to ručně doladí tam, kde nebude sedět. Žádný migrační skript.
+
+NOVÁ NAVIGACE (cílový stav, ne všechno hotové -- viz čísla výše):
+Hlavní záložky: Domů · Mapa · Výpravy · Úlovky
+Hlavička: 🏠 Domů (zkratka) · 🔔 Zvoneček (zúžená role -- jen věci
+vyžadující potvrzení, ne obecné novinky, to dělá feed na Domů) · ☰ Více
+Více menu: Nástrahy, Měrné stanice (zatím nepřidáno), Galerie, Rekordy,
+Statistiky, Export dat, Nastavení, Návod, pozvat parťáka, odhlásit.
+
+ZNÁMÉ DOČASNÉ OMEZENÍ PO TÉHLE DÁVCE: záložka Domů zatím ukazuje feed
+VEDLE dnešní sdílené mapy (appka na "Domů" panel nijak neschovává/
+neupravuje <main> mapovou oblast) -- plnohodnotné rozdělení "Domů =
+bez mapy, na celou šířku" přijde až s fází 2 (Mapa), kdy se stejně
+bude sahat na layout/grid appky komplexněji.
+
+
 
 
