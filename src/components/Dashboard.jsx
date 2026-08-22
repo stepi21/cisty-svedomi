@@ -665,7 +665,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         mapInstance.current?.setView([point.lat, point.lng], 16)
         setGpsManualTitle('')
         setGpsManualRevir('')
-        setGpsConfirmStep({ point, matches: findNearestHistoryMatches(point) })
+        setGpsConfirmStep({ point, matches: findNearestHistoryMatches(point), mode: 'before-rods' })
       },
       () => {
         if (gpsRequestIdRef.current !== requestId) return
@@ -688,7 +688,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setPlacementTarget('session-point')
   }
 
+  // Dvě situace appka řeší tímhle stejným krokem "jak se místo jmenuje?":
+  // mode 'before-rods' (živá výprava přes GPS -- appka jméno zjistí PŘED
+  // klikáním prutů) a mode 'after-rods' (zpětná výprava -- appka jméno
+  // zjistí AŽ PO umístění bodu/prutů, protože GPS appka u zpětné výpravy
+  // vůbec nevolá).
   function pickGpsMatch(match) {
+    if (gpsConfirmStep.mode === 'after-rods') {
+      finishSessionWithName(match.title, match.revir, gpsConfirmStep.point)
+      return
+    }
     pendingGpsShorePointRef.current = gpsConfirmStep.point
     pendingPointModeCatalogRef.current = { title: match.title, revir: match.revir, locationIds: [] }
     setGpsConfirmStep(null)
@@ -698,6 +707,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function confirmGpsManual() {
     if (!gpsManualTitle.trim()) return
+    if (gpsConfirmStep.mode === 'after-rods') {
+      finishSessionWithName(gpsManualTitle.trim(), gpsManualRevir.trim(), gpsConfirmStep.point)
+      return
+    }
     pendingGpsShorePointRef.current = gpsConfirmStep.point
     pendingPointModeCatalogRef.current = { title: gpsManualTitle.trim(), revir: gpsManualRevir.trim(), locationIds: [] }
     setGpsConfirmStep(null)
@@ -705,9 +718,50 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setPlacementTarget('session-point')
   }
 
+  // Postaví draftSession přímo z už NASBÍRANÝCH pozic prutů (rodPointsDraft)
+  // -- používá se pro mode 'after-rods' (zpětná výprava), kde appka body
+  // už má a chybí jen jméno/revír.
+  function finishSessionWithName(title, revir, anchorPoint) {
+    const rods = (rodPointsDraft || []).map((p, i) => ({ name: `Prut ${i + 1}`, lat: p.lat, lng: p.lng, baits: [{ name: '', photoFile: null }] }))
+    const first = rodPointsDraft?.[0]
+    setPlacementTarget(null)
+    setRodPointsDraft(null)
+    setGpsConfirmStep(null)
+    const live = liveDefaults()
+    setDraftSession({
+      type: pendingTypeRef.current,
+      title, date: live.date, timeFrom: live.timeFrom, timeTo: '',
+      revir, target_species: '',
+      temp: '', pressure: '', wind: '', desc: '',
+      point: anchorPoint || first, area: null,
+      rods,
+      live: live.live,
+      linkedLocationIds: [],
+    })
+  }
+
+  // Appka na tuhle funkci naváže tlačítko "Hotovo, pokračovat" u klikání
+  // prutů VŽDY (bez ohledu na to, jestli appka přišla přes GPS, katalog,
+  // nebo čistě ruční umístění) -- rozhodne se sama, jestli jméno/revír už
+  // zná (GPS/katalog), nebo se má na to teprve zeptat (čistě ruční cesta
+  // u zpětné výpravy).
+  function finishRodPointsManual() {
+    if (!rodPointsDraft || rodPointsDraft.length === 0) return
+    if (pendingGpsShorePointRef.current || pendingPointModeCatalogRef.current) {
+      finishRodPoints()
+      return
+    }
+    const first = rodPointsDraft[0]
+    setGpsManualTitle('')
+    setGpsManualRevir('')
+    setGpsConfirmStep({ point: first, matches: findNearestHistoryMatches(first), mode: 'after-rods' })
+  }
+
   function cancelGpsFlow() {
     setGpsConfirmStep(null)
     pendingGpsShorePointRef.current = null
+    setRodPointsDraft(null)
+    setPlacementTarget(null)
   }
 
   function focusOnPoint(lat, lng) {
@@ -1390,11 +1444,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       // Přívlač zatím beze změny -- řeší se v příští dávce (celé odstranění
       // plochy/polygonu je větší zásah, zaslouží si vlastní pozornost).
       setLocationPickerStep('choose')
-    } else {
-      // Bodové typy: appka rovnou zkusí GPS, žádný mezikrok s tlačítky navíc.
-      // Katalog appka u nového zápisu záměrně nenabízí -- nahrazuje ho
-      // "nejbližší z historie" v rámci GPS flow (findNearestHistoryMatches).
+    } else if (pendingLiveRef.current) {
+      // Živá výprava: appka je fyzicky na místě, GPS dává smysl vždycky.
       startGpsFlow()
+    } else {
+      // Zpětná výprava: appka NENÍ fyzicky na místě (zapisuje se třeba
+      // večer doma) -- GPS by zachytilo jen AKTUÁLNÍ polohu appky, ne
+      // místo, kam se výprava zpětně zapisuje. Appka proto rovnou nabídne
+      // ruční umístění bodu na mapě -- "nejbližší z historie" se appka
+      // stejně zeptá, jen AŽ PO umístění bodu (viz finishRodPointsManual).
+      startManualRodPlacement()
     }
   }
 
@@ -1617,6 +1676,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setPlacementTarget(null)
     pendingPointModeCatalogRef.current = null
     pendingGpsShorePointRef.current = null
+    setGpsConfirmStep(null)
   }
 
   function undoRodPoint() {
@@ -3364,7 +3424,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             </div>
           )}
 
-          {rodPointsDraft && (
+          {rodPointsDraft && !gpsConfirmStep && (
             <div className="place-hint area-hint">
               {pendingGpsShorePointRef.current && (
                 <div style={{ marginBottom: 4, opacity: .85 }}>📍 Bod na břehu nastaven — appka podle něj najde revír a vodní stav.</div>
@@ -3372,7 +3432,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               Klikni na mapu, kam jsi nahodil Prut {rodPointsDraft.length + 1}{rodPointsDraft.length > 0 ? ` (zatím nastaveno: ${rodPointsDraft.length})` : ''}.
               <div className="area-controls">
                 <button className="new-btn" onClick={undoRodPoint} disabled={!rodPointsDraft.length}>Zpět o prut</button>
-                <button className="btn-primary" style={{ margin: 0 }} onClick={finishRodPoints} disabled={!rodPointsDraft.length}>Hotovo, pokračovat</button>
+                <button className="btn-primary" style={{ margin: 0 }} onClick={finishRodPointsManual} disabled={!rodPointsDraft.length}>Hotovo, pokračovat</button>
                 <button className="new-btn" onClick={cancelAreaOrPoint}>Zrušit</button>
               </div>
             </div>
