@@ -883,6 +883,12 @@ ZPĚTNÁ VAZBA Z PROVOZU (uživatel testoval Mapu se starými daty) -- opraveno:
     "nejbližší z historie", i když uživatel chtěl jen vybrat ze
     seznamu, ne psát nové jméno. Odstraněno -- výchozí stav appky je
     teď "vybírám", ne "píšu".
+11. ÚPRAVA (na přání): findNearestHistoryMatches teď appka omezuje na
+    2 nejbližší nabídky místo 5 (maxResults), a velké úseky pro loďky
+    (locations.scope === 'reach') appka z nabídky vylučuje úplně --
+    u tak velké plochy by test "jsem uvnitř?" skoro vždycky vyhrál nad
+    malým konkrétním místem, které je pro jednotlivou výpravu užitečnější.
+
 
 
 

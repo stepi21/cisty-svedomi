@@ -671,14 +671,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // appka ukáže jen nejbližší výskyt každého odlišného jména (kvůli
   // soutokům/blízkým, ale odlišným místům appka nikdy nerozhoduje sama --
   // jen nabídne na výběr, poslední slovo má vždycky člověk).
-  function findNearestHistoryMatches(point, maxDistanceMeters = 800, maxResults = 5) {
+  function findNearestHistoryMatches(point, maxDistanceMeters = 800, maxResults = 2) {
     const named = []
 
-    // Katalogová místa s vyšrafovanou plochou appka zkusí NEJDŘÍV testem
-    // "jsem uvnitř?" -- pokud ano, appka to bere jako vzdálenost 0 (vyhraje
-    // nad čímkoli porovnávaným jen podle vzdálenosti od bodu/těžiště).
+    // Velké úseky pro loďky (scope 'reach') appka do nabídky vůbec
+    // nezahrnuje -- u takhle velké plochy by test "jsem uvnitř?" skoro
+    // vždycky vyhrál (appka bude uvnitř té plochy prakticky pořád), a
+    // zbytečně by tak zastínil malé, konkrétní místo, které je pro
+    // jednotlivou výpravu užitečnější nabídnout.
     locationsCatalog.forEach((l) => {
-      if (!l.area) return
+      if (!l.area || l.scope === 'reach') return
       const rings = normalizeAreas(l.area)
       const inside = rings.some((ring) => isPointInPolygon(point, ring))
       if (inside) named.push({ title: l.name, revir: l.revir || '', distance: 0 })
@@ -689,7 +691,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       named.push({ title: s.title, revir: s.revir || '', lat: s.lat, lng: s.lng })
     })
     locationsCatalog.forEach((l) => {
-      if (l.lat == null || l.lng == null) return
+      if (l.lat == null || l.lng == null || l.scope === 'reach') return
       named.push({ title: l.name, revir: l.revir || '', lat: l.lat, lng: l.lng })
     })
     const withDist = named
