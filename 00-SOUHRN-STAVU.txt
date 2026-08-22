@@ -703,12 +703,42 @@ CELKOVÝ PLÁN (pro orientaci, i to, co ještě NENÍ hotové):
    (bod 4 níže) při GPS flow -- našeptávač zatím jen porovnává jména,
    nenabízí live vodní stav u jednotlivé nabídky. Doplní se, až budou
    hotové body 4 a 5.
-4. NEHOTOVO: katalog míst (`locations` tabulka) přestává být zdrojem
-   pravdy pro nové zápisy -- appka "revír" počítá za běhu ze seskupení
-   historie výprav podle jména. Stará tabulka/data se neničí (zůstávají
-   pro zpětnou kompatibilitu a jako zdroj pro appku, dokud se
-   nedopočítá nahrazení), jen appka přestává vyžadovat jejich ruční
-   vyplňování u nových záznamů.
+4. HOTOVO (tahle dávka): katalog míst přestává být zdrojem pravdy --
+   "revír" appka počítá za běhu z historie výprav (computeRevirGroups):
+   - Seskupí VŠECHNY pojmenované výpravy podle jména (normalizovaný
+     text), spočítá reprezentativní bod (průměr GPS bodů), převezme
+     první nalezené neprázdné číslo revíru.
+   - Stará katalogová data (`locations` tabulka) appka NEZAHAZUJE --
+     zapojí je do STEJNÉHO seskupení (appka tak nepřijde o revír/jméno
+     zapsané dřív, i kdyby k němu ještě neexistovala žádná výprava),
+     jen appka přechází na to, že jméno výpravy je odteď ten skutečný
+     zdroj pravdy, ne ruční katalogová položka.
+   - Velké úseky pro loďky (scope 'reach') appka do seskupení
+     nezahrnuje -- stejný důvod jako u findNearestHistoryMatches
+     (obří plocha by zbytečně zastínila malá konkrétní místa).
+   - Vrstva "Revíry" na záložce Mapa teď kreslí TYHLE počítané skupiny
+     (jedna tečka na skupinu), ne přímo katalogovou tabulku. Klik
+     otevře NOVOU jednoduchou kartu (renderRevirCard) -- jméno, číslo
+     revíru, aktuální vodní stav NA VYŽÁDÁNÍ (loadRevirConditions,
+     najde nejbližší ČHМÚ stanici a natáhne live podmínky), seznam
+     výprav na tom místě s prokликem na detail (přesně to porovnání
+     "staré výpravy vs. teď", co appka měla umět už z dřívějšího zadání).
+   - Vyhledávací pole appka přesměrovala ze staré katalogové tabulky
+     na tahle STEJNÁ počítaná data -- appka tak hledá napříč VŠÍM
+     (staré katalogové záznamy i nové GPS výpravy) jedním místem.
+   - Stará katalogová editace (LocationsModal, úprava jména/revíru/
+     tvaru) appka NEODSTRANILA -- pokud počítaná skupina má odkaz na
+     starý katalogový záznam (legacyLocation), appka nabídne tlačítko
+     "Upravit v katalogu (starší tvary/revír)" jako záložní/pokročilou
+     cestu. Appka tak nic neztrácí, jen mění PRIMÁRNÍ způsob prohlížení.
+   VĚDOMĚ NEUDĚLÁNO (mohlo by se sjednotit později, ne teď kvůli
+   riziku): findNearestHistoryMatches (GPS flow zakládání výpravy) má
+   VLASTNÍ, samostatnou (a už dobře odladěnou) logiku seskupování,
+   appka ji NEPŘEPSALA na sdílení kódu s computeRevirGroups -- obě
+   funkce dělají podobnou věc mírně jinak (různý účel: jedna nabízí
+   JMÉNO k převzetí, druhá zobrazuje EXISTUJÍCÍ skupinu i s celou
+   historií), a přepisování dobře otestovaného GPS flow kvůli čistotě
+   kódu by bylo zbytečné riziko.
 5. NEHOTOVO: ČHMÚ stanice -- upřednostnit stanici na SPRÁVNÉ řece
    (appka už zná stream u každé stanice z meta1.json), ne jen čistě
    nejbližší vzdušnou čarou. Malá, izolovaná oprava, jde udělat

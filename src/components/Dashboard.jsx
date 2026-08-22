@@ -116,6 +116,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [myProfile, setMyProfile] = useState(profile)
   const [showNotifications, setShowNotifications] = useState(false)
   const [mapLayers, setMapLayers] = useState({ myTrips: true, partyTrips: false, myCatches: true, partyCatches: true, locations: true })
+  const [openRevirGroup, setOpenRevirGroup] = useState(null) // vybraný "počítaný revír" (skupina výprav podle jména) -- appka ho nikde neukládá, spočítá znovu při každém otevření
+  const [revirConditions, setRevirConditions] = useState({}) // cache aktuálního vodního stavu podle klíče skupiny -- appka ho natáhne až na vyžádání
   const [stationsList, setStationsList] = useState(null) // null = ještě nenačteno
   const [stationsLoading, setStationsLoading] = useState(false)
   const [expandedStationId, setExpandedStationId] = useState(null)
@@ -812,22 +814,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     mapInstance.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 })
   }
 
-  // Použito při kliknutí na výsledek hledání v záložce Mapa -- přiblíží
-  // mapu NA to místo a rovnou otevře jeho detailní kartu (na rozdíl od
-  // focusOnLocation níže, co jen přeostří mapu v rámci už otevřeného detailu).
-  function openLocationDetail(loc) {
-    if (loc.area && mapInstance.current) {
-      const areas = normalizeAreas(loc.area)
-      const bounds = areas.flat().map((p) => [p.lat, p.lng])
-      if (bounds.length) mapInstance.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 })
-    } else if (loc.lat != null && loc.lng != null && mapInstance.current) {
-      mapInstance.current.setView([loc.lat, loc.lng], 16)
-    }
-    setLocationsReturnId(loc.id)
-    setBaitsInitialKey(null)
-    setShowLocations(true)
-  }
-
 
   // Přiblíží dominantní mapu na katalogové místo, ALE zůstává v režimu
   // "📍 Revíry" (na rozdíl od otevření konkrétní výpravy, které režim opouští).
@@ -1041,29 +1027,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const bounds = []
 
     if (mapLayers.locations) {
-      locationsCatalog.filter((loc) => loc.scope !== 'reach').forEach((loc) => {
-        if (loc.area) {
-          const areas = normalizeAreas(loc.area)
-          areas.forEach((pts) => {
-            L.polygon(pts.map((p) => [p.lat, p.lng]), { color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.18 })
-              .bindPopup(`${loc.name}${loc.revir ? ` (${loc.revir})` : ''}`)
-              .on('click', () => { setLocationsReturnId(loc.id); setBaitsInitialKey(null); setShowLocations(true) })
-              .addTo(markersLayer.current)
-            pts.forEach((p) => bounds.push([p.lat, p.lng]))
-          })
-          const c = areaCentroid(areas.flat())
-          bounds.push([c.lat, c.lng])
-          L.circleMarker([c.lat, c.lng], { radius: 7, color: '#6B7A4F', weight: 2, fillColor: '#EDE9DC', fillOpacity: 1 })
-            .bindPopup(`${loc.name}${loc.revir ? ` (${loc.revir})` : ''}`)
-            .on('click', () => { setLocationsReturnId(loc.id); setBaitsInitialKey(null); setShowLocations(true) })
-            .addTo(markersLayer.current)
-        } else if (loc.lat != null && loc.lng != null) {
-          L.circleMarker([loc.lat, loc.lng], { radius: 8, color: '#B97F35', weight: 2, fillColor: '#D9A054', fillOpacity: 0.8 })
-            .bindPopup(`${loc.name}${loc.revir ? ` (${loc.revir})` : ''}`)
-            .on('click', () => { setLocationsReturnId(loc.id); setBaitsInitialKey(null); setShowLocations(true) })
-            .addTo(markersLayer.current)
-          bounds.push([loc.lat, loc.lng])
-        }
+      // "Revír" appka teď kreslí jako POČÍTANOU skupinu (jméno výpravy je
+      // zdroj pravdy), ne přímo z katalogové tabulky -- viz computeRevirGroups.
+      // Stará katalogová data appka nezahazuje, jsou zapojená do stejného
+      // seskupení (viz funkce), takže appka o nic nepřijde.
+      computeRevirGroups().forEach((g) => {
+        L.circleMarker([g.point.lat, g.point.lng], { radius: 8, color: '#B97F35', weight: 2, fillColor: '#D9A054', fillOpacity: 0.8 })
+          .bindPopup(`${g.name}${g.revir ? ` (${g.revir})` : ''}`)
+          .on('click', () => openRevirCard(g))
+          .addTo(markersLayer.current)
+        bounds.push([g.point.lat, g.point.lng])
       })
     }
 
@@ -2548,10 +2521,136 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     )
   }
 
+  // --- "revír" appka počítá za běhu z historie výprav, katalog míst
+  // (`locations` tabulka) přestává být zdrojem pravdy pro NOVÉ výpravy.
+  // Stará katalogová data appka NEZAHAZUJE -- zapojí je do stejného
+  // seskupení (appka tak nepřijde o revír/plochu zapsanou dřív, i kdyby
+  // k němu ještě neexistovala žádná výprava), jen appka poklidně
+  // přechází na to, že jméno výpravy je ten skutečný zdroj pravdy.
+  function computeRevirGroups() {
+    const groups = new Map() // klíč: normalizované jméno
+
+    function ensureGroup(name) {
+      const key = normalizeSearchText(name)
+      if (!key) return null
+      if (!groups.has(key)) groups.set(key, { key, name, revir: '', points: [], sessions: [], legacyLocation: null })
+      return groups.get(key)
+    }
+
+    sessions.forEach((s) => {
+      const g = ensureGroup(s.title)
+      if (!g) return
+      if (s.revir && !g.revir) g.revir = s.revir
+      if (s.lat != null && s.lng != null) g.points.push({ lat: s.lat, lng: s.lng })
+      g.sessions.push(s)
+    })
+
+    // Velké úseky pro loďky appka do počítaných revírů nezahrnuje --
+    // stejný důvod jako u findNearestHistoryMatches, appka by jinak
+    // ukázala jednu obří tečku místo desítek konkrétních malých míst.
+    locationsCatalog.filter((l) => l.scope !== 'reach').forEach((l) => {
+      const g = ensureGroup(l.name)
+      if (!g) return
+      if (l.revir && !g.revir) g.revir = l.revir
+      if (l.lat != null && l.lng != null) g.points.push({ lat: l.lat, lng: l.lng })
+      if (!g.legacyLocation) g.legacyLocation = l
+    })
+
+    return Array.from(groups.values())
+      .map((g) => {
+        if (g.points.length === 0) return null
+        const point = {
+          lat: g.points.reduce((sum, p) => sum + p.lat, 0) / g.points.length,
+          lng: g.points.reduce((sum, p) => sum + p.lng, 0) / g.points.length,
+        }
+        const catches = []
+        g.sessions.forEach((s) => (s.catches || []).forEach((c) => catches.push({ ...c, sessionRef: s })))
+        return { ...g, point, catches }
+      })
+      .filter(Boolean)
+  }
+
+  function openRevirCard(group) {
+    setOpenRevirGroup(group)
+  }
+
+  async function loadRevirConditions(group) {
+    if (revirConditions[group.key] !== undefined) return
+    setRevirConditions((prev) => ({ ...prev, [group.key]: null }))
+    try {
+      const stations = await findNearestStations(group.point.lat, group.point.lng, 1)
+      if (!stations?.length) { setRevirConditions((prev) => ({ ...prev, [group.key]: false })); return }
+      const cond = await fetchLiveConditions(stations[0].objID)
+      setRevirConditions((prev) => ({ ...prev, [group.key]: cond ? { ...cond, stationName: stations[0].name } : false }))
+    } catch {
+      setRevirConditions((prev) => ({ ...prev, [group.key]: false }))
+    }
+  }
+
+  function renderRevirCard() {
+    const g = openRevirGroup
+    if (!g) return null
+    const cond = revirConditions[g.key]
+    const sortedSessions = [...g.sessions].sort((a, b) => (b.session_date || '').localeCompare(a.session_date || ''))
+    return (
+      <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && setOpenRevirGroup(null)}>
+        <div className="ticket" style={{ maxWidth: 440 }}>
+          <div className="ticket-top">
+            <button className="ticket-close" onClick={() => setOpenRevirGroup(null)}><IconClose size={16} /></button>
+            <div className="eyebrow">Místo</div>
+            <h2>{g.name}</h2>
+            {g.revir && <div className="catcher-sub">Revír: {g.revir}</div>}
+          </div>
+          <div className="perforation"></div>
+          <div className="ticket-body">
+            {cond === undefined && (
+              <button className="new-btn" onClick={() => loadRevirConditions(g)}>Zjistit aktuální vodní stav</button>
+            )}
+            {cond === null && <p className="hint-text">Zjišťuji…</p>}
+            {cond === false && <p className="hint-text">Pro tohle místo se nepodařilo najít aktuální data.</p>}
+            {cond && (
+              <div className="weather-row" style={{ marginBottom: 12 }}>
+                {cond.level_cm != null && <div className="w-item"><div className="num">{cond.level_cm} cm</div><div className="lab">vodní stav</div></div>}
+                {cond.flow_m3s != null && <div className="w-item"><div className="num">{cond.flow_m3s} m³/s</div><div className="lab">průtok</div></div>}
+                {cond.temp_c != null && <div className="w-item"><div className="num">{cond.temp_c}°C</div><div className="lab">teplota vody</div></div>}
+                {cond.spa_level != null && SPA_LEVEL_INFO[cond.spa_level] && (
+                  <div className="w-item"><div className="num">{SPA_LEVEL_INFO[cond.spa_level].icon}</div><div className="lab">{SPA_LEVEL_INFO[cond.spa_level].label}</div></div>
+                )}
+                <div className="c-sub" style={{ width: '100%', marginTop: 4 }}>stanice {cond.stationName}</div>
+              </div>
+            )}
+
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>
+              {g.catches.length === 0 ? 'Zatím na tomto místě nic nechyceno.' : `${g.catches.length} chycených ryb na tomto místě`}
+            </p>
+
+            {sortedSessions.length > 0 && (
+              <div className="catch-list" style={{ maxHeight: 220, marginTop: 8 }}>
+                {sortedSessions.map((s) => (
+                  <div key={s.id} className="record-row" onClick={() => { setOpenRevirGroup(null); setActivePanel(null); setActiveId(s.id); setViewMode('detail') }}>
+                    <div className="record-head"><strong>{s.title}</strong><span className="c-sub">{s.session_date}</span></div>
+                    <div className="c-sub">{userName(s.user_id)} · {(s.catches || []).length} úlovky</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {g.legacyLocation && (
+              <button
+                className="new-btn" style={{ marginTop: 12 }}
+                onClick={() => { setOpenRevirGroup(null); setLocationsReturnId(g.legacyLocation.id); setBaitsInitialKey(null); setShowLocations(true) }}
+              >Upravit v katalogu (starší tvary/revír)</button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   function renderMapControls() {
     const q = normalizeSearchText(searchQuery)
     const results = q
-      ? locationsCatalog.filter((l) => normalizeSearchText(l.name).includes(q) || normalizeSearchText(l.revir).includes(q))
+      ? computeRevirGroups().filter((g) => normalizeSearchText(g.name).includes(q) || normalizeSearchText(g.revir).includes(q))
       : []
     return (
       <>
@@ -2594,10 +2693,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           results.length === 0 ? (
             <div style={{ padding: '0 18px 10px', color: 'var(--ink-soft)', fontSize: 13 }}>Nic nenalezeno.</div>
           ) : (
-            results.map((l) => (
-              <div key={l.id} className="record-row" onClick={() => { setSearchQuery(''); openLocationDetail(l) }}>
-                <div className="record-head"><strong>{l.name}</strong></div>
-                {l.revir && <div className="c-sub">{l.revir}</div>}
+            results.map((g) => (
+              <div
+                key={g.key} className="record-row"
+                onClick={() => { setSearchQuery(''); mapInstance.current?.setView([g.point.lat, g.point.lng], 16); openRevirCard(g) }}
+              >
+                <div className="record-head"><strong>{g.name}</strong></div>
+                {g.revir && <div className="c-sub">{g.revir}</div>}
               </div>
             ))
           )
@@ -3736,6 +3838,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onOpenSession={(sessionId) => { setShowBaits(false); setBaitsStartAdding(false); setActivePanel(null); setActiveId(sessionId); setViewMode('detail') }}
         />
       )}
+
+      {openRevirGroup && renderRevirCard()}
 
       {showLocations && (
         <LocationsModal
