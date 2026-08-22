@@ -108,6 +108,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [myProfile, setMyProfile] = useState(profile)
   const [showNotifications, setShowNotifications] = useState(false)
   const [mapLayers, setMapLayers] = useState({ myTrips: true, partyTrips: false, myCatches: true, partyCatches: true, locations: true })
+  const [stationsList, setStationsList] = useState(null) // null = ještě nenačteno
+  const [stationsLoading, setStationsLoading] = useState(false)
+  const [expandedStationId, setExpandedStationId] = useState(null)
+  const [stationConditions, setStationConditions] = useState({}) // {objID: {level_cm, flow_m3s, temp_c, spa_level}}
   const [gpsCapturing, setGpsCapturing] = useState(false)
   const [gpsConfirmStep, setGpsConfirmStep] = useState(null) // {point, matches} -- appka čeká na potvrzení/napsání jména
   const [gpsManualTitle, setGpsManualTitle] = useState('')
@@ -175,7 +179,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [editingSession, setEditingSession] = useState(null)     // rozepsaná editace výpravy (datum, počasí...)
   const [editingAreasSession, setEditingAreasSession] = useState(null) // {id, areas:[]} — správa oblastí u uložené výpravy
   const [editingAreasLocation, setEditingAreasLocation] = useState(null) // {id, areas:[]} — správa oblastí u místa v katalogu
-  const [activePanel, setActivePanel] = useState(null) // null | 'home' | 'map' | 'locations' | 'baits' | 'catches' — jen jeden panel může být aktivní najednou
+  const [activePanel, setActivePanel] = useState(null) // null | 'home' | 'map' | 'stations' | 'locations' | 'baits' | 'catches' — jen jeden panel může být aktivní najednou
   const [baitsStartAdding, setBaitsStartAdding] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false) // "☰ Více" — méně časté akce schované z hlavičky
   const moreMenuRef = useRef(null)
@@ -229,7 +233,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // dlaždice mohly vykreslit jen zčásti/špatně. Malé zpoždění, ať CSS
   // stihne mapu zase zviditelnit dřív, než Leaflet měří kontejner.
   useEffect(() => {
-    if (activePanel === 'home' || !mapInstance.current) return
+    if (activePanel === 'home' || activePanel === 'stations' || !mapInstance.current) return
     const t = setTimeout(() => mapInstance.current?.invalidateSize(), 50)
     return () => clearTimeout(t)
   }, [activePanel])
@@ -622,14 +626,43 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return Math.sqrt(dLat * dLat + dLng * dLng)
   }
 
+  // Test "je bod uvnitř polygonu?" (ray-casting) -- appka ho použije u
+  // katalogových míst s vyšrafovanou plochou (starší revíry). Porovnání
+  // vzdálenosti od těžiště plochy by u dlouhého úseku (např. pro loďky)
+  // mohlo appce říct "jsi kilometry daleko", i když jsi geograficky uvnitř
+  // toho samého revíru -- těžiště dlouhé plochy bývá daleko od jejích
+  // krajů. Přesné "uvnitř/venku" tenhle problém obchází úplně.
+  function isPointInPolygon(point, ring) {
+    let inside = false
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i].lng, yi = ring[i].lat
+      const xj = ring[j].lng, yj = ring[j].lat
+      const intersect = ((yi > point.lat) !== (yj > point.lat))
+        && (point.lng < ((xj - xi) * (point.lat - yi)) / (yj - yi) + xi)
+      if (intersect) inside = !inside
+    }
+    return inside
+  }
+
   // Najde nejbližší pojmenovaná místa z historie (výpravy i katalog) k
   // danému GPS bodu -- appka appce nabídne jméno/revír k převzetí, ať se
   // nemusí u známého místa psát pokaždé ručně znovu. Seskupuje podle jména,
   // appka ukáže jen nejbližší výskyt každého odlišného jména (kvůli
   // soutokům/blízkým, ale odlišným místům appka nikdy nerozhoduje sama --
   // jen nabídne na výběr, poslední slovo má vždycky člověk).
-  function findNearestHistoryMatches(point, maxDistanceMeters = 300, maxResults = 5) {
+  function findNearestHistoryMatches(point, maxDistanceMeters = 800, maxResults = 5) {
     const named = []
+
+    // Katalogová místa s vyšrafovanou plochou appka zkusí NEJDŘÍV testem
+    // "jsem uvnitř?" -- pokud ano, appka to bere jako vzdálenost 0 (vyhraje
+    // nad čímkoli porovnávaným jen podle vzdálenosti od bodu/těžiště).
+    locationsCatalog.forEach((l) => {
+      if (!l.area) return
+      const rings = normalizeAreas(l.area)
+      const inside = rings.some((ring) => isPointInPolygon(point, ring))
+      if (inside) named.push({ title: l.name, revir: l.revir || '', distance: 0 })
+    })
+
     sessions.forEach((s) => {
       if (!s.title || s.lat == null || s.lng == null) return
       named.push({ title: s.title, revir: s.revir || '', lat: s.lat, lng: s.lng })
@@ -639,7 +672,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       named.push({ title: l.name, revir: l.revir || '', lat: l.lat, lng: l.lng })
     })
     const withDist = named
-      .map((n) => ({ ...n, distance: roughDistanceMeters(point, n) }))
+      .map((n) => (n.distance === 0 ? n : { ...n, distance: roughDistanceMeters(point, n) }))
       .filter((n) => n.distance <= maxDistanceMeters)
       .sort((a, b) => a.distance - b.distance)
     const seen = new Set()
@@ -2348,6 +2381,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function peekLabel() {
     if (activePanel === 'home') return <><IconHome size={15} color="var(--water-deep)" /> Domů</>
+    if (activePanel === 'stations') return <><IconDroplet size={15} color="var(--water-deep)" /> Měrné stanice</>
     if (activePanel === 'map') return <><IconMap size={15} color="var(--water-deep)" /> Mapa</>
     if (activePanel === 'locations') return <><IconRevir size={15} color="var(--water-deep)" dotColor="#fff" /> Revíry · {locationsCatalog.length}</>
     if (activePanel === 'baits') return <><IconNastraha size={15} color="var(--water-deep)" /> Nástrahy</>
@@ -2364,6 +2398,89 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'shore-point-click' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || placementTarget === 'new-location-point' || areaDraft || riverLineDraft || rodPointsDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
 
   // --- postranní panel/mobilní lišta v režimu "🗺 Mapa" — přepínatelné vrstvy + hledání míst ---
+  // --- panel "Měrné stanice" (☰ Více) -- appka ukáže stanice ČHМÚ nejblíž
+  // místům, kde parta chytá (průměr GPS bodů vlastních výprav, jinak
+  // střed Česka jako rozumný výchozí bod). Aktuální stav appka natáhne
+  // až na vyžádání (klik na řádek), ne pro všechny najednou dopředu.
+  async function loadNearbyStations() {
+    setStationsLoading(true)
+    const myPoints = sessions.filter((s) => s.user_id === userId && s.lat != null && s.lng != null)
+    const ref = myPoints.length
+      ? {
+          lat: myPoints.reduce((sum, p) => sum + p.lat, 0) / myPoints.length,
+          lng: myPoints.reduce((sum, p) => sum + p.lng, 0) / myPoints.length,
+        }
+      : { lat: 49.8, lng: 15.5 }
+    try {
+      const list = await findNearestStations(ref.lat, ref.lng, 12)
+      setStationsList(list)
+    } catch {
+      setStationsList([])
+    }
+    setStationsLoading(false)
+  }
+
+  async function toggleStationConditions(station) {
+    if (expandedStationId === station.objID) { setExpandedStationId(null); return }
+    setExpandedStationId(station.objID)
+    if (!stationConditions[station.objID]) {
+      const cond = await fetchLiveConditions(station.objID)
+      setStationConditions((prev) => ({ ...prev, [station.objID]: cond }))
+    }
+  }
+
+  function renderStationsPanel() {
+    return (
+      <>
+        <div className="sb-head"><span>Měrné stanice</span></div>
+        {stationsList === null ? (
+          <div style={{ padding: '0 18px 14px' }}>
+            <p className="hint-text" style={{ marginBottom: 10 }}>
+              Appka ukáže stanice ČHМÚ nejblíž místům, kde parta obvykle chytá.
+            </p>
+            <button className="new-btn" onClick={loadNearbyStations} disabled={stationsLoading}>
+              {stationsLoading ? 'Načítám…' : 'Načíst stanice v okolí'}
+            </button>
+          </div>
+        ) : stationsList.length === 0 ? (
+          <div style={{ padding: '0 18px 14px', color: 'var(--ink-soft)', fontSize: 13 }}>
+            Nepodařilo se načíst seznam stanic. <button className="new-btn" onClick={loadNearbyStations} style={{ marginLeft: 6 }}>Zkusit znovu</button>
+          </div>
+        ) : (
+          stationsList.map((st) => {
+            const cond = stationConditions[st.objID]
+            const expanded = expandedStationId === st.objID
+            return (
+              <div key={st.objID} className="record-row" onClick={() => toggleStationConditions(st)}>
+                <div className="record-head">
+                  <strong>{st.name}</strong>
+                  <span className="c-sub">{st.distanceKm.toFixed(1)} km</span>
+                </div>
+                <div className="c-sub">{st.stream}</div>
+                {expanded && (
+                  cond === undefined ? (
+                    <p className="hint-text" style={{ marginTop: 8 }}>Zjišťuji aktuální stav…</p>
+                  ) : cond === null ? (
+                    <p className="hint-text" style={{ marginTop: 8 }}>Pro tuhle stanici se nepodařilo zjistit aktuální data.</p>
+                  ) : (
+                    <div className="weather-row" style={{ marginTop: 8 }}>
+                      {cond.level_cm != null && <div className="w-item"><div className="num">{cond.level_cm} cm</div><div className="lab">vodní stav</div></div>}
+                      {cond.flow_m3s != null && <div className="w-item"><div className="num">{cond.flow_m3s} m³/s</div><div className="lab">průtok</div></div>}
+                      {cond.temp_c != null && <div className="w-item"><div className="num">{cond.temp_c}°C</div><div className="lab">teplota vody</div></div>}
+                      {cond.spa_level != null && SPA_LEVEL_INFO[cond.spa_level] && (
+                        <div className="w-item"><div className="num">{SPA_LEVEL_INFO[cond.spa_level].icon}</div><div className="lab">{SPA_LEVEL_INFO[cond.spa_level].label}</div></div>
+                      )}
+                    </div>
+                  )
+                )}
+              </div>
+            )
+          })
+        )}
+      </>
+    )
+  }
+
   function renderMapControls() {
     const q = normalizeSearchText(searchQuery)
     const results = q
@@ -3008,6 +3125,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); onSignOut() }}>Odhlásit</button>
                   <div style={{ height: 1, background: 'var(--paper-line)', margin: '6px 0' }} />
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); switchPanel('baits') }}><IconNastraha size={15} color="var(--water-deep)" /> Nástrahy</button>
+                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); switchPanel('stations') }}><IconDroplet size={15} color="var(--water-deep)" /> Měrné stanice</button>
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowGallery(true) }}><IconGallery size={15} color="var(--water-deep)" /> Galerie</button>
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowRecords(true) }}><IconTrophy size={15} color="var(--amber)" /> Rekordy</button>
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowStats(true) }}><IconChart size={15} color="var(--water-deep)" /> Statistiky</button>
@@ -3054,9 +3172,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         )}
       </header>
 
-      <div className={`layout ${activePanel === 'home' ? 'no-map' : ''}`}>
+      <div className={`layout ${activePanel === 'home' || activePanel === 'stations' ? 'no-map' : ''}`}>
         <aside className="sidebar">
           {activePanel === 'home' ? renderHomeFeed()
+            : activePanel === 'stations' ? renderStationsPanel()
             : activePanel === 'map' ? renderMapControls()
             : activePanel === 'locations' ? renderLocationsList()
             : activePanel === 'baits' ? renderBaitsList()
@@ -3114,7 +3233,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   <p className="hint-text" style={{ margin: '0 0 6px' }}>Appka našla poblíž:</p>
                   {gpsConfirmStep.matches.map((m, i) => (
                     <button key={i} className="type-btn" onClick={() => pickGpsMatch(m)}>
-                      {m.title}{m.revir ? ` (${m.revir})` : ''} <span style={{ opacity: .6, marginLeft: 4 }}>· {Math.round(m.distance)} m</span>
+                      {m.title}{m.revir ? ` (${m.revir})` : ''} <span style={{ opacity: .6, marginLeft: 4 }}>· {m.distance === 0 ? 'jsi uvnitř' : `${Math.round(m.distance)} m`}</span>
                     </button>
                   ))}
                   <div style={{ height: 1, background: 'var(--paper-line)', margin: '8px 0' }} />
@@ -3442,12 +3561,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           )}
 
           <div className="desktop-detail-wrap">
-            {activePanel !== 'locations' && renderDetailStrip()}
+            {activePanel === null && renderDetailStrip()}
           </div>
         </main>
       </div>
 
-      {activePanel !== 'home' && (
+      {activePanel !== 'home' && activePanel !== 'stations' && (
         <div className={`mobile-sheet ${mobileSheetOpen ? 'expanded' : ''}`}>
           <div className="mobile-peek-bar" onClick={() => setMobileSheetOpen((v) => !v)}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{peekLabel()}</span>

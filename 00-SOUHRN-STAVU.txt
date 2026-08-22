@@ -674,6 +674,25 @@ CELKOVÝ PLÁN (pro orientaci, i to, co ještě NENÍ hotové):
    pendingGpsShorePointRef stejně u obou), takže finishRodPoints()
    funguje pro obě cesty beze změny, bez potřeby rozlišovat "odkud
    appka přišla".
+   OPRAVA (zjištěno v provozu -- appka nenabídla nejbližší z historie
+   ani u míst, co uživatel subjektivně vnímal jako "blízko"): práh
+   vzdálenosti ve findNearestHistoryMatches byl 300 m, což se ukázalo
+   jako příliš přísné pro reálné použití (přesnost GPS telefonu, plus
+   u starších záznamů byl "bod výpravy" historicky odvozený z pozice
+   PRVNÍHO PRUTA ve vodě, ne z bodu na břehu -- mezi starým a novým
+   způsobem může být přirozený rozdíl řádu desítek metrů). Rozšířeno
+   na 800 m.
+   DALŠÍ OPRAVA (stejný problém, jiná příčina -- upozornil uživatel):
+   appka u katalogových míst S VYŠRAFOVANOU PLOCHOU porovnávala
+   vzdálenost od TĚŽIŠTĚ plochy -- u dlouhého úseku (např. revír pro
+   loďky, viz scope 'reach' z dřívější dávky) může být těžiště
+   kilometry daleko od konkrétního bodu na břehu, i když je uživatel
+   geograficky UVNITŘ toho samého revíru. Přidán isPointInPolygon
+   (ray-casting test), který appka zkusí NEJDŘÍV pro každé katalogové
+   místo s plochou -- pokud je bod uvnitř, appka to bere jako
+   vzdálenost 0 (vyhraje nad čímkoli jiným), bez ohledu na to, jak
+   daleko je od těžiště. V UI appka místo "0 m" ukáže srozumitelnější
+   "jsi uvnitř".
    TAKÉ NEHOTOVO: appka zatím nepoužívá "upřednostnit ČHMÚ stanici na
    správné řece" (bod 5 níže) ani "revír počítaný za běhu z historie"
    (bod 4 níže) při GPS flow -- našeptávač zatím jen porovnává jména,
@@ -759,6 +778,35 @@ vyhledávací pole pro místa (sloučení dnešních Revírů do Mapy),
 samotná nová záložka v navigaci. Vědomě rozděleno na menší kroky
 kvůli riziku -- shlukování je jeden samostatný, testovatelný krok.
 
+ZPĚTNÁ VAZBA Z PROVOZU (uživatel testoval Mapu se starými daty) -- opraveno:
+------------------------------------------------------------------------------
+1. OPRAVA (bug): desktopový detail-strip (podmínky/pruty/úlovky aktivní
+   výpravy pod mapou) se dřív zobrazoval na KTERÉMKOLI panelu kromě
+   'locations' (`activePanel !== 'locations'`) -- to bylo správně, dokud
+   appka měla jen Výpravy/Revíry/Nástrahy/Úlovky, ale po přidání záložky
+   Mapa to znamenalo, že se detail-strip objevoval i tam, kde nedává
+   smysl. Opraveno na `activePanel === null` -- zobrazí se JEN na
+   záložce Výpravy.
+2. DOPLNĚNO (chybějící kus z dřívějšího plánu navigace): panel "Měrné
+   stanice" v ☰ Více -- appka najde stanice ČHMÚ nejblíž místům, kde
+   parta obvykle chytá (průměr GPS bodů vlastních výprav, jinak střed
+   Česka), a na vyžádání (klik na řádek) natáhne aktuální vodní stav
+   pro tu konkrétní stanici (fetchLiveConditions). Stejný "no-map"
+   layout jako Domů (čistý seznam, žádná mapa/mobile-sheet potřeba).
+3. VYSVĚTLENO, NEOPRAVOVÁNO (jde o plánovanou, ještě neprovedenou fázi):
+   uživatel se ptal, proč jde na Mapě zapnout "Výpravy" i "Revíry"
+   zvlášť, když by to mělo být "to samé" -- ano, přesně tohle je bod 4
+   z celkového plánu (katalog míst přestává být zdrojem pravdy, "revír"
+   se počítá za běhu z historie výprav) -- zatím NEHOTOVO, obě vrstvy
+   jsou schválně ještě oddělené (dvě různé datové tabulky), sloučení
+   je plánovaná samostatná fáze, ne bug teď.
+4. NEDOŘEŠENO (čeká na retest po nasazení): uživatel hlásil, že body
+   výprav ("Moje výpravy" vrstva na Mapě) nejdou kliknout -- kód
+   click handleru vypadá v pořádku (výpravy se kreslí AŽ PO revírech,
+   takže by měly být navrchu), ale uživatel testoval verzi appky BEZ
+   posledních dvou nasazených oprav (sám to zmínil). Nechává se na
+   retest po nasazení aktuální verze, než se bude dál pátrat -- nemá
+   smysl opravovat naslepo něco, co může být už vyřešené jinde.
 
 
 
