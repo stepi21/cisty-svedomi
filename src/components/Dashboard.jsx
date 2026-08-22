@@ -3281,7 +3281,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 </>
               )}
               <label className="field-label" style={{ marginTop: 0 }}>Nebo napiš nové jméno</label>
-              <input className="text-input" placeholder="např. Jizera - most" value={gpsManualTitle} onChange={(e) => setGpsManualTitle(e.target.value)} autoFocus />
+              <input className="text-input" placeholder="např. Jizera - most" value={gpsManualTitle} onChange={(e) => setGpsManualTitle(e.target.value)} />
               <label className="field-label">Revír (nepovinné)</label>
               <input className="text-input" placeholder="např. 411024" value={gpsManualRevir} onChange={(e) => setGpsManualRevir(e.target.value)} />
               <button className="btn-primary" style={{ marginTop: 10 }} onClick={confirmGpsManual} disabled={!gpsManualTitle.trim()}>Pokračovat</button>

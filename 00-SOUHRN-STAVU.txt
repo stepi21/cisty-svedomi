@@ -877,6 +877,12 @@ ZPĚTNÁ VAZBA Z PROVOZU (uživatel testoval Mapu se starými daty) -- opraveno:
    appka zůstala oddálená po celou dobu zobrazení kroku "jak se místo
    jmenuje?" -- až do chvíle, kdy klikáním prutů placementTarget zase
    nabylo hodnoty. Doplněno gpsConfirmStep a gpsCapturing do isDrawingNow.
+10. OPRAVA (mobil, zjištěno v provozu): pole pro ruční zápis jména v
+    kroku "jak se místo jmenuje?" mělo autoFocus -- na mobilu to
+    automaticky vyvolalo klávesnici a odvedlo pozornost od nabídky
+    "nejbližší z historie", i když uživatel chtěl jen vybrat ze
+    seznamu, ne psát nové jméno. Odstraněno -- výchozí stav appky je
+    teď "vybírám", ne "píšu".
 
 
 
