@@ -812,25 +812,30 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function pickGpsMatch(match) {
     const point = gpsConfirmStep.point
+    setGpsConfirmStep(null)
+    if (LURE_TYPES.includes(pendingTypeRef.current)) {
+      // Přívlač: appka nemá žádná "další místa" navíc -- jeden bod appka
+      // rovnou dokončí, bez čekání na další klik.
+      finalizeNewSession([point], point, { title: match.title, revir: match.revir })
+      return
+    }
     pendingGpsShorePointRef.current = point
     pendingPointModeCatalogRef.current = { title: match.title, revir: match.revir, locationIds: [] }
-    setGpsConfirmStep(null)
-    // Přívlač nemá samostatný bod na břehu navíc -- ten první bod appka
-    // rovnou bere jako první MÍSTO, ne jako oddělenou "kotvu", kterou by
-    // bylo potřeba znovu klikat/GPSovat pro místo 1. U bodových typů
-    // (kapr/muška/plavaná) appka naopak seznam prutů nechává prázdný --
-    // bod na břehu a pozice prutu ve vodě jsou tam dva různé body.
-    setRodPointsDraft(LURE_TYPES.includes(pendingTypeRef.current) ? [point] : [])
+    setRodPointsDraft([])
     setPlacementTarget('session-point')
   }
 
   function confirmGpsManual() {
     if (!gpsManualTitle.trim()) return
     const point = gpsConfirmStep.point
+    setGpsConfirmStep(null)
+    if (LURE_TYPES.includes(pendingTypeRef.current)) {
+      finalizeNewSession([point], point, { title: gpsManualTitle.trim(), revir: gpsManualRevir.trim() })
+      return
+    }
     pendingGpsShorePointRef.current = point
     pendingPointModeCatalogRef.current = { title: gpsManualTitle.trim(), revir: gpsManualRevir.trim(), locationIds: [] }
-    setGpsConfirmStep(null)
-    setRodPointsDraft(LURE_TYPES.includes(pendingTypeRef.current) ? [point] : [])
+    setRodPointsDraft([])
     setPlacementTarget('session-point')
   }
 
@@ -1749,22 +1754,20 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setRodPointsDraft((prev) => (prev || []).slice(0, -1))
   }
 
-  function finishRodPoints() {
-    if (!rodPointsDraft || rodPointsDraft.length === 0) return
-    const first = rodPointsDraft[0]
-    const label = LURE_TYPES.includes(pendingTypeRef.current) ? 'Místo' : 'Prut'
-    const rods = rodPointsDraft.map((p, i) => ({ name: `${label} ${i + 1}`, lat: p.lat, lng: p.lng, baits: [{ name: '', photoFile: null }] }))
+  // Sdílené dokončení nové výpravy -- appka ho volá jak z klikání
+  // prutů/míst (finishRodPoints, uživatel sám klikne "Hotovo,
+  // pokračovat"), tak přímo z potvrzení jména u přívlače (appka tam
+  // žádné další klikání nechce, viz pickGpsMatch/confirmGpsManual níže
+  // -- u přívlače appka nikdy neřeší víc míst, jen jeden bod výpravy).
+  function finalizeNewSession(points, shorePoint, catalogInfo) {
+    const isLure = LURE_TYPES.includes(pendingTypeRef.current)
+    const first = points[0]
+    const rods = isLure
+      ? [{ name: 'Nástraha', lat: first.lat, lng: first.lng, baits: [{ name: '', photoFile: null }] }]
+      : points.map((p, i) => ({ name: `Prut ${i + 1}`, lat: p.lat, lng: p.lng, baits: [{ name: '', photoFile: null }] }))
     setPlacementTarget(null)
     setRodPointsDraft(null)
     const live = liveDefaults()
-    const catalogInfo = pendingPointModeCatalogRef.current
-    pendingPointModeCatalogRef.current = null
-    // GPS bod na břehu (pokud appka jím prošla přes "📍 Jsem tady") appka
-    // použije jako kotvu výpravy MÍSTO pozice prvního prutu -- appka tak
-    // rozlišuje "kde stojím" (břeh, pro dohledání revíru/vodního stavu) od
-    // "kam jsem hodil" (voda, pozice prutu) jako dva různé body.
-    const shorePoint = pendingGpsShorePointRef.current
-    pendingGpsShorePointRef.current = null
     setDraftSession({
       type: pendingTypeRef.current,
       title: catalogInfo?.title || '', date: live.date, timeFrom: live.timeFrom, timeTo: '',
@@ -1775,6 +1778,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       live: live.live,
       linkedLocationIds: catalogInfo?.locationIds || [],
     })
+  }
+
+  function finishRodPoints() {
+    if (!rodPointsDraft || rodPointsDraft.length === 0) return
+    const catalogInfo = pendingPointModeCatalogRef.current
+    pendingPointModeCatalogRef.current = null
+    const shorePoint = pendingGpsShorePointRef.current
+    pendingGpsShorePointRef.current = null
+    finalizeNewSession(rodPointsDraft, shorePoint, catalogInfo)
   }
 
   function finishCurrentArea() {
@@ -2175,17 +2187,30 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setPlacementTarget('relocate-session-point')
   }
 
-  // Appka umožní přidat nový prut/místo k UŽ ULOŽENÉ výpravě -- na rozdíl
-  // od "+ další místo" ve formuláři nové výpravy (co existuje jen PŘED
-  // uložením), tohle appka nabízí přímo v detailu hotové výpravy. Hodí se
-  // hlavně u starých přívlačových výprav se zrušenou plochou -- appka jim
-  // tak dá cestu přejít na nový bodový systém míst, aniž by musely zpátky
-  // přes katalog/ruční kreslení/auto-tvar, co appka u nových výprav
-  // odstranila.
+  // Appka umožní přidat nový prut k UŽ ULOŽENÉ výpravě -- na rozdíl od
+  // "+ další prut" ve formuláři nové výpravy (co existuje jen PŘED
+  // uložením), tohle appka nabízí přímo v detailu hotové výpravy.
+  // Jen pro bodové typy (kapr/muška/plavaná) -- přívlač má od appky
+  // vlastní, jednodušší cestu (addLureBaitToSession níže), žádné
+  // klikání na mapu navíc, protože u přívlače appka žádnou samostatnou
+  // pozici nástrahy neřeší -- je to vždycky bod výpravy.
   function startAddRodToSession(session) {
     addRodToSessionRef.current = { sessionId: session.id, type: session.type }
     setMobileSheetOpen(false)
     setPlacementTarget('add-rod-to-session')
+  }
+
+  // U přívlače appka nástrahu ukládá jako jediný "prut" na stejné
+  // souřadnici jako bod výpravy (žádné samostatné místo/klik navíc) --
+  // pokud appka zjistí, že výprava žádnou nemá (např. po smazání), appka
+  // rovnou vytvoří novou prázdnou, ať appka má vůbec kam nástrahu zapsat.
+  async function addLureBaitToSession(session) {
+    const { error } = await supabase.from('rods').insert({
+      session_id: session.id, group_id: groupId, name: 'Nástraha',
+      lat: session.lat, lng: session.lng, baits: [],
+    })
+    if (error) { alert(error.message); return }
+    await loadSessions()
   }
 
   function startManageAreas(session) {
@@ -3008,11 +3033,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               </div>
               <div className="det-block">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <h3>{LURE_TYPES.includes(activeSession.type) ? 'Místa a nástrahy' : 'Pruty a nástrahy'}</h3>
-                  {canEdit && (
-                    <button className="new-btn" onClick={() => startAddRodToSession(activeSession)}>
-                      + {LURE_TYPES.includes(activeSession.type) ? 'Přidat místo' : 'Přidat prut'}
-                    </button>
+                  <h3>{LURE_TYPES.includes(activeSession.type) ? 'Nástraha' : 'Pruty a nástrahy'}</h3>
+                  {canEdit && !LURE_TYPES.includes(activeSession.type) && (
+                    <button className="new-btn" onClick={() => startAddRodToSession(activeSession)}>+ Přidat prut</button>
+                  )}
+                  {canEdit && LURE_TYPES.includes(activeSession.type) && (!activeSession.rods || activeSession.rods.length === 0) && (
+                    <button className="new-btn" onClick={() => addLureBaitToSession(activeSession)}>+ Přidat nástrahu</button>
                   )}
                 </div>
                 {(activeSession.rods || []).map((r, i) => (
@@ -3030,11 +3056,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                       onArmPosition={() => setPlacementTarget(`edit-rod-${r.id}`)}
                       onDone={() => { setEditingRodId(null); loadSessions() }}
                       onCancel={() => setEditingRodId(null)}
+                      onDeleteRod={() => { setEditingRodId(null); loadSessions() }}
+                      deleteLabel={LURE_TYPES.includes(activeSession.type) ? 'nástrahu' : 'prut'}
+                      hidePosition={LURE_TYPES.includes(activeSession.type)}
                     />
                   ) : (
                     <div className="rod-row" key={r.id}>
-                      <div className="rod-dot" style={{ background: rodColors[i % rodColors.length] }} />
-                      <div className="rod-name">{r.name}</div>
+                      {!LURE_TYPES.includes(activeSession.type) && <>
+                        <div className="rod-dot" style={{ background: rodColors[i % rodColors.length] }} />
+                        <div className="rod-name">{r.name}</div>
+                      </>}
                       <div className="rod-baits">
                         {(r.baits && r.baits.length > 0 ? r.baits : (r.bait ? [{ name: r.bait, photo_url: r.bait_photo_url }] : [])).map((b, bi) => (
                           <span className="bait-chip" key={bi}>
@@ -3048,16 +3079,18 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                     </div>
                   )
                 ))}
-                {(!activeSession.rods || activeSession.rods.length === 0) && (
-                  <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{LURE_TYPES.includes(activeSession.type) ? 'Bez míst' : 'Bez prutů'}</div>
+                {!LURE_TYPES.includes(activeSession.type) && (!activeSession.rods || activeSession.rods.length === 0) && (
+                  <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Bez prutů</div>
                 )}
-                <div className="coord-list">
-                  {(activeSession.rods || []).map((r) => (
-                    <button key={r.id} className="coord-chip" type="button" onClick={() => focusOnPoint(r.lat, r.lng)}>
-                      <IconRevir size={13} color="var(--water-mid)" dotColor="var(--paper)" /> {r.name}: {r.lat?.toFixed(4)}, {r.lng?.toFixed(4)}
-                    </button>
-                  ))}
-                </div>
+                {!LURE_TYPES.includes(activeSession.type) && (
+                  <div className="coord-list">
+                    {(activeSession.rods || []).map((r) => (
+                      <button key={r.id} className="coord-chip" type="button" onClick={() => focusOnPoint(r.lat, r.lng)}>
+                        <IconRevir size={13} color="var(--water-mid)" dotColor="var(--paper)" /> {r.name}: {r.lat?.toFixed(4)}, {r.lng?.toFixed(4)}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="det-block">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -4365,7 +4398,7 @@ function SettingsModal({ userId, profile, onClose, onSaved }) {
   )
 }
 
-function RodEditRow({ rod, color, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, onAddBait, onBackfillBaitPhoto, onArmPosition, onDone, onCancel }) {
+function RodEditRow({ rod, color, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, onAddBait, onBackfillBaitPhoto, onArmPosition, onDone, onCancel, onDeleteRod, deleteLabel = 'prut', hidePosition = false }) {
   const [name, setName] = useState(rod.name)
   const initialBaits = (rod.baits && rod.baits.length > 0)
     ? rod.baits.map((b) => ({ name: b.name, photo_url: b.photo_url, photoFile: null }))
@@ -4412,9 +4445,18 @@ function RodEditRow({ rod, color, baitPhotoMap = {}, baitListId = 'known-baits-a
     onDone()
   }
 
+  async function handleDelete() {
+    if (!window.confirm(`Opravdu smazat ${deleteLabel} „${rod.name}“? Nedá se to vrátit zpět.`)) return
+    setBusy(true)
+    const { error } = await supabase.from('rods').delete().eq('id', rod.id)
+    setBusy(false)
+    if (error) { alert(error.message); return }
+    onDeleteRod ? onDeleteRod() : onDone()
+  }
+
   return (
     <div className="rod-edit-block">
-      <input className="text-input" value={name} onChange={(e) => setName(e.target.value)} style={{ marginBottom: 8 }} />
+      {!hidePosition && <input className="text-input" value={name} onChange={(e) => setName(e.target.value)} style={{ marginBottom: 8 }} />}
       {baits.map((b, i) => (
         <div key={i} className="bait-edit-row">
           <BaitPicker
@@ -4434,11 +4476,14 @@ function RodEditRow({ rod, color, baitPhotoMap = {}, baitListId = 'known-baits-a
         </div>
       ))}
       <button type="button" className="new-btn" onClick={addBait} style={{ marginTop: 4 }}>+ další nástraha</button>
-      <div className="rod-edit-row" style={{ marginTop: 8 }}>
-        <button type="button" className="new-btn" onClick={onArmPosition}><IconRevir size={13} /> změnit pozici na mapě</button>
-      </div>
+      {!hidePosition && (
+        <div className="rod-edit-row" style={{ marginTop: 8 }}>
+          <button type="button" className="new-btn" onClick={onArmPosition}><IconRevir size={13} /> změnit pozici na mapě</button>
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <button className="new-btn" onClick={onCancel}>Zrušit</button>
+        <button className="new-btn danger-btn" onClick={handleDelete} disabled={busy}><IconTrash size={13} /> Smazat {deleteLabel}</button>
         <button className="btn-primary" style={{ margin: 0 }} onClick={handleSave} disabled={busy}>{busy ? 'Ukládám…' : 'Uložit'}</button>
       </div>
     </div>

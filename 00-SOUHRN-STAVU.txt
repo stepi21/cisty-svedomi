@@ -1129,3 +1129,50 @@ jen pro autora výpravy). Klik appka nechá kliknout bod na mapě
 (placementTarget 'add-rod-to-session', nový addRodToSessionRef),
 appka rovnou vloží nový řádek do tabulky rods se správným pojmenováním
 podle typu (Místo/Prut, pokračuje v číslování za existujícími).
+
+POZNÁMKA K PŘEDCHOZÍMU BODU: appka toto tlačítko po dalším kole
+zpětné vazby PŘEJMENOVALA a zúžila jen na kapra ("+ Přidat prut") --
+viz další zápis níže, u přívlače appka celý koncept "míst" zrušila.
+
+ZÁSADNÍ ZJEDNODUŠENÍ PŘÍVLAČE (na výslovné přání uživatele -- appka
+dřív zavedla "místa" jako znovupoužitý mechanismus prutů, v provozu
+se to ukázalo jako matoucí -- appka duplikovala tečku výpravy s
+"Místem 1" na tom samém bodě, appka nedávala jasně najevo, který bod
+je co).
+------------------------------------------------------------------------
+Přívlač už NEMÁ ŽÁDNÝ koncept "míst" ani "prutů" jako samostatných,
+pojmenovaných bodů. Appka místo toho:
+
+1. Má jen JEDEN bod výpravy (barva appka bere z uživatelovy vlastní
+   barvy, sjednoceno s Mapou -- viz oprava barvy výše). U živé appka
+   ho získá přes GPS, u zpětné appka necháčky kliknout ručně. U obou
+   appka jde přesunout přes "Přesunout bod na břehu na mapě" v
+   editaci výpravy -- to appka umí u obou typů stejně.
+
+2. Appka RUŠÍ čekání na "další místa" -- pickGpsMatch a confirmGpsManual
+   appka u přívlače (LURE_TYPES) volají ROVNOU finalizeNewSession()
+   (nová sdílená funkce, refaktorovaná z finishRodPoints), místo aby
+   appka čekala na klikání "Místo 2, 3...". Appka vytvoří jen jeden
+   implicitní záznam v tabulce rods (appka ho appka nazve "Nástraha"),
+   appka ho v UI NIKDY neukazuje jako "místo" -- je to čistě nosič dat
+   pro appku, kam si appka uloží nástrahu.
+
+3. V detailu výpravy appka sekci "Pruty a nástrahy" u přívlače
+   přejmenovala na "Nástraha" -- appka neukazuje název ani pozici
+   samostatně, jen appka rovnou ukáže nástrahu s možností úpravy.
+   Appka odstranila tlačítko "+ Přidat místo" úplně (necháno jen pro
+   kapra jako "+ Přidat prut"). Pokud appka u přívlače zjistí, že
+   nástraha chybí (např. po smazání), appka nabídne "+ Přidat nástrahu"
+   (addLureBaitToSession) -- appka ji rovnou umístí na bod výpravy,
+   žádný klik na mapu navíc.
+
+4. Appka umožňuje smazat prut/nástrahu (RodEditRow dostala tlačítko
+   "Smazat", dřív appka tohle vůbec neuměla -- uživatel narazil na
+   nemožnost smazat dva prut/místo záznamy, co omylem vznikly přes
+   dřívější, nesprávně navrženou verzi "+ Přidat místo").
+
+5. Coord-list ("kliknutelné pozice") appka pro přívlač schovala úplně
+   -- pozice nástrahy je vždycky totožná s bodem výpravy, appka by tak
+   jen zbytečně duplikovala tu samou souřadnici jako klikatelný chip
+   navíc. U kapra zůstává coord-list beze změny.
+
