@@ -482,11 +482,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     }
 
     if (target === 'relocate-session-point') {
-      setPlacementTarget(null)
       const sid = relocateSessionIdRef.current
       ;(async () => {
         const { error } = await supabase.from('sessions').update({ lat: point.lat, lng: point.lng }).eq('id', sid)
-        if (error) { alert(error.message); return }
+        if (error) { alert(error.message); setPlacementTarget(null); return }
         // U přívlače je "Místo 1" ten samý bod jako tečka výpravy (appka
         // ho tak navrhla schválně -- žádný samostatný bod na břehu navíc).
         // Appka proto při přesunu tečky aktualizuje zároveň i pozici
@@ -496,16 +495,20 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         if (relocatedSession && LURE_TYPES.includes(relocatedSession.type) && firstRod) {
           await supabase.from('rods').update({ lat: point.lat, lng: point.lng }).eq('id', firstRod.id)
         }
-        loadSessions()
+        await loadSessions()
+        // placementTarget appka vynuluje AŽ TEĎ, ne hned na začátku --
+        // jinak by mezi kliknutím a dokončením loadSessions() na okamžik
+        // platilo isDrawingNow === false, a appka by mapu mezitím stihla
+        // oddálit (mapový efekt se spustí znovu při každé změně sessions).
+        setPlacementTarget(null)
       })()
       return
     }
 
     if (target === 'add-rod-to-session') {
-      setPlacementTarget(null)
       const info = addRodToSessionRef.current
       addRodToSessionRef.current = null
-      if (!info) return
+      if (!info) { setPlacementTarget(null); return }
       ;(async () => {
         const label = LURE_TYPES.includes(info.type) ? 'Místo' : 'Prut'
         const existingCount = (sessions.find((s) => s.id === info.sessionId)?.rods || []).length
@@ -513,19 +516,21 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           session_id: info.sessionId, group_id: groupId, name: `${label} ${existingCount + 1}`,
           lat: point.lat, lng: point.lng, baits: [],
         })
-        if (error) { alert(error.message); return }
+        if (error) { alert(error.message); setPlacementTarget(null); return }
         await loadSessions()
+        setPlacementTarget(null)
       })()
       return
     }
 
     if (target === 'relocate-catch') {
-      setPlacementTarget(null)
       const cid = relocateCatchIdRef.current
-      supabase.from('catches').update({ lat: point.lat, lng: point.lng }).eq('id', cid).then(({ error }) => {
+      ;(async () => {
+        const { error } = await supabase.from('catches').update({ lat: point.lat, lng: point.lng }).eq('id', cid)
         if (error) alert(error.message)
-        loadSessions()
-      })
+        await loadSessions()
+        setPlacementTarget(null)
+      })()
       return
     }
 
@@ -1009,13 +1014,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           // výše (appka ho tak navrhla schválně -- první GPS/klik bod se
           // stává rovnou "Místem 1", appka se neptá na klik znovu). Kreslit
           // ho by appka duplikovala stejný bod dvakrát přes sebe -- appka
-          // proto u přívlače první místo přeskočí, další (Místo 2, 3...)
-          // appka nakreslí normálně, protože ty už jsou na jiném místě.
+          // proto u přívlače první místo přeskočí. Další místa (appka je
+          // ukazuje v sekci "Další místa") appka nakreslí VLASTNÍ BARVOU
+          // uživatele -- stejnou jako hlavní bod, ne barvou prutů (appka
+          // je totiž koncepčně "další stejný bod", ne odlišný prut).
           if (isLureSession && i === 0) return
-          const color = rodColors[i % rodColors.length]
+          const color = isLureSession ? userColor(activeSession.user_id) : rodColors[i % rodColors.length]
           L.circleMarker([r.lat ?? activeSession.lat, r.lng ?? activeSession.lng], {
-            radius: 8, color, weight: 2, fillColor: color, fillOpacity: 0.5,
-          }).bindPopup(`<b>${r.name}</b>`).addTo(markersLayer.current)
+            radius: 8, color, weight: 2, fillColor: isLureSession ? '#fff' : color, fillOpacity: isLureSession ? 0.9 : 0.5,
+          }).bindPopup(isLureSession ? 'Další místo' : `<b>${r.name}</b>`).addTo(markersLayer.current)
         })
       }
 
@@ -2225,6 +2232,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     await loadSessions()
   }
 
+  // Smazání "dalšího místa" u přívlače -- na rozdíl od RodEditRow appka
+  // tady nepotřebuje celý formulář (žádná nástraha se u dalších míst
+  // neřeší), stačí přímé potvrzení a smazání.
+  async function deleteLurePlace(rod) {
+    if (!window.confirm('Smazat tohle místo?')) return
+    const { error } = await supabase.from('rods').delete().eq('id', rod.id)
+    if (error) { alert(error.message); return }
+    await loadSessions()
+  }
+
   function startManageAreas(session) {
     setEditingAreasSession({ id: session.id, areas: normalizeSessionAreas(session.area) })
     setEditingSession(null)
@@ -3050,7 +3067,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                     <button className="new-btn" onClick={() => addLureBaitToSession(activeSession)}>+ Přidat nástrahu</button>
                   )}
                 </div>
-                {(activeSession.rods || []).map((r, i) => (
+                {(activeSession.rods || [])
+                  .filter((r, i) => !LURE_TYPES.includes(activeSession.type) || i === 0)
+                  .map((r, i) => (
                   editingRodId === r.id && canEdit ? (
                     <RodEditRow
                       key={r.id}
@@ -3101,6 +3120,33 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   </div>
                 )}
               </div>
+
+              {LURE_TYPES.includes(activeSession.type) && (
+                <div className="det-block">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <h3>Další místa</h3>
+                    {canEdit && (
+                      <button className="new-btn" onClick={() => startAddRodToSession(activeSession)}>+ Přidat další místo</button>
+                    )}
+                  </div>
+                  {(activeSession.rods || []).length <= 1 ? (
+                    <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Chytáš jen z jednoho místa. Pokud jsi zkoušel i jinde (např. jez z druhého břehu), přidej ho sem.</div>
+                  ) : (
+                    <div className="coord-list">
+                      {(activeSession.rods || []).slice(1).map((r) => (
+                        <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <button className="coord-chip" type="button" onClick={() => focusOnPoint(r.lat, r.lng)}>
+                            <IconRevir size={13} color="var(--water-mid)" dotColor="var(--paper)" /> {r.lat?.toFixed(4)}, {r.lng?.toFixed(4)}
+                          </button>
+                          {canEdit && (
+                            <button className="ticket-close" style={{ position: 'static', color: 'var(--ink-soft)' }} onClick={() => deleteLurePlace(r)}><IconClose size={14} /></button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="det-block">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                   <h3>Úlovky</h3>

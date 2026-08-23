@@ -1217,3 +1217,26 @@ BODY 1 A 3 ZE STARŠÍHO SEZNAMU ZJEDNODUŠENÍ:
    vyplnění nástrahy -- při ukládání appka prázdné pole jednoduše
    přeskočí (žádná HTML required, žádná validace). Bylo to nepovinné
    už od začátku, appka jen pole vizuálně ukazovala.
+
+OPRAVA (zjištěno v provozu): mapa se oddálila i při přesunu bodu
+výpravy/úlovku/přidání prutu -- stejná třída chyby jako dřív u
+gpsConfirmStep. Příčina: appka vynulovala placementTarget HNED na
+začátku handleru, PŘED dokončením async uložení + loadSessions() --
+mezitím (kratičkou chvíli) platilo isDrawingNow === false, mapový
+efekt (spuštěný změnou "sessions" po loadSessions) mapu přeostřil.
+Opraveno na všech třech místech (relocate-session-point, relocate-catch,
+add-rod-to-session) -- placementTarget appka vynuluje AŽ PO dokončení
+celé async operace včetně loadSessions().
+
+DOPLNĚNO (na přání -- přívlač PŘECE JEN potřebuje možnost víc míst,
+typicky "jez z obou stran řeky", i po zjednodušení na jeden hlavní
+bod): appka nabízí "+ Přidat další místo" jako VOLITELNOU, oddělenou
+sekci "Další místa" u přívlače (ne během zakládání, appka to necháčky
+přidat KDYKOLI POZDĚJI z detailu hotové výpravy -- funguje stejně pro
+živou i zpětnou výpravu). Na rozdíl od dřívějšího pokusu appka další
+místa NEKRESLÍ barvou prutů -- appka je nakreslí VLASTNÍ BARVOU
+uživatele (stejnou jako hlavní bod), appka je neukazuje jako
+pojmenovaná "Místa" s vlastní nástrahou (nástraha zůstává jen jedna
+pro celou výpravu, appka ji neváže na konkrétní další místo) -- jsou
+to čistě position-only body, appka je zobrazí jako klikatelné
+souřadnicové chipy s možností smazání (deleteLurePlace).
