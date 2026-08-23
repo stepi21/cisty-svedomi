@@ -118,6 +118,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [mapLayers, setMapLayers] = useState({ myTrips: true, partyTrips: false, myCatches: true, partyCatches: true, locations: true })
   const [openRevirGroup, setOpenRevirGroup] = useState(null) // vybraný "počítaný revír" (skupina výprav podle jména) -- appka ho nikde neukládá, spočítá znovu při každém otevření
   const [revirConditions, setRevirConditions] = useState({}) // cache aktuálního vodního stavu podle klíče skupiny -- appka ho natáhne až na vyžádání
+  const [revirStationOptions, setRevirStationOptions] = useState({}) // cache nabídnutých stanic podle klíče skupiny -- pro ruční "Změnit stanici"
+  const [showRevirStationPicker, setShowRevirStationPicker] = useState(false)
   const [stationsList, setStationsList] = useState(null) // null = ještě nenačteno
   const [stationsLoading, setStationsLoading] = useState(false)
   const [expandedStationId, setExpandedStationId] = useState(null)
@@ -247,6 +249,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const mapInstance = useRef(null)
   const markersLayer = useRef(null)
   const aggregateClusterLayer = useRef(null) // shlukovaná vrstva úlovků v souhrnném pohledu -- oddělená od markersLayer, protože ten drží i polygony/kruhy (revíry, detail výpravy), co shlukování nepodporuje
+  const tripsClusterLayer = useRef(null) // shlukovaná vrstva výprav na záložce Mapa -- oddělená od úlovků, ať se čísla ve dvou různých kolečkách nemíchají dohromady
   const draftLayer = useRef(null)
 
   // Na "Domů" appka mapu jen schová přes CSS (display:none), ne že by ji
@@ -428,6 +431,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         html: `<div style="width:36px;height:36px;background:var(--water-deep);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:13px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)">${cluster.getChildCount()}</div>`,
         className: '',
         iconSize: [36, 36],
+      }),
+    }).addTo(map)
+    // Vlastní shluková vrstva pro výpravy -- jiná barva (jantarová) než
+    // úlovky (tmavě modrá), ať appka na první pohled odliší, co číslo
+    // vlastně počítá, když appka ukáže obě vrstvy zapnuté najednou.
+    tripsClusterLayer.current = L.markerClusterGroup({
+      maxClusterRadius: 40,
+      iconCreateFunction: (cluster) => L.divIcon({
+        html: `<div style="width:32px;height:32px;background:var(--amber-deep);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:12px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)">${cluster.getChildCount()}</div>`,
+        className: '',
+        iconSize: [32, 32],
       }),
     }).addTo(map)
     draftLayer.current = L.layerGroup().addTo(map)
@@ -836,6 +850,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (!mapInstance.current || !markersLayer.current) return
     markersLayer.current.clearLayers()
     if (aggregateClusterLayer.current) aggregateClusterLayer.current.clearLayers()
+    if (tripsClusterLayer.current) tripsClusterLayer.current.clearLayers()
     const map = mapInstance.current
 
     // Appka mapu NEPŘEOSTŘUJE ("fitBounds"/"setView"), když uživatel zrovna
@@ -1015,15 +1030,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }, [activeSession, activeCategory, activeUserFilter, viewMode, sessions, locationsCatalog, activePanel, placementTarget, areaDraft, riverLineDraft, rodPointsDraft, riverConfirm, areaDrawChoice, editingAreasLocation, editingAreasSession, savingLocationFor])
 
   // --- záložka 🗺 Mapa: přepínatelné vrstvy (moje/party výpravy, moje/party
-  // úlovky, revíry), samostatně od agregovaného pohledu výše. Úlovky appka
-  // shlukuje (aggregateClusterLayer, sdílený plugin leaflet.markercluster),
-  // výpravy a revíry ne (jejich počet bývá výrazně menší, shlukování by tam
-  // spíš překáželo než pomáhalo).
+  // úlovky, revíry), samostatně od agregovaného pohledu výše. Úlovky i
+  // výpravy appka shlukuje (dvě oddělené vrstvy pluginu leaflet.markercluster,
+  // jinak barevné, ať jde na první pohled poznat, co číslo počítá) -- revíry
+  // ne (jejich počet bývá výrazně menší, shlukování by tam spíš překáželo).
   useEffect(() => {
-    if (activePanel !== 'map' || !mapInstance.current || !markersLayer.current || !aggregateClusterLayer.current) return
+    if (activePanel !== 'map' || !mapInstance.current || !markersLayer.current || !aggregateClusterLayer.current || !tripsClusterLayer.current) return
     const map = mapInstance.current
     markersLayer.current.clearLayers()
     aggregateClusterLayer.current.clearLayers()
+    tripsClusterLayer.current.clearLayers()
     const bounds = []
 
     if (mapLayers.locations) {
@@ -1047,10 +1063,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         if (!isMine && !mapLayers.partyTrips) return
         if (s.lat == null || s.lng == null) return
         const color = userColor(s.user_id)
-        L.circleMarker([s.lat, s.lng], { radius: 7, color, weight: 2, fillColor: '#fff', fillOpacity: 0.9 })
+        // L.marker + vlastní divIcon, ne L.circleMarker -- stejný vzor jako
+        // úlovky výše. Plugin leaflet.markercluster je stavěný na L.Marker,
+        // s L.CircleMarker nemusí spolehlivě fungovat.
+        const html = `<div style="width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid ${color};box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>`
+        const icon = L.divIcon({ html, className: '', iconSize: [18, 18], iconAnchor: [9, 9] })
+        L.marker([s.lat, s.lng], { icon })
           .bindPopup(`${s.title} — ${userName(s.user_id)}`)
           .on('click', () => { setActivePanel(null); setActiveId(s.id); setViewMode('detail') })
-          .addTo(markersLayer.current)
+          .addTo(tripsClusterLayer.current)
         bounds.push([s.lat, s.lng])
       })
     }
@@ -2527,6 +2548,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // seskupení (appka tak nepřijde o revír/plochu zapsanou dřív, i kdyby
   // k němu ještě neexistovala žádná výprava), jen appka poklidně
   // přechází na to, že jméno výpravy je ten skutečný zdroj pravdy.
+  // Odvodí jméno řeky ze jména revíru/výpravy -- oficiální jména revírů
+  // konvenčně začínají jménem řeky ("Labe 18", "Jizera - most"), appka
+  // vezme první slovo před případnou pomlčkou. Použije se jako nápověda
+  // appce ČHМÚ stanic, ať appka upřednostní stanici na SPRÁVNÉ řece.
+  function extractRiverName(name) {
+    if (!name) return null
+    const beforeDash = name.split(/[-–]/)[0].trim()
+    return beforeDash.split(/\s+/)[0] || null
+  }
+
   function computeRevirGroups() {
     const groups = new Map() // klíč: normalizované jméno
 
@@ -2571,17 +2602,20 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   function openRevirCard(group) {
+    setShowRevirStationPicker(false)
     setOpenRevirGroup(group)
   }
 
-  async function loadRevirConditions(group) {
-    if (revirConditions[group.key] !== undefined) return
+  async function loadRevirConditions(group, forceStationId = null) {
+    if (!forceStationId && revirConditions[group.key] !== undefined) return
     setRevirConditions((prev) => ({ ...prev, [group.key]: null }))
     try {
-      const stations = await findNearestStations(group.point.lat, group.point.lng, 1)
+      const stations = await findNearestStations(group.point.lat, group.point.lng, 6, extractRiverName(group.name))
+      setRevirStationOptions((prev) => ({ ...prev, [group.key]: stations }))
       if (!stations?.length) { setRevirConditions((prev) => ({ ...prev, [group.key]: false })); return }
-      const cond = await fetchLiveConditions(stations[0].objID)
-      setRevirConditions((prev) => ({ ...prev, [group.key]: cond ? { ...cond, stationName: stations[0].name } : false }))
+      const chosen = forceStationId ? stations.find((s) => s.objID === forceStationId) || stations[0] : stations[0]
+      const cond = await fetchLiveConditions(chosen.objID)
+      setRevirConditions((prev) => ({ ...prev, [group.key]: cond ? { ...cond, stationName: chosen.name, stationId: chosen.objID } : false }))
     } catch {
       setRevirConditions((prev) => ({ ...prev, [group.key]: false }))
     }
@@ -2609,7 +2643,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             {cond === null && <p className="hint-text">Zjišťuji…</p>}
             {cond === false && <p className="hint-text">Pro tohle místo se nepodařilo najít aktuální data.</p>}
             {cond && (
-              <div className="weather-row" style={{ marginBottom: 12 }}>
+              <div className="weather-row" style={{ marginBottom: 4 }}>
                 {cond.level_cm != null && <div className="w-item"><div className="num">{cond.level_cm} cm</div><div className="lab">vodní stav</div></div>}
                 {cond.flow_m3s != null && <div className="w-item"><div className="num">{cond.flow_m3s} m³/s</div><div className="lab">průtok</div></div>}
                 {cond.temp_c != null && <div className="w-item"><div className="num">{cond.temp_c}°C</div><div className="lab">teplota vody</div></div>}
@@ -2617,6 +2651,24 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   <div className="w-item"><div className="num">{SPA_LEVEL_INFO[cond.spa_level].icon}</div><div className="lab">{SPA_LEVEL_INFO[cond.spa_level].label}</div></div>
                 )}
                 <div className="c-sub" style={{ width: '100%', marginTop: 4 }}>stanice {cond.stationName}</div>
+              </div>
+            )}
+            {cond && (
+              <button className="new-btn" style={{ marginBottom: 12 }} onClick={() => setShowRevirStationPicker((v) => !v)}>
+                {showRevirStationPicker ? 'Zavřít výběr stanice' : 'Změnit stanici'}
+              </button>
+            )}
+            {showRevirStationPicker && (
+              <div style={{ maxHeight: 140, overflowY: 'auto', background: 'var(--paper)', borderRadius: 8, padding: 6, marginBottom: 12 }}>
+                {(revirStationOptions[g.key] || []).map((st) => (
+                  <div key={st.objID} className="rod-edit-row" style={{ justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 12.5 }}>{st.name} <span className="c-sub">({st.stream}, {st.distanceKm.toFixed(1)} km)</span></span>
+                    <button
+                      className="new-btn"
+                      onClick={() => { setShowRevirStationPicker(false); setRevirConditions((prev) => { const n = { ...prev }; delete n[g.key]; return n }); loadRevirConditions(g, st.objID) }}
+                    >Vybrat</button>
+                  </div>
+                ))}
               </div>
             )}
 

@@ -105,13 +105,34 @@ async function loadStationList() {
 
 // Pro výběr/potvrzení stanice u katalogového místa (a pro automatické
 // dohledání u záznamů bez katalogového místa).
-export async function findNearestStations(lat, lng, count = 5) {
+// riverNameHint (nepovinné): appka podle něj upřednostní stanice na TÉ SAMÉ
+// řece (STREAM_NAME v metadatech appka porovná se jménem revíru/výpravy) --
+// bez tohohle appka řadí čistě podle vzdušné vzdálenosti, což na místech
+// blízko dvou různých řek (soutoky, souběžné toky) dokáže vybrat stanici na
+// úplně jiné řece, i když je o pár kilometrů blíž. Appka dá stanicím na
+// SPRÁVNÉ řece přednost, i kdyby byly o kousek dál -- ale jen do rozumné
+// vzdálenosti (60 km), ať appka nenabídne stanici stovky km daleko jen
+// proto, že jí sedí jméno řeky.
+export async function findNearestStations(lat, lng, count = 5, riverNameHint = null) {
   if (lat == null || lng == null) return []
   const stations = await loadStationList()
-  return stations
-    .map((s) => ({ ...s, distanceKm: haversineKm(lat, lng, s.lat, s.lng) }))
-    .sort((a, b) => a.distanceKm - b.distanceKm)
-    .slice(0, count)
+  const withDistance = stations.map((s) => ({ ...s, distanceKm: haversineKm(lat, lng, s.lat, s.lng) }))
+
+  if (riverNameHint) {
+    const hint = riverNameHint.trim().toLowerCase()
+    const REASONABLE_KM = 60
+    const sameRiver = withDistance
+      .filter((s) => s.stream && s.stream.trim().toLowerCase() === hint && s.distanceKm <= REASONABLE_KM)
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+    if (sameRiver.length > 0) {
+      const rest = withDistance
+        .filter((s) => !(s.stream && s.stream.trim().toLowerCase() === hint))
+        .sort((a, b) => a.distanceKm - b.distanceKm)
+      return [...sameRiver, ...rest].slice(0, count)
+    }
+  }
+
+  return withDistance.sort((a, b) => a.distanceKm - b.distanceKm).slice(0, count)
 }
 
 async function getStationThresholds(stationId) {

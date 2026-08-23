@@ -739,10 +739,36 @@ CELKOVÝ PLÁN (pro orientaci, i to, co ještě NENÍ hotové):
    JMÉNO k převzetí, druhá zobrazuje EXISTUJÍCÍ skupinu i s celou
    historií), a přepisování dobře otestovaného GPS flow kvůli čistotě
    kódu by bylo zbytečné riziko.
-5. NEHOTOVO: ČHMÚ stanice -- upřednostnit stanici na SPRÁVNÉ řece
-   (appka už zná stream u každé stanice z meta1.json), ne jen čistě
-   nejbližší vzdušnou čarou. Malá, izolovaná oprava, jde udělat
-   kdykoli nezávisle na zbytku plánu.
+5. HOTOVO (tahle dávka): ČHМÚ stanice -- upřednostnit stanici na
+   SPRÁVNÉ řece. findNearestStations dostala nepovinný parametr
+   riverNameHint -- appka porovná se STREAM_NAME z metadat ČHМÚ, a
+   pokud najde stanici na stejné řece do rozumné vzdálenosti (60 km),
+   dá jí přednost i před čistě bližší stanicí na jiné řece. Jméno
+   řeky appka odvodí z jména revíru/výpravy (extractRiverName --
+   první slovo před pomlčkou, oficiální jména revírů takhle
+   konvenčně začínají). Zapojeno do nové karty revíru
+   (loadRevirConditions) -- zjištěno v provozu, že appka bez tohohle
+   u míst blízko dvou řek (typicky soutoky) vybírala stanici na
+   ÚPLNĚ JINÉ řece, i když byla jen o kousek blíž vzdušnou čarou.
+   DOPLNĚNO NAVÍC (chybělo v kartě revíru): appka teď nabízí i ruční
+   "Změnit stanici" -- zobrazí až 6 nejbližších stanic (s upřednostněnou
+   správnou řekou na vrcholu seznamu), klik na "Vybrat" přepočítá
+   aktuální stav pro tu konkrétní stanici. Bez tohohle appka nabízela
+   jen tu jednu automaticky vybranou, bez možnosti opravit se sám.
+6. HOTOVO (tahle dávka, zjištěno v provozu -- appka na Mapě u vrstvy
+   "Moje výpravy" ukazovala jen JEDNU tečku i u míst, kde byl uživatel
+   opakovaně): appka měla shlukování (Leaflet.markercluster) jen pro
+   ÚLOVKY (aggregateClusterLayer), ne pro VÝPRAVY -- ty se kreslily
+   jako prosté L.circleMarker přímo do markersLayer, takže se výpravy
+   se stejnou/velmi blízkou pozicí vizuálně beze zbytku překryly, bez
+   jakéhokoli náznaku, kolik jich tam ve skutečnosti je. Přidána nová,
+   samostatná shlukovací vrstva tripsClusterLayer (jiná barva --
+   jantarová -- než úlovky, ať jde na první pohled poznat, co číslo
+   počítá, když appka ukáže obě vrstvy zapnuté najednou). Body výprav
+   appka navíc přepnula z L.circleMarker na L.marker s vlastní divIcon
+   (stejný bezpečný vzor jako úlovky) -- plugin leaflet.markercluster
+   je stavěný na L.Marker, s L.CircleMarker by nemuselo shlukování
+   spolehlivě fungovat.
 6. NEHOTOVO: úklid -- pokud se ukáže, že appka auto-tvar podle břehu
    (riverShape.js, overpass-proxy, turf.js závislost) v novém modelu
    vůbec nepotřebuje, odstranit. Zatím NEODSTRAŇOVÁNO -- staré výpravy
