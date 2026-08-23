@@ -1086,3 +1086,16 @@ místo u přívlače)
    Stejná chyba nalezena i v náhledovém popisku při klikání pozic
    (draftLayer preview, "Prut N" v bublině při samotném klikání, dřív
    napevno, teď podle typu).
+
+OPRAVA: přesun bodu u přívlače teď synchronizuje i Místo 1 (dřívější
+"známá drobnost, vědomě neopravena" -- uživatel na ni narazil naostro,
+opraveno pořádně). handleMapClick, případ 'relocate-session-point':
+appka po přesunutí sessions.lat/lng navíc zjistí typ výpravy, a pokud
+jde o LURE_TYPES (přívlač), aktualizuje zároveň i pozici PRVNÍHO
+prutu/místa (rods[0]) -- protože u přívlače je Místo 1 koncepčně ten
+samý bod jako tečka výpravy, appka je teď drží synchronizované, ne
+že by se od sebe po přesunu odchýlily. Tlačítko "Přesunout bod na
+břehu na mapě" appka u nových přívlačových výprav (bez uložené
+plochy) zobrazuje správně už od dřívější opravy (Array.isArray(draft.area)
+kontrola) -- uživatel se jen ptal, jestli existuje, appka ho jen dřív
+nenašel v ✏️ Upravit výpravu.

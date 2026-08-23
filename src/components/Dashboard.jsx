@@ -483,10 +483,20 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (target === 'relocate-session-point') {
       setPlacementTarget(null)
       const sid = relocateSessionIdRef.current
-      supabase.from('sessions').update({ lat: point.lat, lng: point.lng }).eq('id', sid).then(({ error }) => {
-        if (error) alert(error.message)
+      ;(async () => {
+        const { error } = await supabase.from('sessions').update({ lat: point.lat, lng: point.lng }).eq('id', sid)
+        if (error) { alert(error.message); return }
+        // U přívlače je "Místo 1" ten samý bod jako tečka výpravy (appka
+        // ho tak navrhla schválně -- žádný samostatný bod na břehu navíc).
+        // Appka proto při přesunu tečky aktualizuje zároveň i pozici
+        // prvního místa, ať mezi nimi nevznikne nesoulad.
+        const relocatedSession = sessions.find((s) => s.id === sid)
+        const firstRod = relocatedSession?.rods?.[0]
+        if (relocatedSession && LURE_TYPES.includes(relocatedSession.type) && firstRod) {
+          await supabase.from('rods').update({ lat: point.lat, lng: point.lng }).eq('id', firstRod.id)
+        }
         loadSessions()
-      })
+      })()
       return
     }
 
