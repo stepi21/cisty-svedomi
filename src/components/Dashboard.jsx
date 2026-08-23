@@ -178,6 +178,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [showCatalogSnapPicker, setShowCatalogSnapPicker] = useState(false)
   const pendingConfirmActionRef = useRef(null)                   // 'proceedToForm' | 'finishAppendArea' | 'proceedRelocateArea' — spustí se, až se areaDraft skutečně aktualizuje
   const suppressLocationsFitRef = useRef(false)                  // jednorázově potlačí "přeostři mapu na všechny revíry" hned po potvrzení/uložení konkrétní editované oblasti
+  const suppressSessionFitRef = useRef(false)                    // jednorázově potlačí "přeostři mapu na bod výpravy" hned po přesunu bodu/přidání dalšího místa -- appka nechá mapu tak, jak si ji uživatel sám přiblížil při klikání
   const [rodPointsDraft, setRodPointsDraft] = useState(null)     // [{lat,lng}, ...] během sbírání pozic prutů (bodové typy)
   const [placementTarget, setPlacementTarget] = useState(null)   // 'session-point' | 'area-point' | 'rod-<i>' | 'catch-point'
   const [draftSession, setDraftSession] = useState(null)         // otevřený formulář nové výpravy
@@ -500,6 +501,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         // jinak by mezi kliknutím a dokončením loadSessions() na okamžik
         // platilo isDrawingNow === false, a appka by mapu mezitím stihla
         // oddálit (mapový efekt se spustí znovu při každé změně sessions).
+        // suppressSessionFitRef appka nastaví TĚSNĚ před vynulováním --
+        // appka tak nechá mapu tak, jak si ji uživatel sám přiblížil,
+        // místo aby appka vycentrovala zpátky na pevný zoom.
+        suppressSessionFitRef.current = true
         setPlacementTarget(null)
       })()
       return
@@ -518,6 +523,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         })
         if (error) { alert(error.message); setPlacementTarget(null); return }
         await loadSessions()
+        suppressSessionFitRef.current = true
         setPlacementTarget(null)
       })()
       return
@@ -984,7 +990,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       // pohledu výše, jinak by appka smazala uživateli jeho přiblížení
       // pokaždé, když appka jen začne čekat na další klik.
       if (!isDrawingNow) {
-        if (pendingMapFocusRef.current && pendingMapFocusRef.current.sessionId === activeSession.id) {
+        if (suppressSessionFitRef.current) {
+          // Spotřebuje se přesně tady -- appka právě dokončila přesun bodu
+          // nebo přidání dalšího místa, uživatel si mapu sám přiblížil na
+          // to, co potřeboval vidět. Appka mapu NEPŘEKRESLÍ zpátky na
+          // pevný zoom 14 -- to by na bližším přiblížení vypadalo jako
+          // nechtěné oddálení, i když appka technicky "jen" centruje.
+          suppressSessionFitRef.current = false
+        } else if (pendingMapFocusRef.current && pendingMapFocusRef.current.sessionId === activeSession.id) {
           const f = pendingMapFocusRef.current
           map.setView([f.lat, f.lng], f.zoom || 16)
           pendingMapFocusRef.current = null

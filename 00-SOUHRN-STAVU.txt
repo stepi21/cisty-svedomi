@@ -1240,3 +1240,17 @@ pojmenovaná "Místa" s vlastní nástrahou (nástraha zůstává jen jedna
 pro celou výpravu, appka ji neváže na konkrétní další místo) -- jsou
 to čistě position-only body, appka je zobrazí jako klikatelné
 souřadnicové chipy s možností smazání (deleteLurePlace).
+
+DOOPRAVA (uživatel hlásil, že mapa se pořád "oddaluje" i po předchozí
+opravě): předchozí oprava (pozdější setPlacementTarget(null)) sice
+zabránila SKUTEČNÉMU předčasnému přeostření, ale appka po dokončení
+přesunu/přidání bodu STEJNĚ zavolala map.setView([...], 14) -- pevný
+zoom 14. Pokud byl uživatel přiblížený BLÍŽ (typicky ano, když přesně
+klikal na konkrétní bod), tenhle návrat na zoom 14 vypadal jako
+oddálení, i když appka technicky nedělala nic špatně -- jen se
+vycentrovala na výchozí úroveň po dokončení. Přidán suppressSessionFitRef
+(stejný vzor jako starší suppressLocationsFitRef u katalogu) --
+appka ho nastaví na true těsně před vynulováním placementTarget po
+úspěšném relocate-session-point/add-rod-to-session, a mapový efekt
+ho jednorázově spotřebuje (přeskočí veškeré přeostřování, nechá mapu
+přesně tak, jak si ji uživatel sám přiblížil).
