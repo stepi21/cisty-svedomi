@@ -1273,3 +1273,13 @@ prvního záznamu, Další místa jako position-only chipy). Formulář teď
 u přívlače ukazuje rods[0] jen jako "Nástraha" (žádné jméno, žádná
 pozice na mapě), rods[1+] appka ukazuje jako souřadnicové chipy se
 smazáním (removeRod). U kapra beze změny.
+
+DOPLNĚNO (na přání -- GPS chyběla u UŽ ULOŽENÉ, právě probíhající
+výpravy, appka ji měla jen ve formuláři PŘED uložením): sekce "Další
+místa" appka teď rozlišuje podle stavu výpravy -- pokud výprava PRÁVĚ
+PROBÍHÁ (status 'in_progress', appka je fyzicky na místě), appka
+nabídne "+ Další bod pomocí GPS" (addLurePlaceViaGps, přímé GPS bez
+klikání na mapu). U DOKONČENÉ/zpětné výpravy appka zůstává u ručního
+kliku na mapu (startAddRodToSession) -- GPS by tam zachytilo aktuální
+polohu appky, ne místo, kde uživatel tehdy stál, stejná logika jako u
+celého založení výpravy (živá = GPS, zpětná = ruční klik).

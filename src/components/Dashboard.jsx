@@ -2245,6 +2245,29 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     await loadSessions()
   }
 
+  // Přidá další místo k UŽ ULOŽENÉ výpravě rovnou přes GPS -- appka tohle
+  // nabízí jen dokud výprava PRÁVĚ PROBÍHÁ (status 'in_progress', appka
+  // je fyzicky na místě). U dokončené/zpětné výpravy appka GPS nenabízí
+  // (appka by zachytila AKTUÁLNÍ polohu, ne místo, kde uživatel tehdy
+  // stál) -- tam zůstává ruční klik na mapu (startAddRodToSession).
+  async function addLurePlaceViaGps(session) {
+    if (!navigator.geolocation) { alert('Tento prohlížeč neumí zjistit polohu.'); return }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const point = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        const existingCount = (session.rods || []).length
+        const { error } = await supabase.from('rods').insert({
+          session_id: session.id, group_id: groupId, name: `Místo ${existingCount + 1}`,
+          lat: point.lat, lng: point.lng, baits: [],
+        })
+        if (error) { alert(error.message); return }
+        await loadSessions()
+      },
+      () => alert('Nepodařilo se zjistit polohu. Zkontroluj, že appka má povolení k lokaci.'),
+      { enableHighAccuracy: true, timeout: 8000 }
+    )
+  }
+
   // Smazání "dalšího místa" u přívlače -- na rozdíl od RodEditRow appka
   // tady nepotřebuje celý formulář (žádná nástraha se u dalších míst
   // neřeší), stačí přímé potvrzení a smazání.
@@ -3139,7 +3162,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                     <h3>Další místa</h3>
                     {canEdit && (
-                      <button className="new-btn" onClick={() => startAddRodToSession(activeSession)}>+ Přidat další místo</button>
+                      activeSession.status === 'in_progress' ? (
+                        <button className="new-btn" onClick={() => addLurePlaceViaGps(activeSession)}>+ Další bod pomocí GPS</button>
+                      ) : (
+                        <button className="new-btn" onClick={() => startAddRodToSession(activeSession)}>+ Přidat další místo</button>
+                      )
                     )}
                   </div>
                   {(activeSession.rods || []).length <= 1 ? (
