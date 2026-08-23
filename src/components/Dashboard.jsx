@@ -598,15 +598,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     }
   }, [areaDraft, riverLineDraft, riverConfirm])
 
-  // --- kreslení náhledu pozic prutů při zakládání bodové výpravy ---
+  // --- kreslení náhledu pozic prutů/míst při zakládání bodové výpravy ---
   useEffect(() => {
     if (!draftLayer.current) return
     draftLayer.current.clearLayers()
     if (!rodPointsDraft) return
+    const label = LURE_TYPES.includes(pendingTypeRef.current) ? 'Místo' : 'Prut'
     rodPointsDraft.forEach((p, i) => {
       const color = rodColors[i % rodColors.length]
       L.circleMarker([p.lat, p.lng], { radius: 8, color, weight: 2, fillColor: color, fillOpacity: 0.6 })
-        .bindPopup(`Prut ${i + 1}`).addTo(draftLayer.current)
+        .bindPopup(`${label} ${i + 1}`).addTo(draftLayer.current)
     })
   }, [rodPointsDraft])
 
@@ -960,12 +961,23 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       // abys ji mohl upravit). Appka tak drží konzistentní zobrazení napříč
       // starými i novými výpravami, aniž by stará data jakkoli mazala nebo
       // měnila -- jen je přestává vizuálně kreslit při běžném prohlížení.
+      // Barva appka bere vlastní barvu uživatele (stejná jako na Mapě),
+      // ne napevno danou barvu -- jinak by appka ukazovala jinou barvu na
+      // souhrnné mapě a jinou v detailu téže výpravy.
+      const isLureSession = LURE_TYPES.includes(activeSession.type)
       L.circleMarker([activeSession.lat, activeSession.lng], {
-        radius: 8, color: '#2C6E71', weight: 2, fillColor: '#fff', fillOpacity: 0.9,
+        radius: 8, color: userColor(activeSession.user_id), weight: 2, fillColor: '#fff', fillOpacity: 0.9,
       }).bindPopup(`<b>${activeSession.title}</b>`).addTo(markersLayer.current)
 
       if (!AREA_TYPES.includes(activeSession.type)) {
         (activeSession.rods || []).forEach((r, i) => {
+          // U přívlače je PRVNÍ místo tím samým bodem jako tečka výpravy
+          // výše (appka ho tak navrhla schválně -- první GPS/klik bod se
+          // stává rovnou "Místem 1", appka se neptá na klik znovu). Kreslit
+          // ho by appka duplikovala stejný bod dvakrát přes sebe -- appka
+          // proto u přívlače první místo přeskočí, další (Místo 2, 3...)
+          // appka nakreslí normálně, protože ty už jsou na jiném místě.
+          if (isLureSession && i === 0) return
           const color = rodColors[i % rodColors.length]
           L.circleMarker([r.lat ?? activeSession.lat, r.lng ?? activeSession.lng], {
             radius: 8, color, weight: 2, fillColor: color, fillOpacity: 0.5,
@@ -4390,9 +4402,10 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
     })
   }
   function addRod() {
+    const label = LURE_TYPES.includes(draft.type) ? 'Místo' : 'Prut'
     setDraft((d) => ({
       ...d,
-      rods: [...d.rods, { name: `Prut ${d.rods.length + 1}`, lat: d.point.lat, lng: d.point.lng, baits: [{ name: '', photoFile: null }] }],
+      rods: [...d.rods, { name: `${label} ${d.rods.length + 1}`, lat: d.point.lat, lng: d.point.lng, baits: [{ name: '', photoFile: null }] }],
     }))
   }
   function updateBait(rodIndex, baitIndex, field, value) {

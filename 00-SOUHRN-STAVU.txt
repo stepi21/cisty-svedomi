@@ -1062,3 +1062,27 @@ stanice (appka tam tuhle funkci měla už dřív, nezávisle na revírech).
 riverNameHint parametr ve findNearestStations (hydrology.js) zůstal
 v kódu nepoužitý (harmless) -- appka ho momentálně nikde nevolá s
 vyplněnou hodnotou, ale je k dispozici, kdyby se hodil později.
+
+OPRAVA DETAILU VÝPRAVY (zjištěno v provozu -- barva tečky + duplicitní
+místo u přívlače)
+------------------------------------------------------------------------
+1. Tečka výpravy v detailu měla napevno danou barvu (#2C6E71), ne
+   vlastní barvu uživatele -- appka tak na souhrnné mapě ukazovala
+   jednu barvu (uživatelova), ale v detailu téže výpravy jinou.
+   Opraveno na userColor(activeSession.user_id) -- stejná barva všude.
+2. U přívlače appka kreslila "Místo 1" přesně na tom samém bodě jako
+   tečku výpravy (appka totiž první GPS/klik bod bere rovnou jako
+   Místo 1, žádný samostatný bod na břehu navíc) -- v detailu se tak
+   zobrazily DVĚ překrývající se tečky na stejném místě. Appka teď u
+   přívlače první místo (index 0) při kreslení PŘESKOČÍ (duplicitní se
+   sáčkem výpravy), další místa (2, 3...) kreslí normálně, protože ta
+   jsou na jiných souřadnicích.
+3. Nalezena a opravena SKUTEČNÁ příčina, proč appka u přívlače
+   pojmenovávala nová místa "Prut N" místo "Místo N": funkce addRod
+   (tlačítko "+ další místo/prut" PŘÍMO VE FORMULÁŘI nové výpravy, ne
+   při klikání na mapu) měla napevno "Prut", bez ohledu na typ výpravy
+   -- na rozdíl od finishRodPoints, co appka opravila už dřív. Opraveno
+   stejným vzorem (LURE_TYPES.includes(draft.type) ? 'Místo' : 'Prut').
+   Stejná chyba nalezena i v náhledovém popisku při klikání pozic
+   (draftLayer preview, "Prut N" v bublině při samotném klikání, dřív
+   napevno, teď podle typu).
