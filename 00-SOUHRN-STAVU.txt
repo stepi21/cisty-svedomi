@@ -1190,3 +1190,30 @@ jen nikde v UI znovu nezobrazí ani nenabídne upravit přes starý flow)
 jen tečka" (viz zápis výše). Appka tak definitivně a jednotně u
 VŠECH výprav (staré i nové, kapr i přívlač) nabízí jen: jeden bod +
 u kapra k tomu pozice prutů. Nic víc.
+
+OPRAVA UX NEKONZISTENCE (na přání): "Přesunout bod na břehu na mapě"
+appka přesunula z editace výpravy (SessionEditModal, kde appka
+ostatní pole ukládá až tlačítkem "Uložit změny") přímo na KARTU
+výpravy jako samostatné tlačítko "Přesunout bod" (startRelocateFromCard)
+-- appka ho ukládá OKAMŽITĚ po kliknutí na mapu, takže tohle míchání
+dvou různých způsobů ukládání na jednom místě appka odstranila.
+Zároveň appka odstranila i zbylé mrtvé katalogové tlačítko "Uložit
+místo do katalogu" (appka ho ukazovala jen u výprav s plochou, což je
+teď appce jedno, appka plochu stejně nikde neukazuje ani neupravuje).
+"Místo" tlačítko appka přejmenovala na "Přesunout bod" a jeho stará
+funkce (otevření nabídky "Aktualizovat podle katalogu"/"+ Přidat/
+změnit místa") appka nahradila přímým přesunem -- staré funkce
+(openLocationMenu, locationActionMenuFor panel) appka ponechala jako
+mrtvý, nedosažitelný kód (nic už je nevolá).
+
+BODY 1 A 3 ZE STARŠÍHO SEZNAMU ZJEDNODUŠENÍ:
+1. HOTOVO (tahle dávka): ruční pole počasí (teplota/tlak/vítr/popis)
+   ve formuláři NOVÉ výpravy appka schovala za přepínač "Upřesnit
+   ručně" -- appka je natáhne automaticky sama, ruční pole appka
+   ukáže, jen když appka na tlačítko klikne. Appka je navíc SAMA
+   odkryje, pokud automatické natažení počasí selže (uživatel je
+   pak potřebuje vyplnit ručně, appka mu je nenechá schované).
+3. UŽ SPLNĚNO (žádná změna nebyla potřeba): appka nikdy nevynucovala
+   vyplnění nástrahy -- při ukládání appka prázdné pole jednoduše
+   přeskočí (žádná HTML required, žádná validace). Bylo to nepovinné
+   už od začátku, appka jen pole vizuálně ukazovala.

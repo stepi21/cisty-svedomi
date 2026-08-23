@@ -2187,6 +2187,18 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setPlacementTarget('relocate-session-point')
   }
 
+  // Přesun bodu appka nabízí rovnou na kartě výpravy, ne uvnitř editace
+  // ostatních polí (datum, počasí...) -- ty appka ukládá až tlačítkem
+  // "Uložit změny", kdežto přesun bodu appka ukládá OKAMŽITĚ po kliknutí
+  // na mapu. Kdyby appka tohle nechala uvnitř editačního formuláře,
+  // vzniklo by matoucí míchání dvou různých způsobů ukládání na jednom
+  // místě -- takhle jsou od sebe jasně oddělené.
+  function startRelocateFromCard(session) {
+    relocateSessionIdRef.current = session.id
+    setMobileSheetOpen(false)
+    setPlacementTarget('relocate-session-point')
+  }
+
   // Appka umožní přidat nový prut k UŽ ULOŽENÉ výpravě -- na rozdíl od
   // "+ další prut" ve formuláři nové výpravy (co existuje jen PŘED
   // uložením), tohle appka nabízí přímo v detailu hotové výpravy.
@@ -2981,10 +2993,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   <h3>Podmínky</h3>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button className="new-btn" onClick={() => duplicateSession(activeSession)}><IconDuplicate size={13} /> Nová jako tahle</button>
-                    {activeSession.area && (activeSession.session_locations || []).length === 0 && (
-                      <button className="new-btn" onClick={() => startSaveLocation(activeSession)}><IconBookmark size={13} /> Uložit místo do katalogu</button>
-                    )}
-                    {canEdit && <button className="new-btn" onClick={() => openLocationMenu(activeSession)}><IconRevir size={13} /> Místo</button>}
+                    {canEdit && <button className="new-btn" onClick={() => startRelocateFromCard(activeSession)}><IconRevir size={13} /> Přesunout bod</button>}
                     {canEdit && <button className="new-btn" onClick={() => startEditSession(activeSession)}><IconEdit size={13} /> Upravit výpravu</button>}
                   </div>
                 </div>
@@ -4258,9 +4267,6 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
               </div>
             </div>
             <p className="hint-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><IconMoonPhase phase={moonPhaseName(draft.date)} size={13} /> {moonPhaseName(draft.date)}</p>
-            <button type="button" className="new-btn" onClick={onRelocate} style={{ marginBottom: 10 }}>
-              <IconMapEdit size={13} /> Přesunout bod na břehu na mapě
-            </button>
 
             <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy}>
               {weatherBusy ? 'Zjišťuji…' : <><IconRefresh size={13} /> Přepočítat podmínky pro nové datum</>}
@@ -4488,6 +4494,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
   const [busy, setBusy] = useState(false)
   const [weatherBusy, setWeatherBusy] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
+  const [showManualWeather, setShowManualWeather] = useState(false)
 
   function set(field, value) { setDraft((d) => ({ ...d, [field]: value })) }
   function setRod(i, field, value) {
@@ -4540,6 +4547,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
       setDraft((d) => ({ ...d, temp: w.temp, pressure: w.pressure, pressureTrend: w.pressureTrend, wind: w.wind, desc: w.desc }))
     } catch (e) {
       setWeatherError(e.message)
+      setShowManualWeather(true)
     }
     try {
       const stations = resolveHydroStations(draft.linkedLocationIds, locationsCatalog)
@@ -4674,22 +4682,29 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
             )}
             {draft.date && <p className="hint-text" style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}><IconMoonPhase phase={moonPhaseName(draft.date)} size={13} /> {moonPhaseName(draft.date)}</p>}
 
-            <div className="input-row" style={{ marginTop: 10 }}>
-              <div>
-                <label className="field-label">Teplota °C</label>
-                <input className="text-input" type="number" value={draft.temp} onChange={(e) => set('temp', e.target.value)} />
-              </div>
-              <div>
-                <label className="field-label">Tlak hPa</label>
-                <input className="text-input" type="number" value={draft.pressure} onChange={(e) => set('pressure', e.target.value)} />
-              </div>
-              <div>
-                <label className="field-label">Vítr</label>
-                <input className="text-input" value={draft.wind} onChange={(e) => set('wind', e.target.value)} placeholder="3 m/s SV" />
-              </div>
-            </div>
-            <label className="field-label">Popis počasí</label>
-            <input className="text-input" value={draft.desc} onChange={(e) => set('desc', e.target.value)} placeholder="jasno, ráno mlha" />
+            <button type="button" className="new-btn" onClick={() => setShowManualWeather((v) => !v)} style={{ marginTop: 6 }}>
+              {showManualWeather ? 'Skrýt ruční upřesnění' : 'Upřesnit ručně'}
+            </button>
+            {showManualWeather && (
+              <>
+                <div className="input-row" style={{ marginTop: 10 }}>
+                  <div>
+                    <label className="field-label">Teplota °C</label>
+                    <input className="text-input" type="number" value={draft.temp} onChange={(e) => set('temp', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="field-label">Tlak hPa</label>
+                    <input className="text-input" type="number" value={draft.pressure} onChange={(e) => set('pressure', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="field-label">Vítr</label>
+                    <input className="text-input" value={draft.wind} onChange={(e) => set('wind', e.target.value)} placeholder="3 m/s SV" />
+                  </div>
+                </div>
+                <label className="field-label">Popis počasí</label>
+                <input className="text-input" value={draft.desc} onChange={(e) => set('desc', e.target.value)} placeholder="jasno, ráno mlha" />
+              </>
+            )}
 
             <label className="field-label">{LURE_TYPES.includes(draft.type) ? 'Místa' : 'Pruty'}</label>
             {draft.rods.map((r, i) => (
