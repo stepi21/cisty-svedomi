@@ -402,6 +402,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   useEffect(() => { activeSessionRef.current = activeSession }, [activeSession])
   const relocateSessionIdRef = useRef(null)
   const relocateCatchIdRef = useRef(null)
+  const addRodToSessionRef = useRef(null) // {sessionId, type} -- výprava, ke které appka přidává nový prut/místo (funguje i u už uložené výpravy)
   const pendingMapFocusRef = useRef(null)
 
   function filteredCatches(session) {
@@ -496,6 +497,24 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           await supabase.from('rods').update({ lat: point.lat, lng: point.lng }).eq('id', firstRod.id)
         }
         loadSessions()
+      })()
+      return
+    }
+
+    if (target === 'add-rod-to-session') {
+      setPlacementTarget(null)
+      const info = addRodToSessionRef.current
+      addRodToSessionRef.current = null
+      if (!info) return
+      ;(async () => {
+        const label = LURE_TYPES.includes(info.type) ? 'Místo' : 'Prut'
+        const existingCount = (sessions.find((s) => s.id === info.sessionId)?.rods || []).length
+        const { error } = await supabase.from('rods').insert({
+          session_id: info.sessionId, group_id: groupId, name: `${label} ${existingCount + 1}`,
+          lat: point.lat, lng: point.lng, baits: [],
+        })
+        if (error) { alert(error.message); return }
+        await loadSessions()
       })()
       return
     }
@@ -2156,6 +2175,19 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setPlacementTarget('relocate-session-point')
   }
 
+  // Appka umožní přidat nový prut/místo k UŽ ULOŽENÉ výpravě -- na rozdíl
+  // od "+ další místo" ve formuláři nové výpravy (co existuje jen PŘED
+  // uložením), tohle appka nabízí přímo v detailu hotové výpravy. Hodí se
+  // hlavně u starých přívlačových výprav se zrušenou plochou -- appka jim
+  // tak dá cestu přejít na nový bodový systém míst, aniž by musely zpátky
+  // přes katalog/ruční kreslení/auto-tvar, co appka u nových výprav
+  // odstranila.
+  function startAddRodToSession(session) {
+    addRodToSessionRef.current = { sessionId: session.id, type: session.type }
+    setMobileSheetOpen(false)
+    setPlacementTarget('add-rod-to-session')
+  }
+
   function startManageAreas(session) {
     setEditingAreasSession({ id: session.id, areas: normalizeSessionAreas(session.area) })
     setEditingSession(null)
@@ -2454,7 +2486,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return `${prefix}${visibleSessions.length} výprav · ${catchCount} úlovků`
   }
 
-  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'shore-point-click' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || placementTarget === 'new-location-point' || areaDraft || riverLineDraft || rodPointsDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
+  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'shore-point-click' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || placementTarget === 'new-location-point' || placementTarget === 'add-rod-to-session' || areaDraft || riverLineDraft || rodPointsDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
 
   // --- postranní panel/mobilní lišta v režimu "🗺 Mapa" — přepínatelné vrstvy + hledání míst ---
   // --- panel "Měrné stanice" (☰ Více) -- appka ukáže stanice ČHМÚ nejblíž
@@ -2975,7 +3007,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 </div>
               </div>
               <div className="det-block">
-                <h3>{LURE_TYPES.includes(activeSession.type) ? 'Místa a nástrahy' : 'Pruty a nástrahy'}</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <h3>{LURE_TYPES.includes(activeSession.type) ? 'Místa a nástrahy' : 'Pruty a nástrahy'}</h3>
+                  {canEdit && (
+                    <button className="new-btn" onClick={() => startAddRodToSession(activeSession)}>
+                      + {LURE_TYPES.includes(activeSession.type) ? 'Přidat místo' : 'Přidat prut'}
+                    </button>
+                  )}
+                </div>
                 {(activeSession.rods || []).map((r, i) => (
                   editingRodId === r.id && canEdit ? (
                     <RodEditRow
@@ -3518,6 +3557,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             <div className="place-hint">
               Klikni na mapu, kam přesunout výpravu.
               <button className="ticket-close" onClick={() => setPlacementTarget(null)}><IconClose size={16} /></button>
+            </div>
+          )}
+
+          {placementTarget === 'add-rod-to-session' && (
+            <div className="place-hint">
+              Klikni na mapu pro pozici {LURE_TYPES.includes(addRodToSessionRef.current?.type) ? 'nového místa' : 'nového prutu'}.
+              <button className="ticket-close" onClick={() => { setPlacementTarget(null); addRodToSessionRef.current = null }}><IconClose size={16} /></button>
             </div>
           )}
 

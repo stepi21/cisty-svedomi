@@ -1115,3 +1115,17 @@ jménem. Tenhle typ složeného jména navíc appka už NEMŮŽE nově vytvořit
 (starý flow "vyber víc míst z katalogu najednou" u přívlače appka
 odstranila), takže je to ohraničená, nerostoucí historická drobnost,
 ne rostoucí problém.
+
+NOVÁ FUNKCE (mezera zjištěná v provozu): "+ Přidat prut/místo" k UŽ
+ULOŽENÉ výpravě -- appka dřív uměla nový prut/místo přidat jen PŘED
+uložením (formulář nové výpravy), ne u výpravy, co už existuje. Bez
+tohohle neměl uživatel žádnou cestu, jak starou přívlačovou výpravu
+(po smazání staré plochy přes "Upravit oblasti") převést na nový
+bodový systém míst -- appka ho jinak nutila zpátky přes katalog/ruční
+kreslení/auto-tvar, přesně to, co appka u nových výprav odstranila.
+Řešení: nové tlačítko "+ Přidat prut"/"+ Přidat místo" přímo v
+detailu výpravy (sekce "Pruty a nástrahy"/"Místa a nástrahy", viditelné
+jen pro autora výpravy). Klik appka nechá kliknout bod na mapě
+(placementTarget 'add-rod-to-session', nový addRodToSessionRef),
+appka rovnou vloží nový řádek do tabulky rods se správným pojmenováním
+podle typu (Místo/Prut, pokračuje v číslování za existujícími).
