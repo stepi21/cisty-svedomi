@@ -1040,3 +1040,25 @@ aktuální vodní stav" přesunout čistě pod ☰ Více -> Měrné stanice
 výpravy (findNearestHistoryMatches) zůstává beze změny, jen appka ji
 NEUKAZUJE jako browsovatelnou vrstvu. Než se implementuje, čeká se na
 jasné ano/ne od uživatele.
+
+REVÍRY JAKO VRSTVA NA MAPĚ -- ODSTRANĚNO (potvrzeno uživatelem)
+------------------------------------------------------------------
+Podle výslovného přání appka zrušila celou "Revíry" vrstvu na Mapě --
+žádné oranžové tečky, žádná karta s vodním stavem, žádné vyhledávací
+pole, žádný checkbox. Odstraněné funkce: computeRevirGroups,
+extractRiverName, openRevirCard, loadRevirConditions, renderRevirCard,
+včetně souvisejícího stavu (openRevirGroup, revirConditions,
+revirStationOptions, showRevirStationPicker). mapLayers appka
+zjednodušila na 4 vrstvy (myTrips, partyTrips, myCatches, partyCatches),
+"locations" pole odstraněno. Mapa teď ukazuje jen Výpravy a Úlovky.
+
+Appka POŘÁD používá koncept "revíru" jako TICHOU nápovědu při zakládání
+výpravy (findNearestHistoryMatches, GPS flow) -- to zůstalo beze změny,
+je to samostatná, nezávislá funkce. Jen appka revír přestala nabízet
+jako SAMOSTATNĚ PROHLÍŽENOU věc.
+
+"Zjistit aktuální vodní stav" appka nechala JEN pod ☰ Více -> Měrné
+stanice (appka tam tuhle funkci měla už dřív, nezávisle na revírech).
+riverNameHint parametr ve findNearestStations (hydrology.js) zůstal
+v kódu nepoužitý (harmless) -- appka ho momentálně nikde nevolá s
+vyplněnou hodnotou, ale je k dispozici, kdyby se hodil později.

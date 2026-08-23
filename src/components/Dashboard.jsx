@@ -115,11 +115,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [viewMode, setViewMode] = useState('aggregate') // 'aggregate' | 'detail'
   const [myProfile, setMyProfile] = useState(profile)
   const [showNotifications, setShowNotifications] = useState(false)
-  const [mapLayers, setMapLayers] = useState({ myTrips: true, partyTrips: false, myCatches: true, partyCatches: true, locations: true })
-  const [openRevirGroup, setOpenRevirGroup] = useState(null) // vybraný "počítaný revír" (skupina výprav podle jména) -- appka ho nikde neukládá, spočítá znovu při každém otevření
-  const [revirConditions, setRevirConditions] = useState({}) // cache aktuálního vodního stavu podle klíče skupiny -- appka ho natáhne až na vyžádání
-  const [revirStationOptions, setRevirStationOptions] = useState({}) // cache nabídnutých stanic podle klíče skupiny -- pro ruční "Změnit stanici"
-  const [showRevirStationPicker, setShowRevirStationPicker] = useState(false)
+  const [mapLayers, setMapLayers] = useState({ myTrips: true, partyTrips: false, myCatches: true, partyCatches: true })
   const [stationsList, setStationsList] = useState(null) // null = ještě nenačteno
   const [stationsLoading, setStationsLoading] = useState(false)
   const [expandedStationId, setExpandedStationId] = useState(null)
@@ -1035,20 +1031,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     aggregateClusterLayer.current.clearLayers()
     tripsClusterLayer.current.clearLayers()
     const bounds = []
-
-    if (mapLayers.locations) {
-      // "Revír" appka teď kreslí jako POČÍTANOU skupinu (jméno výpravy je
-      // zdroj pravdy), ne přímo z katalogové tabulky -- viz computeRevirGroups.
-      // Stará katalogová data appka nezahazuje, jsou zapojená do stejného
-      // seskupení (viz funkce), takže appka o nic nepřijde.
-      computeRevirGroups().forEach((g) => {
-        L.circleMarker([g.point.lat, g.point.lng], { radius: 8, color: '#B97F35', weight: 2, fillColor: '#D9A054', fillOpacity: 0.8 })
-          .bindPopup(`${g.name}${g.revir ? ` (${g.revir})` : ''}`)
-          .on('click', () => openRevirCard(g))
-          .addTo(markersLayer.current)
-        bounds.push([g.point.lat, g.point.lng])
-      })
-    }
 
     if (mapLayers.myTrips || mapLayers.partyTrips) {
       sessions.forEach((s) => {
@@ -2536,168 +2518,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     )
   }
 
-  // --- "revír" appka počítá za běhu z historie výprav, katalog míst
-  // (`locations` tabulka) přestává být zdrojem pravdy pro NOVÉ výpravy.
-  // Stará katalogová data appka NEZAHAZUJE -- zapojí je do stejného
-  // seskupení (appka tak nepřijde o revír/plochu zapsanou dřív, i kdyby
-  // k němu ještě neexistovala žádná výprava), jen appka poklidně
-  // přechází na to, že jméno výpravy je ten skutečný zdroj pravdy.
-  // Odvodí jméno řeky ze jména revíru/výpravy -- oficiální jména revírů
-  // konvenčně začínají jménem řeky ("Labe 18", "Jizera - most"), appka
-  // vezme první slovo před případnou pomlčkou. Použije se jako nápověda
-  // appce ČHМÚ stanic, ať appka upřednostní stanici na SPRÁVNÉ řece.
-  function extractRiverName(name) {
-    if (!name) return null
-    const beforeDash = name.split(/[-–]/)[0].trim()
-    return beforeDash.split(/\s+/)[0] || null
-  }
-
-  function computeRevirGroups() {
-    const groups = new Map() // klíč: normalizované jméno
-
-    function ensureGroup(name) {
-      const key = normalizeSearchText(name)
-      if (!key) return null
-      if (!groups.has(key)) groups.set(key, { key, name, revir: '', points: [], sessions: [], legacyLocation: null })
-      return groups.get(key)
-    }
-
-    sessions.forEach((s) => {
-      const g = ensureGroup(s.title)
-      if (!g) return
-      if (s.revir && !g.revir) g.revir = s.revir
-      if (s.lat != null && s.lng != null) g.points.push({ lat: s.lat, lng: s.lng })
-      g.sessions.push(s)
-    })
-
-    // Velké úseky pro loďky appka do počítaných revírů nezahrnuje --
-    // stejný důvod jako u findNearestHistoryMatches, appka by jinak
-    // ukázala jednu obří tečku místo desítek konkrétních malých míst.
-    locationsCatalog.filter((l) => l.scope !== 'reach').forEach((l) => {
-      const g = ensureGroup(l.name)
-      if (!g) return
-      if (l.revir && !g.revir) g.revir = l.revir
-      if (l.lat != null && l.lng != null) g.points.push({ lat: l.lat, lng: l.lng })
-      if (!g.legacyLocation) g.legacyLocation = l
-    })
-
-    return Array.from(groups.values())
-      .map((g) => {
-        if (g.points.length === 0) return null
-        const point = {
-          lat: g.points.reduce((sum, p) => sum + p.lat, 0) / g.points.length,
-          lng: g.points.reduce((sum, p) => sum + p.lng, 0) / g.points.length,
-        }
-        const catches = []
-        g.sessions.forEach((s) => (s.catches || []).forEach((c) => catches.push({ ...c, sessionRef: s })))
-        return { ...g, point, catches }
-      })
-      .filter(Boolean)
-  }
-
-  function openRevirCard(group) {
-    setShowRevirStationPicker(false)
-    setOpenRevirGroup(group)
-  }
-
-  async function loadRevirConditions(group, forceStationId = null) {
-    if (!forceStationId && revirConditions[group.key] !== undefined) return
-    setRevirConditions((prev) => ({ ...prev, [group.key]: null }))
-    try {
-      const stations = await findNearestStations(group.point.lat, group.point.lng, 6, extractRiverName(group.name))
-      setRevirStationOptions((prev) => ({ ...prev, [group.key]: stations }))
-      if (!stations?.length) { setRevirConditions((prev) => ({ ...prev, [group.key]: false })); return }
-      const chosen = forceStationId ? stations.find((s) => s.objID === forceStationId) || stations[0] : stations[0]
-      const cond = await fetchLiveConditions(chosen.objID)
-      setRevirConditions((prev) => ({ ...prev, [group.key]: cond ? { ...cond, stationName: chosen.name, stationId: chosen.objID } : false }))
-    } catch {
-      setRevirConditions((prev) => ({ ...prev, [group.key]: false }))
-    }
-  }
-
-  function renderRevirCard() {
-    const g = openRevirGroup
-    if (!g) return null
-    const cond = revirConditions[g.key]
-    const sortedSessions = [...g.sessions].sort((a, b) => (b.session_date || '').localeCompare(a.session_date || ''))
-    return (
-      <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && setOpenRevirGroup(null)}>
-        <div className="ticket" style={{ maxWidth: 440 }}>
-          <div className="ticket-top">
-            <button className="ticket-close" onClick={() => setOpenRevirGroup(null)}><IconClose size={16} /></button>
-            <div className="eyebrow">Místo</div>
-            <h2>{g.name}</h2>
-            {g.revir && <div className="catcher-sub">Revír: {g.revir}</div>}
-          </div>
-          <div className="perforation"></div>
-          <div className="ticket-body">
-            {cond === undefined && (
-              <button className="new-btn" onClick={() => loadRevirConditions(g)}>Zjistit aktuální vodní stav</button>
-            )}
-            {cond === null && <p className="hint-text">Zjišťuji…</p>}
-            {cond === false && <p className="hint-text">Pro tohle místo se nepodařilo najít aktuální data.</p>}
-            {cond && (
-              <div className="weather-row" style={{ marginBottom: 4 }}>
-                {cond.level_cm != null && <div className="w-item"><div className="num">{cond.level_cm} cm</div><div className="lab">vodní stav</div></div>}
-                {cond.flow_m3s != null && <div className="w-item"><div className="num">{cond.flow_m3s} m³/s</div><div className="lab">průtok</div></div>}
-                {cond.temp_c != null && <div className="w-item"><div className="num">{cond.temp_c}°C</div><div className="lab">teplota vody</div></div>}
-                {cond.spa_level != null && SPA_LEVEL_INFO[cond.spa_level] && (
-                  <div className="w-item"><div className="num">{SPA_LEVEL_INFO[cond.spa_level].icon}</div><div className="lab">{SPA_LEVEL_INFO[cond.spa_level].label}</div></div>
-                )}
-                <div className="c-sub" style={{ width: '100%', marginTop: 4 }}>stanice {cond.stationName}</div>
-              </div>
-            )}
-            {cond && (
-              <button className="new-btn" style={{ marginBottom: 12 }} onClick={() => setShowRevirStationPicker((v) => !v)}>
-                {showRevirStationPicker ? 'Zavřít výběr stanice' : 'Změnit stanici'}
-              </button>
-            )}
-            {showRevirStationPicker && (
-              <div style={{ maxHeight: 140, overflowY: 'auto', background: 'var(--paper)', borderRadius: 8, padding: 6, marginBottom: 12 }}>
-                {(revirStationOptions[g.key] || []).map((st) => (
-                  <div key={st.objID} className="rod-edit-row" style={{ justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 12.5 }}>{st.name} <span className="c-sub">({st.stream}, {st.distanceKm.toFixed(1)} km)</span></span>
-                    <button
-                      className="new-btn"
-                      onClick={() => { setShowRevirStationPicker(false); setRevirConditions((prev) => { const n = { ...prev }; delete n[g.key]; return n }); loadRevirConditions(g, st.objID) }}
-                    >Vybrat</button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>
-              {g.catches.length === 0 ? 'Zatím na tomto místě nic nechyceno.' : `${g.catches.length} chycených ryb na tomto místě`}
-            </p>
-
-            {sortedSessions.length > 0 && (
-              <div className="catch-list" style={{ maxHeight: 220, marginTop: 8 }}>
-                {sortedSessions.map((s) => (
-                  <div key={s.id} className="record-row" onClick={() => { setOpenRevirGroup(null); setActivePanel(null); setActiveId(s.id); setViewMode('detail') }}>
-                    <div className="record-head"><strong>{s.title}</strong><span className="c-sub">{s.session_date}</span></div>
-                    <div className="c-sub">{userName(s.user_id)} · {(s.catches || []).length} úlovky</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {g.legacyLocation && (
-              <button
-                className="new-btn" style={{ marginTop: 12 }}
-                onClick={() => { setOpenRevirGroup(null); setLocationsReturnId(g.legacyLocation.id); setBaitsInitialKey(null); setShowLocations(true) }}
-              >Upravit v katalogu (starší tvary/revír)</button>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   function renderMapControls() {
-    const q = normalizeSearchText(searchQuery)
-    const results = q
-      ? computeRevirGroups().filter((g) => normalizeSearchText(g.name).includes(q) || normalizeSearchText(g.revir).includes(q))
-      : []
     return (
       <>
         <div className="sb-head"><span>Mapa</span></div>
@@ -2718,38 +2540,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             <input type="checkbox" checked={mapLayers.partyCatches} onChange={(e) => setMapLayers((p) => ({ ...p, partyCatches: e.target.checked }))} />
             <span>Úlovky party</span>
           </label>
-          <label className="location-check-row">
-            <input type="checkbox" checked={mapLayers.locations} onChange={(e) => setMapLayers((p) => ({ ...p, locations: e.target.checked }))} />
-            <span>Revíry</span>
-          </label>
         </div>
-        <div style={{ padding: '0 18px 10px', position: 'relative' }}>
-          <span style={{ position: 'absolute', left: 28, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-soft)', display: 'flex', pointerEvents: 'none' }}>
-            <IconSearch size={15} />
-          </span>
-          <input
-            className="text-input"
-            style={{ paddingLeft: 34 }}
-            placeholder="Hledat revír (jméno, číslo)…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-        {q && (
-          results.length === 0 ? (
-            <div style={{ padding: '0 18px 10px', color: 'var(--ink-soft)', fontSize: 13 }}>Nic nenalezeno.</div>
-          ) : (
-            results.map((g) => (
-              <div
-                key={g.key} className="record-row"
-                onClick={() => { setSearchQuery(''); mapInstance.current?.setView([g.point.lat, g.point.lng], 16); openRevirCard(g) }}
-              >
-                <div className="record-head"><strong>{g.name}</strong></div>
-                {g.revir && <div className="c-sub">{g.revir}</div>}
-              </div>
-            ))
-          )
-        )}
       </>
     )
   }
@@ -3870,8 +3661,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onOpenSession={(sessionId) => { setShowBaits(false); setBaitsStartAdding(false); setActivePanel(null); setActiveId(sessionId); setViewMode('detail') }}
         />
       )}
-
-      {openRevirGroup && renderRevirCard()}
 
       {showLocations && (
         <LocationsModal
