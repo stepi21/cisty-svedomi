@@ -1995,7 +1995,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       waterStationName: s.water_station_name || null, waterPrecision: s.water_data_precision || null, waterSpaLevel: s.water_spa_level ?? null,
       waterStations: s.water_stations || null,
       linkedLocationIds: (s.session_locations || []).map((sl) => sl.location_id),
-      lat: s.lat, lng: s.lng,
+      lat: s.lat, lng: s.lng, area: s.area,
     })
   }
 
@@ -3206,7 +3206,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{LURE_TYPES.includes(activeSession.type) ? 'Bez míst' : 'Bez prutů'}</div>
                 )}
                 <div className="coord-list">
-                  {AREA_TYPES.includes(activeSession.type) ? (
+                  {normalizeSessionAreas(activeSession.area).length > 0 ? (
                     normalizeSessionAreas(activeSession.area).map((entry, i) => {
                       const pts = entry.points
                       const c = areaCentroid(pts)
@@ -4388,7 +4388,7 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
               </div>
             </div>
             <p className="hint-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><IconMoonPhase phase={moonPhaseName(draft.date)} size={13} /> {moonPhaseName(draft.date)}</p>
-            {AREA_TYPES.includes(draft.type) ? (
+            {Array.isArray(draft.area) && draft.area.length > 0 ? (
               <button type="button" className="new-btn" onClick={onManageAreas} style={{ marginBottom: 10 }}>
                 <IconMapEdit size={13} /> Upravit oblasti (přidat / smazat)
               </button>

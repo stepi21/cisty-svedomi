@@ -769,11 +769,34 @@ CELKOVÝ PLÁN (pro orientaci, i to, co ještě NENÍ hotové):
    (stejný bezpečný vzor jako úlovky) -- plugin leaflet.markercluster
    je stavěný na L.Marker, s L.CircleMarker by nemuselo shlukování
    spolehlivě fungovat.
-6. NEHOTOVO: úklid -- pokud se ukáže, že appka auto-tvar podle břehu
-   (riverShape.js, overpass-proxy, turf.js závislost) v novém modelu
-   vůbec nepotřebuje, odstranit. Zatím NEODSTRAŇOVÁNO -- staré výpravy
-   s dřív nakreslenými plochami by o svá data přišly, řeší se, až
-   bude jasné, jak appka bude se starými plochami zacházet.
+6. PŘEHODNOCENO (na základě důkladné kontroly, ne provedeno jak bylo
+   plánováno): úklid nepotřebného kódu (riverShape.js, overpass-proxy,
+   turf.js) appka NEODSTRAŇUJE -- ukázalo se, že jsou pořád legitimně
+   dosažitelné a potřebné pro STARÉ přívlačové výpravy/místa s reálně
+   uloženou plochou přes "Upravit oblasti" -> "+ Přidat oblast" ->
+   "Podle břehu (auto)". Smazání by tuhle funkci pro stará data rozbilo
+   -- v rozporu s tím, že appka se záměrně rozhodla stará data
+   nezničit, jen změnit, jak se zapisují NOVÁ.
+   MÍSTO TOHO NALEZENO A OPRAVENO (skutečná regrese, vznikla dřív při
+   vyprázdnění AREA_TYPES, projevila se až teď): dvě místa appka
+   rozhodovala "ukázat plochu, nebo pruty?" podle TYPU výpravy
+   (AREA_TYPES.includes(session.type)), ne podle toho, jestli výprava
+   SKUTEČNĚ má uloženou plochu. Protože AREA_TYPES je teď prázdné, appka
+   by u STARÝCH přívlačových výprav s reálnou plochou:
+   (a) v detailním coord-listu ukázala PRÁZDNÝ seznam míst místo
+       klikatelných "Oblast 1, 2..." (appka renderovala podle typu,
+       ne podle dat) -- opraveno na normalizeSessionAreas(...).length > 0.
+   (b) v editaci výpravy nabídla "Přesunout bod na břehu" místo
+       "Upravit oblasti" -- ztráta možnosti starou plochu upravit.
+       Opraveno na Array.isArray(draft.area) && draft.area.length > 0
+       -- draft objekt navíc předtím vůbec NEOBSAHOVAL pole area
+       (startEditSession ho nekopírovala ze session), doplněno.
+   Obě opravy appku vrátily do stavu, kdy staré přívlačové výpravy s
+   reálnou plochou zase správně ukazují a umožňují upravovat svou
+   plochu, nezávisle na tom, že AREA_TYPES je teď prázdné pro nové
+   zápisy. Toto je typ chyby, na kterou je potřeba dávat pozor i
+   napříště -- kontrola "podle typu" místo "podle skutečných dat" je
+   riziková vždycky, když appka mění, co který typ znamená.
 7. NEHOTOVO: migrace starých dat -- appka NEBUDE nic chytře
    přepočítávat automaticky. Staré výpravy si ponechají dnešní
    sessions.lat/lng jako aproximaci nového "bodu na břehu" -- uživatel
