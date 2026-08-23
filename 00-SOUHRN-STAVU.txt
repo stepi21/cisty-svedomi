@@ -1099,3 +1099,19 @@ břehu na mapě" appka u nových přívlačových výprav (bez uložené
 plochy) zobrazuje správně už od dřívější opravy (Array.isArray(draft.area)
 kontrola) -- uživatel se jen ptal, jestli existuje, appka ho jen dřív
 nenašel v ✏️ Upravit výpravu.
+
+DISKUZE: staré výpravy se SLOŽENÝM jménem ze dvou katalogových míst
+("Jizera - hřiště, Dousa") -- appka je neumí zpětně rozdělit na dvě
+samostatná místa (a nemá to ani řešit -- je to jen jedno jméno pro
+appku). Appka ALE hledá i v katalogu, ne jen ve výpravách -- původní
+JEDNOTLIVÁ místa ("Jizera - hřiště" zvlášť) appka pořád nabízí jako
+samostatnou možnost vedle složeného jména, pokud jsou obě dost blízko.
+Zvýšeno maxResults z 2 na 3, ať appka dá jednotlivému místu větší šanci
+se vejít do nabídky vedle staršího složeného jména. Appka nikdy
+NEROZHODUJE sama -- pokud jednou nabídne špatné (složené) jméno,
+uživatel ho může vždycky ignorovat a napsat jednotlivé jméno ručně;
+od tý chvíle appka staví NOVOU, čistou historii pod tím správným
+jménem. Tenhle typ složeného jména navíc appka už NEMŮŽE nově vytvořit
+(starý flow "vyber víc míst z katalogu najednou" u přívlače appka
+odstranila), takže je to ohraničená, nerostoucí historická drobnost,
+ne rostoucí problém.

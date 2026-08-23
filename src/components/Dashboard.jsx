@@ -702,7 +702,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // appka ukáže jen nejbližší výskyt každého odlišného jména (kvůli
   // soutokům/blízkým, ale odlišným místům appka nikdy nerozhoduje sama --
   // jen nabídne na výběr, poslední slovo má vždycky člověk).
-  function findNearestHistoryMatches(point, maxDistanceMeters = 800, maxResults = 2) {
+  function findNearestHistoryMatches(point, maxDistanceMeters = 800, maxResults = 3) {
     const named = []
 
     // Velké úseky pro loďky (scope 'reach') appka do nabídky vůbec
