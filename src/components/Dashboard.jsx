@@ -4569,6 +4569,28 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
       rods: [...d.rods, { name: `${label} ${d.rods.length + 1}`, lat: d.point.lat, lng: d.point.lng, baits: [{ name: '', photoFile: null }] }],
     }))
   }
+  // U přívlače appka nabízí přidání dalšího místa rovnou přes GPS (appka
+  // ho nemusí ručně klikat na mapě) -- appka to hodí do stejného pole
+  // rods, jen appka nedává žádnou nástrahu (ta zůstává jen jedna, u
+  // prvního záznamu -- appka to tak drží konzistentně s detailem už
+  // uložené výpravy, viz "Nástraha" + "Další místa" sekce tam).
+  function addRodViaGps() {
+    if (!navigator.geolocation) { alert('Tento prohlížeč neumí zjistit polohu.'); return }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const point = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        setDraft((d) => ({
+          ...d,
+          rods: [...d.rods, { name: `Místo ${d.rods.length + 1}`, lat: point.lat, lng: point.lng, baits: [] }],
+        }))
+      },
+      () => alert('Nepodařilo se zjistit polohu. Zkontroluj, že appka má povolení k lokaci.'),
+      { enableHighAccuracy: true, timeout: 8000 }
+    )
+  }
+  function removeRod(index) {
+    setDraft((d) => ({ ...d, rods: d.rods.filter((_, i) => i !== index) }))
+  }
   function updateBait(rodIndex, baitIndex, field, value) {
     setDraft((d) => {
       const rods = [...d.rods]
@@ -4765,35 +4787,60 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
               </>
             )}
 
-            <label className="field-label">{LURE_TYPES.includes(draft.type) ? 'Místa' : 'Pruty'}</label>
-            {draft.rods.map((r, i) => (
-              <div key={i} className="rod-edit-block">
-                <input className="text-input" value={r.name} onChange={(e) => setRod(i, 'name', e.target.value)} placeholder={LURE_TYPES.includes(draft.type) ? 'Místo 1' : 'Prut 1'} style={{ marginBottom: 8 }} />
-                {r.baits.map((b, bi) => (
-                  <div key={bi} className="bait-edit-row">
-                    <BaitPicker
-                      value={b.name}
-                      category={baitCategory}
-                      catalog={baitCatalog}
-                      onChange={(name) => updateBait(i, bi, 'name', name)}
-                      onAddBait={onAddBait}
-                      placeholder="nástraha"
-                    />
-                    <label className="photo-label">
-                      <IconCamera size={13} />{' '}{b.photoFile ? b.photoFile.name : (b.photo_url ? 'nalezeno z historie' : 'foto')}
-                      <input type="file" accept="image/*" hidden onChange={(e) => updateBait(i, bi, 'photoFile', e.target.files[0])} />
-                    </label>
-                    {b.photo_url && !b.photoFile && <img src={b.photo_url} alt="" className="bait-thumb" />}
-                    {r.baits.length > 1 && <button type="button" className="ticket-close" style={{ position: 'static', color: 'var(--ink-soft)' }} onClick={() => removeBait(i, bi)}><IconClose size={16} /></button>}
-                  </div>
-                ))}
-                <button type="button" className="new-btn" onClick={() => addBait(i)} style={{ marginTop: 4 }}>+ další nástraha</button>
-                <div className="rod-edit-row" style={{ marginTop: 8 }}>
-                  <button type="button" className="new-btn" onClick={() => onArmRod(i)}><IconRevir size={13} /> pozice na mapě: {r.lat.toFixed(4)}, {r.lng.toFixed(4)}</button>
+            <label className="field-label">{LURE_TYPES.includes(draft.type) ? 'Nástraha' : 'Pruty'}</label>
+            {draft.rods.map((r, i) => {
+              const isLure = LURE_TYPES.includes(draft.type)
+              if (isLure && i > 0) return null // další místa appka ukáže samostatně níž, žádná nástraha/jméno tam
+              return (
+                <div key={i} className="rod-edit-block">
+                  {!isLure && (
+                    <input className="text-input" value={r.name} onChange={(e) => setRod(i, 'name', e.target.value)} placeholder="Prut 1" style={{ marginBottom: 8 }} />
+                  )}
+                  {r.baits.map((b, bi) => (
+                    <div key={bi} className="bait-edit-row">
+                      <BaitPicker
+                        value={b.name}
+                        category={baitCategory}
+                        catalog={baitCatalog}
+                        onChange={(name) => updateBait(i, bi, 'name', name)}
+                        onAddBait={onAddBait}
+                        placeholder="nástraha"
+                      />
+                      <label className="photo-label">
+                        <IconCamera size={13} />{' '}{b.photoFile ? b.photoFile.name : (b.photo_url ? 'nalezeno z historie' : 'foto')}
+                        <input type="file" accept="image/*" hidden onChange={(e) => updateBait(i, bi, 'photoFile', e.target.files[0])} />
+                      </label>
+                      {b.photo_url && !b.photoFile && <img src={b.photo_url} alt="" className="bait-thumb" />}
+                      {r.baits.length > 1 && <button type="button" className="ticket-close" style={{ position: 'static', color: 'var(--ink-soft)' }} onClick={() => removeBait(i, bi)}><IconClose size={16} /></button>}
+                    </div>
+                  ))}
+                  <button type="button" className="new-btn" onClick={() => addBait(i)} style={{ marginTop: 4 }}>+ další nástraha</button>
+                  {!isLure && (
+                    <div className="rod-edit-row" style={{ marginTop: 8 }}>
+                      <button type="button" className="new-btn" onClick={() => onArmRod(i)}><IconRevir size={13} /> pozice na mapě: {r.lat.toFixed(4)}, {r.lng.toFixed(4)}</button>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
-            <button type="button" className="new-btn" onClick={addRod} style={{ marginBottom: 12 }}>+ {LURE_TYPES.includes(draft.type) ? 'další místo' : 'další prut'}</button>
+              )
+            })}
+
+            {LURE_TYPES.includes(draft.type) ? (
+              <>
+                {draft.rods.length > 1 && (
+                  <div className="coord-list" style={{ marginBottom: 8 }}>
+                    {draft.rods.slice(1).map((r, idx) => (
+                      <div key={idx + 1} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span className="coord-chip">{r.lat.toFixed(4)}, {r.lng.toFixed(4)}</span>
+                        <button type="button" className="ticket-close" style={{ position: 'static', color: 'var(--ink-soft)' }} onClick={() => removeRod(idx + 1)}><IconClose size={14} /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button type="button" className="new-btn" onClick={addRodViaGps} style={{ marginBottom: 12 }}>+ Další bod pomocí GPS</button>
+              </>
+            ) : (
+              <button type="button" className="new-btn" onClick={addRod} style={{ marginBottom: 12 }}>+ další prut</button>
+            )}
 
             <button className="btn-primary" type="submit" disabled={busy}>{busy ? 'Ukládám…' : 'Uložit výpravu'}</button>
           </form>

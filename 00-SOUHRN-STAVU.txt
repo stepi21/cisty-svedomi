@@ -1254,3 +1254,22 @@ appka ho nastaví na true těsně před vynulováním placementTarget po
 úspěšném relocate-session-point/add-rod-to-session, a mapový efekt
 ho jednorázově spotřebuje (přeskočí veškeré přeostřování, nechá mapu
 přesně tak, jak si ji uživatel sám přiblížil).
+
+DOPLNĚNO (na přání -- GPS tlačítko pro další místo i BĚHEM zakládání
+živé výpravy, ne jen dodatečně u už uložené): SessionFormPanel
+(formulář nové výpravy, appka ho ukazuje mezi umístěním bodu a
+uložením) dostal addRodViaGps -- appka zavolá navigator.geolocation
+přímo, žádný klik na mapu potřeba, appka rovnou přidá další místo do
+draft.rods. Tlačítko u přívlače přejmenováno na "+ Další bod pomocí
+GPS" (dřív "+ další místo", volalo jen addRod, co vyžadovalo ruční
+klik na mapu -- tohle zůstává zachované pro kapra, tam appka pozici
+prutů ve vodě chce naklikat).
+
+ZÁROVEŇ SJEDNOCENO: appka si všimla, že formulář NOVÉ výpravy pořád
+zobrazoval pruty/místa STARÝM způsobem (jméno, nástraha, pozice u
+KAŽDÉHO záznamu) i pro přívlač -- nekonzistentní s tím, jak appka
+mezitím zjednodušila DETAIL už uložené výpravy (Nástraha jen u
+prvního záznamu, Další místa jako position-only chipy). Formulář teď
+u přívlače ukazuje rods[0] jen jako "Nástraha" (žádné jméno, žádná
+pozice na mapě), rods[1+] appka ukazuje jako souřadnicové chipy se
+smazáním (removeRod). U kapra beze změny.
