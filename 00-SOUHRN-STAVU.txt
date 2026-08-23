@@ -1176,3 +1176,17 @@ pojmenovaných bodů. Appka místo toho:
    jen zbytečně duplikovala tu samou souřadnici jako klikatelný chip
    navíc. U kapra zůstává coord-list beze změny.
 
+
+DEFINITIVNÍ ZJEDNODUŠENÍ: appka u ŽÁDNÉ výpravy (ani staré s reálně
+uloženou plochou) už NIKDY nenabízí "Upravit oblasti" / "Jak přidat
+oblast?" (Z katalogu / Naklikat na mapě / Podle břehu). Appka VŽDY
+ukazuje jen jedno tlačítko -- "Přesunout bod na břehu na mapě" --
+klikneš, appka nechá kliknout JEDEN bod, hotovo. Podmínka
+Array.isArray(draft.area) odstraněna úplně, appka se teď rozhoduje
+POŘÁD stejně bez ohledu na to, jestli výprava má, nebo nemá starou
+plochu uloženou. Stará data appka NEMAŽE (zůstávají v DB, appka je
+jen nikde v UI znovu nezobrazí ani nenabídne upravit přes starý flow)
+-- konzistentní s tím, jak appka detail mapy dřív přepnula na "vždycky
+jen tečka" (viz zápis výše). Appka tak definitivně a jednotně u
+VŠECH výprav (staré i nové, kapr i přívlač) nabízí jen: jeden bod +
+u kapra k tomu pozice prutů. Nic víc.

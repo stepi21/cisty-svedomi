@@ -4258,15 +4258,9 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
               </div>
             </div>
             <p className="hint-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><IconMoonPhase phase={moonPhaseName(draft.date)} size={13} /> {moonPhaseName(draft.date)}</p>
-            {Array.isArray(draft.area) && draft.area.length > 0 ? (
-              <button type="button" className="new-btn" onClick={onManageAreas} style={{ marginBottom: 10 }}>
-                <IconMapEdit size={13} /> Upravit oblasti (přidat / smazat)
-              </button>
-            ) : (
-              <button type="button" className="new-btn" onClick={onRelocate} style={{ marginBottom: 10 }}>
-                <IconMapEdit size={13} /> Přesunout bod na břehu na mapě
-              </button>
-            )}
+            <button type="button" className="new-btn" onClick={onRelocate} style={{ marginBottom: 10 }}>
+              <IconMapEdit size={13} /> Přesunout bod na břehu na mapě
+            </button>
 
             <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy}>
               {weatherBusy ? 'Zjišťuji…' : <><IconRefresh size={13} /> Přepočítat podmínky pro nové datum</>}
