@@ -1013,3 +1013,30 @@ nechat mírně nekonzistentní. Vědomě neřešeno teď kvůli riziku/přínosu
 
 
 
+7. OPRAVA (na přání, zjištěno v provozu -- appka ukazovala matoucí
+   nekonzistenci "nová výprava = tečka, stará s plochou = vyšrafovaná
+   plocha" v detailu jedné konkrétní výpravy): appka teď v BĚŽNÉM
+   prohlížení (detail výpravy) VŽDY ukáže jen tečku (activeSession.lat/
+   lng, "kde jsem stál") -- bez ohledu na to, jestli výprava má, nebo
+   nemá uloženou starou plochu. Appka STARÁ DATA NEMAŽE ani nemění,
+   jen je PŘESTÁVÁ VYKRESLOVAT při běžném prohlížení -- při aktivní
+   editaci ("Upravit oblasti", viz bod 6 výše, pořád funguje) appka
+   plochu samozřejmě dál ukazuje, protože ji potřebuješ vidět, abys ji
+   mohl upravit. Coord-list ("Pruty a nástrahy"/"Místa a nástrahy")
+   appka zjednodušila stejným směrem -- ukazuje jen pruty/místa,
+   žádné "Oblast N" chipy. Funkce focusOnArea zůstala v kódu
+   nepoužitá (harmless dead code) -- žádné volání ji už nepotřebuje,
+   ponechána spíš než riskovat další úpravu navíc.
+
+PENDING ROZHODNUTÍ (navrženo, ČEKÁ NA POTVRZENÍ uživatele, NEIMPLEMENTOVÁNO):
+Uživatel se ptal, jestli appka opravdu chce mít samostatnou vrstvu
+"Revíry" na Mapě, když cílem bylo zrušit revír jako SAMOSTATNĚ
+PROHLÍŽENOU věc (mělo to být jen tichá nápověda jména/revíru při
+zakládání výpravy). Navrženo (čeká na odsouhlasení): (a) zrušit
+vrstvu "Revíry" na Mapě úplně (žádné oranžové tečky, žádná karta,
+žádné zaškrtávátko), mapa ukazuje jen Výpravy a Úlovky; (b) "Zjistit
+aktuální vodní stav" přesunout čistě pod ☰ Více -> Měrné stanice
+(appka tam už funkci má); (c) nápověda jména/revíru při GPS zakládání
+výpravy (findNearestHistoryMatches) zůstává beze změny, jen appka ji
+NEUKAZUJE jako browsovatelnou vrstvu. Než se implementuje, čeká se na
+jasné ano/ne od uživatele.

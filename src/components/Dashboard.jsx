@@ -957,22 +957,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         }
       }
 
-      normalizeSessionAreas(activeSession.area).forEach((entry, ai) => {
-        const pts = entry.points
-        L.polygon(pts.map((p) => [p.lat, p.lng]), {
-          color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.12,
-        }).addTo(markersLayer.current)
-        const c = areaCentroid(pts)
-        const loc = entry.location_id ? locationsCatalog.find((l) => l.id === entry.location_id) : null
-        const label = loc ? loc.name : `Oblast ${ai + 1}`
-        const marker = L.circleMarker([c.lat, c.lng], {
-          radius: 7, color: '#6B7A4F', weight: 2, fillColor: '#EDE9DC', fillOpacity: 1,
-        }).bindPopup(loc ? `${label} <br><i>(klikni pro detail v katalogu)</i>` : label)
-        marker.addTo(markersLayer.current)
-        if (loc) {
-          marker.on('click', () => { setLocationsReturnId(loc.id); setShowLocations(true) })
-        }
-      })
+      // Appka v běžném prohlížení VŽDY ukáže jen tečku (kde uživatel stál)
+      // -- i u starých výprav se skutečně uloženou plochou appka ji TADY
+      // NEKRESLÍ (jen při aktivní editaci "Upravit oblasti" -- to je jiná,
+      // záměrná cesta, tam appka plochu ukáže, protože ji potřebuješ vidět,
+      // abys ji mohl upravit). Appka tak drží konzistentní zobrazení napříč
+      // starými i novými výpravami, aniž by stará data jakkoli mazala nebo
+      // měnila -- jen je přestává vizuálně kreslit při běžném prohlížení.
+      L.circleMarker([activeSession.lat, activeSession.lng], {
+        radius: 8, color: '#2C6E71', weight: 2, fillColor: '#fff', fillOpacity: 0.9,
+      }).bindPopup(`<b>${activeSession.title}</b>`).addTo(markersLayer.current)
 
       if (!AREA_TYPES.includes(activeSession.type)) {
         (activeSession.rods || []).forEach((r, i) => {
@@ -3206,25 +3200,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{LURE_TYPES.includes(activeSession.type) ? 'Bez míst' : 'Bez prutů'}</div>
                 )}
                 <div className="coord-list">
-                  {normalizeSessionAreas(activeSession.area).length > 0 ? (
-                    normalizeSessionAreas(activeSession.area).map((entry, i) => {
-                      const pts = entry.points
-                      const c = areaCentroid(pts)
-                      const loc = entry.location_id ? locationsCatalog.find((l) => l.id === entry.location_id) : null
-                      const label = loc ? loc.name : `Oblast ${i + 1}`
-                      return (
-                        <button key={i} className="coord-chip" type="button" onClick={() => focusOnArea(pts)}>
-                          <IconRevir size={13} color="var(--water-mid)" dotColor="var(--paper)" /> {label}: {c.lat.toFixed(4)}, {c.lng.toFixed(4)}
-                        </button>
-                      )
-                    })
-                  ) : (
-                    (activeSession.rods || []).map((r) => (
-                      <button key={r.id} className="coord-chip" type="button" onClick={() => focusOnPoint(r.lat, r.lng)}>
-                        <IconRevir size={13} color="var(--water-mid)" dotColor="var(--paper)" /> {r.name}: {r.lat?.toFixed(4)}, {r.lng?.toFixed(4)}
-                      </button>
-                    ))
-                  )}
+                  {(activeSession.rods || []).map((r) => (
+                    <button key={r.id} className="coord-chip" type="button" onClick={() => focusOnPoint(r.lat, r.lng)}>
+                      <IconRevir size={13} color="var(--water-mid)" dotColor="var(--paper)" /> {r.name}: {r.lat?.toFixed(4)}, {r.lng?.toFixed(4)}
+                    </button>
+                  ))}
                 </div>
               </div>
               <div className="det-block">
