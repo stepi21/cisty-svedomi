@@ -3937,7 +3937,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       </div>
 
       {activePanel !== 'home' && activePanel !== 'stations' && (
-        <div className={`mobile-sheet ${mobileSheetOpen ? 'expanded' : ''}`}>
+        <div className={`mobile-sheet ${mobileSheetOpen ? 'expanded' : ''} ${activePanel === 'map' ? 'map-panel' : ''}`}>
           <div className="mobile-peek-bar" onClick={() => setMobileSheetOpen((v) => !v)}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{peekLabel()}</span>
             <span className="peek-chevron">{mobileSheetOpen ? '▾' : '▴'}</span>
