@@ -143,6 +143,10 @@ header h1 .accent{ color:var(--amber); }
      ikonám stejnou vizuální váhu v řádku, šířka se u appky dopočítá sama
      podle vlastního poměru stran každé ikony. */
   .head-actions-primary .new-btn svg{ width:auto; height:22px; }
+  /* appka rybí ikonu (Úlovky, poslední tab) drží o něco nižší -- při stejné
+     výšce jako appčiny čtvercové ikony vyjde appce nápadně širší kvůli
+     plochému poměru stran a opticky appce dominuje. */
+  .head-actions-primary .new-btn:last-child svg{ height:18px; }
 }
 .invite-banner{
   margin-top:10px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.25);
@@ -289,6 +293,17 @@ header h1 .accent{ color:var(--amber); }
   position:sticky; top:0; z-index:1;
 }
 .sb-toolbar{ display:flex; gap:6px; padding:0 18px 10px; flex-wrap:wrap; }
+.season-chart-wrap{ padding:2px 18px 14px; }
+.season-chart-label{
+  font-family:'IBM Plex Mono', monospace; font-size:var(--fs-2xs); text-transform:uppercase;
+  letter-spacing:.06em; color:var(--ink-soft); margin-bottom:6px;
+}
+.season-chart{ display:flex; align-items:flex-end; gap:1.5px; height:44px; }
+.season-chart-bar{ flex:1; display:flex; flex-direction:column; justify-content:flex-end; height:100%; min-width:1px; }
+.season-chart-seg{ width:100%; border-radius:1px 1px 0 0; }
+.season-chart-seg.dravec{ background:#5C7A85; }
+.season-chart-seg.bila{ background:#C4A572; }
+.season-chart-seg.empty{ background:var(--paper-line); height:2px; border-radius:1px; }
 .year-header{
   padding:10px 18px; font-family:'Fraunces', serif; font-weight:600; font-size:var(--fs-md2);
   color:var(--ink); cursor:pointer; background:var(--white); border-top:1px solid var(--paper-line);
@@ -303,11 +318,13 @@ header h1 .accent{ color:var(--amber); }
 .s-icon{ width:34px; height:34px; flex:none; border-radius:8px; display:flex; align-items:center; justify-content:center; background:var(--paper); border:1px solid var(--paper-line); }
 .s-icon svg{ width:19px; height:19px; }
 .s-title{ font-weight:600; font-size:var(--fs-md); }
-.s-sub{ font-size:var(--fs-sm); color:var(--ink-soft); margin-top:2px; }
+.s-sub{ font-size:var(--fs-sm); color:var(--ink-soft); margin-top:2px; display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
 .s-tags{ margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; }
 .s-tag{ display:inline-flex; align-items:center; gap:4px; font-family:'IBM Plex Mono', monospace; font-size:var(--fs-2xs); background:#fff; border:1px solid var(--paper-line); padding:1.5px 7px; border-radius:20px; color:var(--ink-soft); }
 .s-tag.catch{ background:var(--amber); border-color:var(--amber-deep); color:#3A2A0F; font-weight:600; }
 .s-tag.live-tag{ background:#B4432E; border-color:#8F3423; color:#fff; font-weight:600; animation:live-pulse 2s infinite; }
+.s-tag.category-dravec{ background:#5C7A85; border-color:#46626c; color:#fff; }
+.s-tag.category-bila{ background:#C4A572; border-color:#B0915E; color:#3A2A0F; }
 .session-item.live{ background:#FBEEEA; }
 @keyframes live-pulse{ 0%,100%{ opacity:1; } 50%{ opacity:.6; } }
 .s-tag.target{ background:var(--water-soft); border-color:var(--water-mid); color:var(--water-deep); }

@@ -2954,6 +2954,28 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     )
   }
 
+  // appka tímhle počítá krátký přehled sezóny nad seznamem výprav -- kolik
+  // úlovků bylo který týden a jestli šlo hlavně o dravce nebo bílou rybu.
+  // appka záměrně bere úlovky (ne výpravy), protože ty appce lépe ukážou,
+  // kdy se fakt dařilo, ne jen kdy appka byla u vody.
+  function computeWeeklyActivity(list) {
+    const year = new Date().getFullYear()
+    const weeks = Array.from({ length: 52 }, () => ({ dravec: 0, bila: 0 }))
+    const yearStart = new Date(year, 0, 1)
+    list.forEach((s) => {
+      ;(s.catches || []).forEach((c) => {
+        const dateStr = c.caught_at ? c.caught_at.slice(0, 10) : s.session_date
+        if (!dateStr) return
+        const d = new Date(dateStr)
+        if (d.getFullYear() !== year) return
+        const idx = Math.min(51, Math.floor((d - yearStart) / 86400000 / 7))
+        if (c.category === 'dravec') weeks[idx].dravec++
+        else if (c.category === 'bila') weeks[idx].bila++
+      })
+    })
+    return weeks
+  }
+
   function renderSessionList() {
     return (
       <>
@@ -2977,6 +2999,29 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               {isAllExpanded(visibleSessions) ? 'Sbalit vše' : 'Rozbalit vše'}
             </button>
           </div>
+          {(() => {
+            const weeks = computeWeeklyActivity(visibleSessions)
+            const maxTotal = Math.max(1, ...weeks.map((w) => w.dravec + w.bila))
+            return (
+              <div className="season-chart-wrap">
+                <div className="season-chart-label">Sezóna {new Date().getFullYear()} · úlovky po týdnech</div>
+                <div className="season-chart">
+                  {weeks.map((w, i) => {
+                    const total = w.dravec + w.bila
+                    if (total === 0) return <div key={i} className="season-chart-bar"><div className="season-chart-seg empty" /></div>
+                    const dravecH = Math.round((w.dravec / maxTotal) * 44)
+                    const bilaH = Math.round((w.bila / maxTotal) * 44)
+                    return (
+                      <div key={i} className="season-chart-bar" title={`Týden ${i + 1}: ${total} úlovky`}>
+                        {w.bila > 0 && <div className="season-chart-seg bila" style={{ height: Math.max(2, bilaH) }} />}
+                        {w.dravec > 0 && <div className="season-chart-seg dravec" style={{ height: Math.max(2, dravecH) }} />}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
           <div className="filter-row">
             {['all', 'dravec', 'bila'].map((cat) => (
               <button
@@ -3039,10 +3084,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                             <div className="s-icon" dangerouslySetInnerHTML={{ __html: s.type === 'kapr' ? iconCarp : iconSpin }} />
                             <div className="s-body">
                               <div className="s-title">{s.title}</div>
-                              <div className="s-sub">{s.session_date} · {s.time_from}–{s.time_to} · {userName(s.user_id)}{s.revir ? ` · ${s.revir}` : ''}</div>
+                              <div className="s-sub">
+                                <IconMoonPhase phase={moonPhaseName(s.session_date)} size={11} /> {s.session_date} · {s.time_from}–{s.time_to} · {userName(s.user_id)}{s.revir ? ` · ${s.revir}` : ''}
+                              </div>
                               <div className="s-tags">
                                 {s.status === 'in_progress' && <span className="s-tag live-tag"><IconLive size={9} color="#fff" /> Probíhá</span>}
-                                <span className="s-tag">{s.type}</span>
+                                {TYPE_CATEGORY[s.type] && (
+                                  <span className={`s-tag category-${TYPE_CATEGORY[s.type]}`}>{TYPE_CATEGORY[s.type] === 'dravec' ? 'Dravec' : 'Bílá ryba'}</span>
+                                )}
                                 {s.target_species && <span className="s-tag target"><IconTarget size={11} color="currentColor" /> {s.target_species}</span>}
                                 <span className="s-tag catch">{filteredCatches(s).length} úlovky</span>
                               </div>
