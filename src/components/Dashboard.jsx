@@ -294,16 +294,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // odpojila z DOM -- Leaflet instance tak zůstává živá, jen si při
   // schování zapamatuje rozměry 0x0. Při návratu na panel s mapou je
   // potřeba Leafletu říct "přepočítej si rozměry znovu", jinak by se
-  // dlaždice mohly vykreslit jen zčásti/špatně. Malé zpoždění, ať CSS
-  // stihne mapu zase zviditelnit dřív, než Leaflet měří kontejner.
-  useEffect(() => {
-    if (!mapInstance.current) return
-    const mapHidden = activePanel === 'home' || activePanel === 'stations' ||
-      ((activePanel === 'catches' || activePanel === 'baits' || activePanel === null) && !mapNeededForInteraction)
-    if (mapHidden) return
-    const t = setTimeout(() => mapInstance.current?.invalidateSize(), 50)
-    return () => clearTimeout(t)
-  }, [activePanel, mapNeededForInteraction])
+  // dlaždice mohly vykreslit jen zčásti/špatně. Efekt je až níže v
+  // souboru (za deklarací mapNeededForInteraction, kterou appka potřebuje
+  // v dependency poli).
 
   // Domů: po vstupu appka nastaví scroll podle pendingHomeScrollModeRef --
   // 'top' (druhý klik na už aktivní Domů) appku pošle nahoru, 'restore'
@@ -2843,6 +2836,22 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // panel přes celou obrazovku, stejně jako appka dělá u Úlovky -- ne jako
   // sbalitelnou lištu nad mapou, protože mapa je stejně schovaná.
   const mobileFullPanel = activePanel === null && !mapNeededForInteraction
+
+  // Na "Domů" a dalších panelech bez mapy appka mapu jen schová přes CSS
+  // (display:none), ne že by ji odpojila z DOM -- Leaflet instance tak
+  // zůstává živá, jen si při schování zapamatuje rozměry 0x0. Při návratu
+  // na panel s mapou je potřeba Leafletu říct "přepočítej si rozměry
+  // znovu", jinak by se dlaždice mohly vykreslit jen zčásti/špatně. Malé
+  // zpoždění, ať CSS stihne mapu zase zviditelnit dřív, než Leaflet měří
+  // kontejner.
+  useEffect(() => {
+    if (!mapInstance.current) return
+    const mapHidden = activePanel === 'home' || activePanel === 'stations' ||
+      ((activePanel === 'catches' || activePanel === 'baits' || activePanel === null) && !mapNeededForInteraction)
+    if (mapHidden) return
+    const t = setTimeout(() => mapInstance.current?.invalidateSize(), 50)
+    return () => clearTimeout(t)
+  }, [activePanel, mapNeededForInteraction])
 
   // --- postranní panel/mobilní lišta v režimu "🗺 Mapa" — přepínatelné vrstvy + hledání míst ---
   // --- panel "Měrné stanice" (☰ Více) -- appka ukáže stanice ČHМÚ nejblíž

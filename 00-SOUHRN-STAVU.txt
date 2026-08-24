@@ -1427,6 +1427,34 @@ flows znovu (bod 3/6/7), obě fokusovaná přiblížení (bod 5, 8, 9),
 a chování všech 4 záložek při opakovaném kliknutí (bod 1) -- na
 mobilu i desktopu.
 
+KRITICKÁ OPRAVA (verze 125): appka po nasazení verze 124 vůbec
+nenaběhla -- prázdná stránka, jen barva pozadí, na PC i mobilu.
+Příčina: JavaScriptová chyba "Cannot access 'mapNeededForInteraction'
+before initialization", tedy přístup k proměnné dřív, než byla
+vůbec definovaná.
+
+Konkrétně: bezpečnostní efekt pro invalidateSize() (přidaný ve verzi
+123, viz bod o schované mapě) měl v poli závislostí proměnnou
+mapNeededForInteraction. Ta se ale ve zdrojovém souboru definuje až
+o dost níž (řádek ~2837), zatímco efekt byl nahoře (řádek ~299).
+JavaScript pole závislostí vyhodnocuje HNED, ne až při běhu efektu
+-- appka tak při každém vykreslení narazila na proměnnou, co ještě
+neexistovala, a celá appka spadla hned na startu.
+
+Oprava: efekt přesunut níž, až za definici mapNeededForInteraction,
+funkčně beze změny. Ověřeno tentokrát i skutečným vykreslením appky
+(React server-side render mimo prohlížeč, přes lokální testovací
+appku). Appka se tentokrát opravdu vykreslila bez chyby, ne jen
+podle syntax kontroly jako dřív. Syntax kontrola (esbuild) totiž
+tenhle typ chyby vůbec neodhalí -- je to platný JavaScript, jen
+špatně seřazený, projeví se až při skutečném běhu.
+
+POUČENÍ DO BUDOUCNA: u nových proměnných používaných v poli
+závislostí efektu (useEffect) vždycky zkontrolovat, že jsou
+definované NAD tím efektem v souboru, ne jen někde v komponentě.
+Syntax kontrola (esbuild) tohle neodhalí, je potřeba to ověřit
+buď skutečným vykreslením, nebo ručně dohledat pořadí řádků.
+
 ZMĚNA (verze 124) -- doladění chování po vyzkoušení verze 123:
 
 1. Domů: druhý klik na už aktivní záložku appku pošle úplně nahoru
