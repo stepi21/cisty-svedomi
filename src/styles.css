@@ -75,21 +75,32 @@ body{
 /* ---------- app shell ---------- */
 .app{ display:flex; flex-direction:column; min-height:100vh; }
 header{ background:var(--water-deep); color:var(--white); padding:16px 20px; }
-.head-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; row-gap:10px; }
-header h1{ font-family:'Fraunces', serif; font-weight:600; font-size:var(--fs-4xl); margin:0; }
+.head-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.head-logo-group{ display:flex; align-items:center; gap:10px; min-width:0; }
+.head-icons-group{ display:flex; align-items:center; gap:8px; flex:none; }
+header h1{ font-family:'Fraunces', serif; font-weight:600; font-size:var(--fs-4xl); margin:0; white-space:nowrap; }
 header h1 .accent{ color:var(--amber); }
-.live-header-btn{
-  display:inline-flex; align-items:center; gap:6px; flex:none;
-  border:none; background:var(--amber); color:var(--ink);
-  font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:var(--fs-sm2);
-  padding:7px 14px; border-radius:20px; cursor:pointer;
-  box-shadow:0 2px 6px rgba(0,0,0,.2);
-}
-.live-header-btn:hover{ background:var(--amber-deep); }
-.live-header-btn.active{ background:#B4432E; color:#fff; animation:live-pulse 1.8s infinite; }
-.live-header-btn.active:hover{ background:#8F3423; }
+.new-btn.live-toggle{ border-style:solid; font-weight:600; }
+.new-btn.live-toggle.active{ animation:live-pulse 1.8s infinite; }
+.head-logo-group .new-btn.live-toggle{ background:var(--amber); border-color:var(--amber); color:var(--ink); }
+.head-logo-group .new-btn.live-toggle:hover{ background:var(--amber-deep); border-color:var(--amber-deep); color:#fff; }
+.head-logo-group .new-btn.live-toggle.active{ background:#B4432E; border-color:#B4432E; color:#fff; }
+.head-logo-group .new-btn.live-toggle.active:hover{ background:#8F3423; border-color:#8F3423; }
 .new-btn.hamburger-btn{ font-size:22px; padding:9px 14px; line-height:1; flex:none; background:var(--white); color:var(--water-deep); border:1px solid var(--white); }
 .new-btn.hamburger-btn:hover{ background:var(--paper); color:var(--water-deep); border-color:var(--paper); }
+/* appka tady zmenšuje logo, tlačítko Chytat/Probíhá i ikonky zvonečku/menu jen
+   na mobilu -- rozměry appka ověřila skutečným přeměřením (ne odhadem) proti
+   fontům appky (Fraunces/IBM Plex Mono) na šířkách 320-390px, ať se řádek 1
+   nikdy nezalomí ani nepřekryje, ani na nejmenších běžných telefonech. */
+@media (max-width:860px){
+  header{ padding:14px 16px; }
+  .head-row{ gap:6px; }
+  .head-logo-group{ gap:6px; }
+  .head-icons-group{ gap:5px; }
+  header h1{ font-size:20px; }
+  .new-btn.live-toggle{ padding:3px 7px; }
+  .new-btn.hamburger-btn{ padding:7px 10px; }
+}
 .notif-bell-btn{ position:relative; }
 .notif-badge{
   position:absolute; top:2px; right:2px; background:#B4432E; color:#fff;
@@ -113,6 +124,18 @@ header h1 .accent{ color:var(--amber); }
 .whoami{ font-family:'IBM Plex Mono', monospace; font-size:var(--fs-sm); color:#B9CFCB; align-self:center; }
 .head-actions .new-btn, .head-actions-primary .new-btn, .head-actions-secondary .new-btn{ color:#E7EFEC; border-color:rgba(255,255,255,.3); }
 .head-actions-primary .new-btn{ display:inline-flex; align-items:center; gap:6px; }
+/* appka na mobilu udělá ze 4 tabů plnošířkový segmentovaný přepínač (stejný
+   díl = 25 % šířky) místo pilulek s proměnlivou šířkou -- appka tím zaručí,
+   že se to vejde na jakoukoli šířku displeje, ne jen "obvykle to sedí". */
+@media (max-width:860px){
+  .head-secondary-row{ gap:0; margin-top:10px; }
+  .head-actions-primary{ width:100%; gap:0; }
+  .head-actions-primary .new-btn{
+    flex:1; justify-content:center; border-radius:0; border-style:solid; border-width:1px 0 1px 1px;
+  }
+  .head-actions-primary .new-btn:first-child{ border-radius:20px 0 0 20px; }
+  .head-actions-primary .new-btn:last-child{ border-radius:0 20px 20px 0; border-width:1px; }
+}
 .invite-banner{
   margin-top:10px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.25);
   padding:8px 14px; border-radius:8px; font-size:var(--fs-base); position:relative;

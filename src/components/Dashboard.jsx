@@ -3263,19 +3263,19 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       </datalist>
       <header>
         <div className="head-row">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="head-logo-group">
             <h1>Čistý<span className="accent">svědomí</span></h1>
             {myLiveSession ? (
               <button
-                className="live-header-btn active"
+                className="new-btn live-toggle active"
                 onClick={() => { setActivePanel(null); setActiveId(myLiveSession.id); setViewMode('detail'); setMobileSheetOpen(true) }}
                 title="Rozjetá výprava"
               ><IconLive size={11} color="#fff" /> Probíhá</button>
             ) : (
-              <button className="live-header-btn" onClick={startNewSessionLive} title="Spustit živou výpravu">Chytat</button>
+              <button className="new-btn live-toggle" onClick={startNewSessionLive} title="Spustit živou výpravu">Chytat</button>
             )}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="head-icons-group">
             <div style={{ position: 'relative' }} ref={notificationsRef}>
               <button
                 className="new-btn hamburger-btn notif-bell-btn"
