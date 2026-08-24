@@ -1337,3 +1337,16 @@ ZMĚNA (verze 121) -- tři opravy nahlášené hned po nasazení verze 120:
    zavření té drobné placement bublinky. Nová funkce
    cancelAllPlacementFlows() se teď volá při každém switchPanel a
    zruší úplně všechny rozpracované umísťovací/kreslicí stavy.
+
+OPRAVA BUGU (verze 122, nahlášeno hned po nasazení 121): nový
+".mobile-sheet.full-panel" z bodu 1 výše měl "position:fixed" a
+"height:100vh" počítanou od celé obrazovky -- appka tak na mobilu
+schovala i horní hlavičku s přepínáním Domů/Mapa/Výpravy/Úlovky, přes
+celý mobil bylo vidět jen Výpravy, bez možnosti přepnout jinam.
+Opraveno: mobile-sheet appka přesunula dovnitř .layout (byl to
+předtím sourozenec, ne potomek) a full-panel variantu přepnula na
+"position:absolute; inset:0" vůči .layout místo "position:fixed"
+vůči celému oknu. .layout sám o sobě zabírá jen prostor pod
+hlavičkou (.app je flex sloupec: header má svou vlastní výšku,
+.layout dostane zbytek) -- full-panel se tak teď vejde přesně tam a
+do hlavičky nezasahuje.

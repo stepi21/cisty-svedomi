@@ -4102,31 +4102,31 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             )}
           </div>
         </main>
-      </div>
 
-      {activePanel !== 'home' && activePanel !== 'stations' && activePanel !== 'catches' && (
-        <div className={`mobile-sheet ${mobileSheetOpen ? 'expanded' : ''} ${activePanel === 'map' ? 'map-panel' : ''} ${mobileFullPanel ? 'full-panel' : ''}`}>
-          {!mobileFullPanel && (
-            <div className="mobile-peek-bar" onClick={() => setMobileSheetOpen((v) => !v)}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{peekLabel()}</span>
-              <span className="peek-chevron">{mobileSheetOpen ? '▾' : '▴'}</span>
+        {activePanel !== 'home' && activePanel !== 'stations' && activePanel !== 'catches' && (
+          <div className={`mobile-sheet ${mobileSheetOpen ? 'expanded' : ''} ${activePanel === 'map' ? 'map-panel' : ''} ${mobileFullPanel ? 'full-panel' : ''}`}>
+            {!mobileFullPanel && (
+              <div className="mobile-peek-bar" onClick={() => setMobileSheetOpen((v) => !v)}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{peekLabel()}</span>
+                <span className="peek-chevron">{mobileSheetOpen ? '▾' : '▴'}</span>
+              </div>
+            )}
+            <div className="mobile-sheet-body">
+              {activePanel === 'map' ? renderMapControls()
+                : activePanel === 'locations' ? renderLocationsList()
+                : activePanel === 'baits' ? renderBaitsList()
+                : (
+                  viewMode === 'detail' && activeSession && !draftSession ? (
+                    <>
+                      <button className="new-btn" onClick={() => setViewMode('aggregate')} style={{ margin: '0 18px 8px' }}>← Zpět na seznam</button>
+                      {renderDetailStrip()}
+                    </>
+                  ) : renderSessionList()
+                )}
             </div>
-          )}
-          <div className="mobile-sheet-body">
-            {activePanel === 'map' ? renderMapControls()
-              : activePanel === 'locations' ? renderLocationsList()
-              : activePanel === 'baits' ? renderBaitsList()
-              : (
-                viewMode === 'detail' && activeSession && !draftSession ? (
-                  <>
-                    <button className="new-btn" onClick={() => setViewMode('aggregate')} style={{ margin: '0 18px 8px' }}>← Zpět na seznam</button>
-                    {renderDetailStrip()}
-                  </>
-                ) : renderSessionList()
-              )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {draftSession && (
         <SessionFormPanel
