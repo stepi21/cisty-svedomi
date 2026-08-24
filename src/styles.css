@@ -230,6 +230,28 @@ header h1 .accent{ color:var(--amber); }
 }
 .record-row:hover{ background:#F7F4EA; }
 
+/* ---------- Úlovky, řazení "Podle druhu" — hero karta s rekordem + pruh miniatur ---------- */
+.species-group{ padding:0 18px 18px; }
+.species-group-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+.species-name{ font-family:'Fraunces', serif; font-weight:600; font-size:var(--fs-lg); color:var(--ink); }
+.species-count{ font-family:'IBM Plex Mono', monospace; font-size:var(--fs-sm); color:var(--ink-soft); }
+.species-hero{
+  position:relative; height:120px; border-radius:10px; margin-bottom:6px; cursor:pointer;
+  display:flex; align-items:flex-end; padding:10px; overflow:hidden;
+}
+.species-hero img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
+.species-hero-badge{
+  position:relative; z-index:1; display:inline-flex; align-items:center; gap:5px;
+  font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:var(--fs-sm2);
+  background:rgba(18,59,82,.75); color:#fff; padding:4px 10px; border-radius:20px;
+}
+.species-strip{ display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; }
+.species-thumb{
+  width:52px; height:52px; flex:none; border-radius:8px; cursor:pointer; overflow:hidden;
+  background:var(--paper-line);
+}
+.species-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+
 /* ---------- feed na Domů — fotka jako dominanta karty ---------- */
 .home-feed{
   display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));

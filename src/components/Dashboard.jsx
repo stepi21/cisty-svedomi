@@ -237,6 +237,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [toast, setToast] = useState(null) // krátké potvrzení "✓ Uloženo" po akci
   const [searchQuery, setSearchQuery] = useState('') // hledání ve výpravách (název, revír, druh, nástraha)
   const [catchesCategory, setCatchesCategory] = useState('all') // filtr dravec/bílá ryba v panelu Úlovky
+  const [catchesSortMode, setCatchesSortMode] = useState('species') // 'species' | 'date' | 'user' -- appka defaultně řadí podle druhu, tam appka ukazuje rekord
 
   useEffect(() => {
     function goOnline() { setIsOnline(true) }
@@ -3000,8 +3001,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         || normalizeSearchText(c.bait).includes(q)
         || normalizeSearchText(c.revir).includes(q)
         || normalizeSearchText(c.sessionRef.title).includes(q))
-      .sort((a, b) => (b.caught_at || b.sessionRef.session_date || '').localeCompare(a.caught_at || a.sessionRef.session_date || ''))
-    return (
+
+    const header = (
       <>
         <div className="sb-head"></div>
         <div className="filter-row">
@@ -3013,6 +3014,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             >
               {cat === 'all' ? 'Vše' : cat === 'dravec' ? 'Dravci' : 'Bílá ryba'}
             </button>
+          ))}
+        </div>
+        <div className="filter-row">
+          {[['species', 'Podle druhu'], ['date', 'Podle data'], ['user', 'Podle rybáře']].map(([val, label]) => (
+            <button key={val} className={`filter-chip ${catchesSortMode === val ? 'active' : ''}`} onClick={() => setCatchesSortMode(val)}>{label}</button>
           ))}
         </div>
         <div style={{ padding: '0 18px 10px', position: 'relative' }}>
@@ -3027,29 +3033,120 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        {filtered.length === 0 ? (
+      </>
+    )
+
+    if (filtered.length === 0) {
+      return (
+        <>
+          {header}
           <div style={{ padding: '20px 18px', color: 'var(--ink-soft)', fontSize: 13 }}>
             {searchQuery ? 'Nic nenalezeno.' : 'Zatím žádný úlovek.'}
           </div>
-        ) : (
-          filtered.map((c) => (
-            <div
-              key={c.id} className="record-row"
-              onClick={() => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c) }}
-            >
-              <div className="record-head">
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                  <div className="fish-mini" style={{ flex: 'none', width: 26, height: 26 }} dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />
-                  <strong style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.species}</strong>
-                </span>
-                <span className="record-length">{c.length_cm ?? '—'} cm</span>
+        </>
+      )
+    }
+
+    function openCatch(c) { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c) }
+
+    function CatchRow({ c }) {
+      return (
+        <div className="record-row" onClick={() => openCatch(c)}>
+          <div className="record-head">
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+              <div className="fish-mini" style={{ flex: 'none', width: 26, height: 26 }} dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />
+              <strong style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.species}</strong>
+            </span>
+            <span className="record-length">{c.length_cm ?? '—'} cm</span>
+          </div>
+          <div className="c-sub" style={{ marginTop: 4 }}>
+            {c.caught_at ? c.caught_at.slice(0, 10) : c.sessionRef.session_date} · {userName(c.sessionRef.user_id)} · {c.sessionRef.title}{c.revir ? ` · ${c.revir}` : ''}
+          </div>
+        </div>
+      )
+    }
+
+    const byDate = (a, b) => (b.caught_at || b.sessionRef.session_date || '').localeCompare(a.caught_at || a.sessionRef.session_date || '')
+
+    // ---------- Podle data: appka to nechá jako obyčejný chronologický seznam ----------
+    if (catchesSortMode === 'date') {
+      const sorted = [...filtered].sort(byDate)
+      return <>{header}{sorted.map((c) => <CatchRow key={c.id} c={c} />)}</>
+    }
+
+    // ---------- Podle rybáře: appka seskupí podle uživatele ----------
+    if (catchesSortMode === 'user') {
+      const byUser = {}
+      filtered.forEach((c) => {
+        const uid = c.sessionRef.user_id
+        ;(byUser[uid] = byUser[uid] || []).push(c)
+      })
+      const userIds = Object.keys(byUser).sort((a, b) => userName(a).localeCompare(userName(b)))
+      return (
+        <>
+          {header}
+          {userIds.map((uid) => (
+            <div key={uid}>
+              <div className="month-header">
+                <span className="user-dot" style={{ background: userColor(uid), marginRight: 6 }} />
+                {userName(uid)} <span className="month-count">({byUser[uid].length})</span>
               </div>
-              <div className="c-sub" style={{ marginTop: 4 }}>
-                {c.caught_at ? c.caught_at.slice(0, 10) : c.sessionRef.session_date} · {c.sessionRef.title}{c.revir ? ` · ${c.revir}` : ''}
-              </div>
+              {byUser[uid].sort(byDate).map((c) => <CatchRow key={c.id} c={c} />)}
             </div>
-          ))
-        )}
+          ))}
+        </>
+      )
+    }
+
+    // ---------- Podle druhu (výchozí): appka ukáže hero kartu s rekordem
+    // na druh + pruh miniatur ostatních úlovků toho druhu ----------
+    const bySpecies = {}
+    filtered.forEach((c) => {
+      const key = (c.species || 'Neuvedeno').trim()
+      ;(bySpecies[key] = bySpecies[key] || []).push(c)
+    })
+    const speciesNames = Object.keys(bySpecies).sort((a, b) => bySpecies[b].length - bySpecies[a].length)
+
+    return (
+      <>
+        {header}
+        {speciesNames.map((species) => {
+          const list = [...bySpecies[species]].sort((a, b) => (Number(b.length_cm) || 0) - (Number(a.length_cm) || 0))
+          const record = list[0]
+          const rest = list.slice(1)
+          const catColor = CATEGORY_COLOR[record.category] || 'var(--paper-line)'
+          return (
+            <div key={species} className="species-group">
+              <div className="species-group-head">
+                <span className="species-name">{species}</span>
+                <span className="species-count">{list.length}×</span>
+              </div>
+              <div
+                className="species-hero"
+                style={{ background: record.photo_url ? undefined : catColor }}
+                onClick={() => openCatch(record)}
+              >
+                {record.photo_url && <img src={record.photo_url} alt={species} />}
+                <span className="species-hero-badge"><IconTrophy size={12} color="var(--amber)" /> {record.length_cm ?? '—'} cm · {userName(record.sessionRef.user_id)}</span>
+              </div>
+              {rest.length > 0 && (
+                <div className="species-strip">
+                  {rest.map((c) => (
+                    <div
+                      key={c.id}
+                      className="species-thumb"
+                      style={{ background: c.photo_url ? undefined : CATEGORY_COLOR[c.category] }}
+                      onClick={() => openCatch(c)}
+                      title={`${c.length_cm ?? '—'} cm`}
+                    >
+                      {c.photo_url && <img src={c.photo_url} alt={c.species} />}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </>
     )
   }
