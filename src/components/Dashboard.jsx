@@ -1125,6 +1125,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     aggregateClusterLayer.current.clearLayers()
     tripsClusterLayer.current.clearLayers()
     const bounds = []
+    // appka si tu drží, o kterou konkrétní výpravu appce jde -- když appka
+    // přišla přes "Zobrazit na mapě" a na místě je klidně dvacet dalších
+    // výprav ve shluku, appka potřebuje tenhle marker po zoomu i vizuálně
+    // odlišit, jinak by appka nepoznala, která z hromady to je.
+    const focusSessionId = pendingMapFocusRef.current?.sessionId ?? null
+    let focusMarker = null
 
     if (mapLayers.myTrips || mapLayers.partyTrips) {
       sessions.forEach((s) => {
@@ -1133,25 +1139,32 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         if (!isMine && !mapLayers.partyTrips) return
         if (s.lat == null || s.lng == null) return
         const color = userColor(s.user_id)
+        const isFocus = s.id === focusSessionId
         // L.marker + vlastní divIcon, ne L.circleMarker -- stejný vzor jako
         // úlovky výše. Plugin leaflet.markercluster je stavěný na L.Marker,
         // s L.CircleMarker nemusí spolehlivě fungovat.
-        const html = `<div style="width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid ${color};box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>`
-        const icon = L.divIcon({ html, className: '', iconSize: [18, 18], iconAnchor: [9, 9] })
-        L.marker([s.lat, s.lng], { icon })
+        const html = isFocus
+          ? `<div style="width:26px;height:26px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 0 0 4px rgba(217,160,84,.6),0 2px 8px rgba(0,0,0,.4)"></div>`
+          : `<div style="width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid ${color};box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>`
+        const icon = L.divIcon({ html, className: '', iconSize: isFocus ? [26, 26] : [18, 18], iconAnchor: isFocus ? [13, 13] : [9, 9] })
+        const marker = L.marker([s.lat, s.lng], { icon })
           .bindPopup(`${s.title} — ${userName(s.user_id)}`)
           .on('click', () => { setActivePanel(null); setActiveId(s.id); setViewMode('detail') })
-          .addTo(tripsClusterLayer.current)
+        marker.addTo(tripsClusterLayer.current)
+        if (isFocus) focusMarker = marker
         bounds.push([s.lat, s.lng])
 
         // U přívlače appka může mít i DALŠÍ místa (jez z obou stran řeky
         // apod.) -- appka je na týhle souhrnné mapě nakreslí stejně jako
         // hlavní bod (tečka výpravy appka), ať appka na Mapě neschovává
-        // celou výpravu jen za JEDEN bod, kde jich reálně bylo víc.
+        // celou výpravu jen za JEDEN bod, kde jich reálně bylo víc. Appka
+        // je nechává vždy v obyčejném stylu, ať appka nemá dvě "zvýrazněné"
+        // tečky u jedné výpravy a nepůsobí to zmateně.
         if (LURE_TYPES.includes(s.type)) {
+          const plainIcon = L.divIcon({ html: `<div style="width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid ${color};box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>`, className: '', iconSize: [18, 18], iconAnchor: [9, 9] })
           ;(s.rods || []).slice(1).forEach((r) => {
             if (r.lat == null || r.lng == null) return
-            L.marker([r.lat, r.lng], { icon })
+            L.marker([r.lat, r.lng], { icon: plainIcon })
               .bindPopup(`${s.title} — ${userName(s.user_id)} (další místo)`)
               .on('click', () => { setActivePanel(null); setActiveId(s.id); setViewMode('detail') })
               .addTo(tripsClusterLayer.current)
@@ -1181,11 +1194,19 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
     if (pendingMapFocusRef.current) {
       // Appka sem doskočila z detailu výpravy/úlovku (tlačítko "Zobrazit na
-      // mapě") -- appka zaostří přesně na ten bod, ne na fitBounds přes
-      // úplně všechno, což by appka jinak dělala na Mapě vždycky.
+      // mapě"). Pokud appka má marker k dispozici (typicky výprava), appka
+      // použije zoomToShowLayer -- appčin plugin sám rozbalí shluk, kdyby
+      // na stejném místě bylo klidně dvacet dalších výprav, a appka pak
+      // otevře popisek, ať je jasné, o kterou výpravu přesně jde. Bez
+      // markeru (např. appka měla jen souřadnice úlovku) appka aspoň
+      // přiblíží na ten bod obyčejně.
       const f = pendingMapFocusRef.current
-      map.setView([f.lat, f.lng], f.zoom || 15)
       pendingMapFocusRef.current = null
+      if (focusMarker) {
+        tripsClusterLayer.current.zoomToShowLayer(focusMarker, () => focusMarker.openPopup())
+      } else {
+        map.setView([f.lat, f.lng], f.zoom || 17)
+      }
     } else if (bounds.length > 0) {
       map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
     } else {
@@ -2256,11 +2277,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   // Appka doskočí ze detailu výpravy rovnou na záložku Mapa, zaostřenou na
   // tenhle konkrétní bod -- appka to řeší přes pendingMapFocusRef, co appka
-  // konzumuje v efektu pro souhrnnou mapu (viz výše).
+  // konzumuje v efektu pro souhrnnou mapu (viz výše). Appka si tu navíc
+  // pojistí, že appka má zapnuté vrstvy "Výpravy" a "Všichni" -- appka na
+  // Mapě defaultně ukazuje jen úlovky, takže bez týhle pojistky by appka
+  // marker vůbec nenašla, kdyby appka měla vrstvu Výpravy zrovna vypnutou.
   function jumpToMapView(session) {
     if (session.lat == null || session.lng == null) return
-    pendingMapFocusRef.current = { sessionId: session.id, lat: session.lat, lng: session.lng, zoom: 15 }
+    pendingMapFocusRef.current = { sessionId: session.id, lat: session.lat, lng: session.lng, zoom: 17 }
+    setMapWho('both')
+    setMapWhat('both')
     switchPanel('map')
+    setMobileSheetOpen(false)
   }
 
   // Appka umožní přidat nový prut k UŽ ULOŽENÉ výpravě -- na rozdíl od
