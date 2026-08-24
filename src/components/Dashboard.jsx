@@ -200,7 +200,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [editingSession, setEditingSession] = useState(null)     // rozepsaná editace výpravy (datum, počasí...)
   const [editingAreasSession, setEditingAreasSession] = useState(null) // {id, areas:[]} — správa oblastí u uložené výpravy
   const [editingAreasLocation, setEditingAreasLocation] = useState(null) // {id, areas:[]} — správa oblastí u místa v katalogu
-  const [activePanel, setActivePanel] = useState(null) // null | 'home' | 'map' | 'stations' | 'locations' | 'baits' | 'catches' — jen jeden panel může být aktivní najednou
+  const [activePanel, setActivePanel] = useState('home') // null | 'home' | 'map' | 'stations' | 'locations' | 'baits' | 'catches' — jen jeden panel může být aktivní najednou; appka se vždycky po otevření ukáže na Domů, ne se vrací tam, kde uživatel skončil naposled
   const [baitsStartAdding, setBaitsStartAdding] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false) // "☰ Více" — méně časté akce schované z hlavičky
   const moreMenuRef = useRef(null)
@@ -342,6 +342,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         if (nav.activeId) setActiveId(nav.activeId)
         if (nav.viewMode) setViewMode(nav.viewMode)
         if (nav.ticketCatchId) pendingTicketCatchIdRef.current = nav.ticketCatchId
+        // Appka rozlišuje "čerstvě otevřeno" (jde na Domů, nový přehled) od
+        // "appka byla jen chvíli na pozadí, zatímco jsi třeba mrknul na název
+        // revíru nebo nástrahy jinam" (zůstane přesně tam, kde jsi byl).
+        // Rozepsaný formulář výpravy/úlovku appka obnovuje vždycky bez
+        // ohledu na tohle -- viz draft_session/draft_catch výše.
+        const RECENT_MS = 30 * 60 * 1000
+        if ('activePanel' in nav && nav.savedAt && Date.now() - nav.savedAt < RECENT_MS) {
+          setActivePanel(nav.activePanel)
+        }
       }
     } catch { /* ignore */ }
   }, [groupId])
@@ -349,8 +358,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   useEffect(() => {
     localStorage.setItem(`nav_state_${groupId}`, JSON.stringify({
       activeCategory, activeUserFilter, activeId, viewMode, ticketCatchId: ticketCatch?.id || null,
+      activePanel, savedAt: Date.now(),
     }))
-  }, [activeCategory, activeUserFilter, activeId, viewMode, ticketCatch, groupId])
+  }, [activeCategory, activeUserFilter, activeId, viewMode, ticketCatch, activePanel, groupId])
 
   useEffect(() => {
     if (draftSession) {
@@ -2680,16 +2690,22 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       <>
         <div className="sb-head"><span>Mapa</span></div>
         <div style={{ padding: '0 18px 6px' }}>
-          <div className="field-label" style={{ margin: '0 0 4px' }}>Kdo</div>
+          <div className="field-label" style={{ margin: '0 0 4px' }}>Čí záznamy vidět</div>
           <div className="filter-row" style={{ padding: 0, marginBottom: 12 }}>
-            {[['me', 'Já'], ['party', 'Parta'], ['both', 'Oba']].map(([val, label]) => (
+            {[['me', 'Moje'], ['party', 'Parta'], ['both', 'Všichni']].map(([val, label]) => (
               <button key={val} className={`filter-chip ${mapWho === val ? 'active' : ''}`} onClick={() => setMapWho(val)}>{label}</button>
             ))}
           </div>
-          <div className="field-label" style={{ margin: '0 0 4px' }}>Co</div>
+          <div className="field-label" style={{ margin: '0 0 4px' }}>Co ukázat</div>
           <div className="filter-row" style={{ padding: 0 }}>
-            {[['trips', 'Výpravy'], ['catches', 'Úlovky'], ['both', 'Oba']].map(([val, label]) => (
-              <button key={val} className={`filter-chip ${mapWhat === val ? 'active' : ''}`} onClick={() => setMapWhat(val)}>{label}</button>
+            {[
+              ['trips', 'Výpravy', <IconVyprava key="i" size={13} color={mapWhat === 'trips' ? '#fff' : 'var(--water-deep)'} />],
+              ['catches', 'Úlovky', <IconUlovek key="i" size={13} color={mapWhat === 'catches' ? '#fff' : 'var(--water-deep)'} />],
+              ['both', 'Vše', null],
+            ].map(([val, label, icon]) => (
+              <button key={val} className={`filter-chip ${mapWhat === val ? 'active' : ''}`} onClick={() => setMapWhat(val)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                {icon}{label}
+              </button>
             ))}
           </div>
         </div>

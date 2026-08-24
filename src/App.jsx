@@ -14,11 +14,19 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
-      setLoading(false)
+      // Appka tu dřív vypínala "Načítám…" hned, jakmile zjistila přihlášení --
+      // ale to je jen půlka odpovědi. Skupina (groupId) se dozví až
+      // loadMembership() o kus níž (spuštěné z efektu na "session"), a než
+      // doběhne, appka na zlomek vteřiny myslela "nemáš skupinu" a bleskla
+      // Onboarding, i když uživatel skupinu dávno měl. Řešení: pokud session
+      // existuje, appka nechá loading zapnuté -- vypne ho až loadMembership(),
+      // teprve když zná i groupId. Bez session logicky nic dalšího čekat netřeba.
+      if (!data.session) setLoading(false)
     })
     const { data: listener } = supabase.auth.onAuthStateChange((event, sess) => {
       setSession(sess)
       if (event === 'PASSWORD_RECOVERY') setRecovering(true)
+      if (!sess) setLoading(false)
     })
     return () => listener.subscription.unsubscribe()
   }, [])
