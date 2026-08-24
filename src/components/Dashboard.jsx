@@ -2283,14 +2283,56 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // Přepnutí panelu v hlavičce (Výpravy/Revíry/Nástrahy/Úlovky) -- vždycky
   // vyčistí hledání, ať nezůstane text z jednoho seznamu omylem ve druhém.
   // "null" (Výpravy) není přepínací -- vždycky vede domů, ne toggle sama na sebe.
+  // Zároveň zruší jakékoli rozpracované umísťování na mapě (přesun bodu,
+  // kreslení oblasti...) -- jinak by placementTarget zůstal nastavený i po
+  // přechodu na jiný panel a appka by tam zbytečně ukazovala mapu, i když
+  // tam mít nemá (viz cancelAllPlacementFlows níže).
   function switchPanel(panel) {
+    cancelAllPlacementFlows()
     setActivePanel((p) => (panel === null ? null : (p === panel ? null : panel)))
     setSearchQuery('')
     setCatchesCategory('all')
-    // appka lištu u Mapy nechá sbalenou (jen pár filtrů, appka nechce zabírat
-    // appce mapu zbytečně) -- u ostatních panelů appka appku otevře jako dřív.
+    // appka lištu u Mapy nechá sbalenou (jen pár filtrů, ať to na mapě
+    // nezabírá zbytečně místo) -- u ostatních panelů ji otevře jako dřív.
     setMobileSheetOpen(panel !== 'map')
     setMapFocusSessionId(null)
+  }
+
+  // Jedno centrální místo, co zruší úplně každý rozpracovaný "klikni na
+  // mapu"/"vyber na mapě" flow -- volané při přepnutí panelu (switchPanel),
+  // ať appka nezůstane v mezistavu, kdy si mapNeededForInteraction myslí,
+  // že appka mapu ještě potřebuje, i když uživatel už dávno odešel jinam.
+  function cancelAllPlacementFlows() {
+    riverAbortRef.current?.abort()
+    riverAbortRef.current = null
+    riverResumeTargetRef.current = null
+    pendingAreaAppendRef.current = null
+    pendingPointModeCatalogRef.current = null
+    pendingGpsShorePointRef.current = null
+    addRodToSessionRef.current = null
+    relocateSessionIdRef.current = null
+    relocateCatchIdRef.current = null
+    gpsRequestIdRef.current++
+    setPlacementTarget(null)
+    setAreaDraft(null)
+    setRodPointsDraft(null)
+    setRiverLineDraft(null)
+    setRiverConfirm(null)
+    setRiverError(null)
+    setRiverBusy(false)
+    setAreaDrawChoice(null)
+    setGpsCapturing(false)
+    setGpsConfirmStep(null)
+    setCatchChoosing(false)
+    setPickingType(false)
+    setLocationPickerStep(null)
+    setPickingCatalogIds([])
+    setAddAreaStep(null)
+    setAddAreaCatalogIds([])
+    setEditingAreasSession(null)
+    setEditingAreasLocation(null)
+    setSavingLocationFor(null)
+    setAttachingLocationsSessionId(null)
   }
 
   // Appka řadí výpravy vždycky od nejnovější nahoru, takže samostatné
@@ -2709,6 +2751,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     catchChoosing || areaDrawChoice || riverConfirm || editingAreasSession || editingAreasLocation || savingLocationFor
   )
 
+  // Na mobilu appka Výpravy v klidu (nic se neumísťuje) ukáže jako statický
+  // panel přes celou obrazovku, stejně jako appka dělá u Úlovky -- ne jako
+  // sbalitelnou lištu nad mapou, protože mapa je stejně schovaná.
+  const mobileFullPanel = activePanel === null && !mapNeededForInteraction
+
   // --- postranní panel/mobilní lišta v režimu "🗺 Mapa" — přepínatelné vrstvy + hledání míst ---
   // --- panel "Měrné stanice" (☰ Více) -- appka ukáže stanice ČHМÚ nejblíž
   // místům, kde parta chytá (průměr GPS bodů vlastních výprav, jinak
@@ -3008,18 +3055,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   function renderCatchesList() {
-    const q = normalizeSearchText(searchQuery)
     const all = []
     sessions.forEach((s) => {
       ;(s.catches || []).forEach((c) => all.push({ ...c, sessionRef: s }))
     })
     const filtered = all
       .filter((c) => catchesCategory === 'all' || c.category === catchesCategory)
-      .filter((c) => !q
-        || normalizeSearchText(c.species).includes(q)
-        || normalizeSearchText(c.bait).includes(q)
-        || normalizeSearchText(c.revir).includes(q)
-        || normalizeSearchText(c.sessionRef.title).includes(q))
 
     const header = (
       <>
@@ -3040,18 +3081,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             <button key={val} className={`filter-chip ${catchesSortMode === val ? 'active' : ''}`} onClick={() => setCatchesSortMode(val)}>{label}</button>
           ))}
         </div>
-        <div style={{ padding: '0 18px 10px', position: 'relative' }}>
-          <span style={{ position: 'absolute', left: 28, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-soft)', display: 'flex', pointerEvents: 'none' }}>
-            <IconSearch size={15} />
-          </span>
-          <input
-            className="text-input"
-            style={{ paddingLeft: 34 }}
-            placeholder="Hledat úlovek (druh, nástraha, revír)…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
       </>
     )
 
@@ -3060,7 +3089,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         <>
           {header}
           <div style={{ padding: '20px 18px', color: 'var(--ink-soft)', fontSize: 13 }}>
-            {searchQuery ? 'Nic nenalezeno.' : 'Zatím žádný úlovek.'}
+            Zatím žádný úlovek.
           </div>
         </>
       )
@@ -4076,16 +4105,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       </div>
 
       {activePanel !== 'home' && activePanel !== 'stations' && activePanel !== 'catches' && (
-        <div className={`mobile-sheet ${mobileSheetOpen ? 'expanded' : ''} ${activePanel === 'map' ? 'map-panel' : ''}`}>
-          <div className="mobile-peek-bar" onClick={() => setMobileSheetOpen((v) => !v)}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{peekLabel()}</span>
-            <span className="peek-chevron">{mobileSheetOpen ? '▾' : '▴'}</span>
-          </div>
+        <div className={`mobile-sheet ${mobileSheetOpen ? 'expanded' : ''} ${activePanel === 'map' ? 'map-panel' : ''} ${mobileFullPanel ? 'full-panel' : ''}`}>
+          {!mobileFullPanel && (
+            <div className="mobile-peek-bar" onClick={() => setMobileSheetOpen((v) => !v)}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{peekLabel()}</span>
+              <span className="peek-chevron">{mobileSheetOpen ? '▾' : '▴'}</span>
+            </div>
+          )}
           <div className="mobile-sheet-body">
             {activePanel === 'map' ? renderMapControls()
               : activePanel === 'locations' ? renderLocationsList()
               : activePanel === 'baits' ? renderBaitsList()
-              : activePanel === 'catches' ? renderCatchesList()
               : (
                 viewMode === 'detail' && activeSession && !draftSession ? (
                   <>

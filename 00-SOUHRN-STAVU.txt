@@ -1320,3 +1320,20 @@ seznamu byla zbytečná.
   přesun úlovku spuštěný z Úlovkového lístku bez přepnutí panelu
   (relocate-catch) -- to je jediné místo, kde appka potřebuje mapu
   i z panelu Úlovky.
+
+ZMĚNA (verze 121) -- tři opravy nahlášené hned po nasazení verze 120:
+1. Výpravy na mobilu se pořád ukazovaly jako sbalitelná lišta nad
+   schovanou mapou, i když mapa nebyla potřeba. Teď se Výpravy v klidu
+   (nic se neumísťuje) ukážou jako statický panel přes celou
+   obrazovku, stejně jako Úlovky/Domů -- žádné sbalování, žádná lišta.
+   Nová CSS třída .mobile-sheet.full-panel a pomocná hodnota
+   mobileFullPanel v Dashboard.jsx.
+2. Úlovky měly zbytečné vyhledávací políčko. Kategorie a řazení
+   stačí, políčko bylo navíc. Odstraněno i s odpovídající filtrací.
+3. OPRAVA BUGU: přepnutí panelu (Domů/Mapa/Výpravy/Úlovky) nerušilo
+   rozpracované "klikni na mapu" flow (např. přesun bodu výpravy).
+   Placement zůstal nastavený i po přechodu na jiný panel, takže se
+   tam mapa zobrazila celá, i když neměla -- zmizela až po ručním
+   zavření té drobné placement bublinky. Nová funkce
+   cancelAllPlacementFlows() se teď volá při každém switchPanel a
+   zruší úplně všechny rozpracované umísťovací/kreslicí stavy.
