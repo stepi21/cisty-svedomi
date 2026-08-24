@@ -1115,6 +1115,21 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           .on('click', () => { setActivePanel(null); setActiveId(s.id); setViewMode('detail') })
           .addTo(tripsClusterLayer.current)
         bounds.push([s.lat, s.lng])
+
+        // U přívlače appka může mít i DALŠÍ místa (jez z obou stran řeky
+        // apod.) -- appka je na týhle souhrnné mapě nakreslí stejně jako
+        // hlavní bod (tečka výpravy appka), ať appka na Mapě neschovává
+        // celou výpravu jen za JEDEN bod, kde jich reálně bylo víc.
+        if (LURE_TYPES.includes(s.type)) {
+          ;(s.rods || []).slice(1).forEach((r) => {
+            if (r.lat == null || r.lng == null) return
+            L.marker([r.lat, r.lng], { icon })
+              .bindPopup(`${s.title} — ${userName(s.user_id)} (další místo)`)
+              .on('click', () => { setActivePanel(null); setActiveId(s.id); setViewMode('detail') })
+              .addTo(tripsClusterLayer.current)
+            bounds.push([r.lat, r.lng])
+          })
+        }
       })
     }
 

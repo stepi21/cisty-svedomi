@@ -1283,3 +1283,12 @@ klikání na mapu). U DOKONČENÉ/zpětné výpravy appka zůstává u ručního
 kliku na mapu (startAddRodToSession) -- GPS by tam zachytilo aktuální
 polohu appky, ne místo, kde uživatel tehdy stál, stejná logika jako u
 celého založení výpravy (živá = GPS, zpětná = ruční klik).
+
+OPRAVA (zjištěno v provozu): záložka Mapa ("Moje výpravy"/"Výpravy
+party") kreslila u KAŽDÉ výpravy jen JEDEN bod (session.lat/lng),
+i když měla přívlačová výprava uložená "Další místa" (jez z obou
+stran řeky apod.) -- na souhrnné mapě appka celou výpravu schovávala
+za jeden bod, ostatní místa nebyla vidět vůbec. Opraveno -- appka pro
+LURE_TYPES navíc nakreslí i (s.rods || []).slice(1) (všechna další
+místa kromě prvního, to je duplicitní s hlavním bodem, appka ho
+appka jinde stejně přeskakuje), stejnou ikonou/barvou jako hlavní bod.
