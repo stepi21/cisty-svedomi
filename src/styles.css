@@ -273,6 +273,13 @@ header h1 .accent{ color:var(--amber); }
   background:var(--paper-line);
 }
 .species-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+/* Úlovky teď zabírají celou šířku obrazovky (bez mapy vedle) -- na
+   desktopu by se hero fotka bez stropu roztáhla přes celou tu šířku.
+   Mobil má tenhle strop schválně vypnutý (média dotaz od 861px), tam je
+   plná šířka v pořádku. */
+@media (min-width:861px){
+  .species-group{ max-width:640px; margin-left:auto; margin-right:auto; }
+}
 
 /* ---------- feed na Domů — fotka jako dominanta karty ---------- */
 .home-feed{

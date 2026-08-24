@@ -4,9 +4,8 @@ import 'leaflet.markercluster'
 import { supabase } from '../supabaseClient'
 import CatchTicket from './CatchTicket.jsx'
 import HelpModal from './HelpModal.jsx'
-import GalleryModal from './GalleryModal.jsx'
 import BaitsModal, { computeBaitsList } from './BaitsModal.jsx'
-import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconGallery, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconLocate, IconMoonPhase, IconPressureTrend, IconBoat, IconRiverAuto, IconBell, IconHome, IconMap } from '../lib/icons.jsx'
+import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconLocate, IconMoonPhase, IconPressureTrend, IconBoat, IconRiverAuto, IconBell, IconHome, IconMap } from '../lib/icons.jsx'
 import BaitPicker from './BaitPicker.jsx'
 import LocationsModal from './LocationsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
@@ -128,6 +127,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // appka přepne panel běžnou cestou (viz switchPanel) nebo appka klikne na
   // tlačítko "Celá mapa".
   const [mapFocusSessionId, setMapFocusSessionId] = useState(null)
+  // Volitelný doplněk k mapFocusSessionId -- když appka přijde z kliknutí
+  // na konkrétní souřadnicový chip (jeden prut/místo), appka se přiblíží
+  // rovnou na tenhle bod, ne jen na "vejde se celá výprava".
+  const [mapFocusPoint, setMapFocusPoint] = useState(null) // {lat, lng, zoom}
   // appka si tu pamatuje, jestli appka PŘEDTÍM byla ve fokusu -- když appka
   // fokus zruší (tlačítko "Celá mapa"), appka nechce mapu zase zoomnout na
   // "fit všechno", protože appka právě byla přiblížená na konkrétní místo a
@@ -156,7 +159,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [showStats, setShowStats] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
   const [showRecords, setShowRecords] = useState(false)
-  const [showGallery, setShowGallery] = useState(false)
   const [showBaits, setShowBaits] = useState(false)
   const [showLocations, setShowLocations] = useState(false)
   const [baitsInitialKey, setBaitsInitialKey] = useState(null)
@@ -932,6 +934,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // --- render markerů: agregovaný pohled (podle filtrů, přes všechny výpravy) nebo detail jedné výpravy ---
   useEffect(() => {
     if (!mapInstance.current || !markersLayer.current) return
+    // Appka mapu na Výpravách/Úlovcích schovává přes CSS (display:none) a
+    // vrací ji zpátky, kdykoli je potřeba na ni kliknout. Leaflet si o
+    // sobě sám novou velikost nezjistí -- invalidateSize() je nutné volat
+    // pokaždé, jinak by se mapa po odkrytí vykreslila jen zčásti.
+    mapInstance.current.invalidateSize()
     markersLayer.current.clearLayers()
     if (aggregateClusterLayer.current) aggregateClusterLayer.current.clearLayers()
     if (tripsClusterLayer.current) tripsClusterLayer.current.clearLayers()
@@ -1135,6 +1142,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   useEffect(() => {
     if (activePanel !== 'map' || !mapInstance.current || !markersLayer.current || !aggregateClusterLayer.current || !tripsClusterLayer.current) return
     const map = mapInstance.current
+    // Mapa mohla být donedávna schovaná (jiný panel ji schovává přes CSS) --
+    // Leaflet si o sobě nezjistí novou velikost sám, jen na požádání. Bez
+    // tohohle by fitBounds/setView níže počítaly se starou (často nulovou)
+    // velikostí a appka by skončila přiblížená na nesmyslném místě.
+    map.invalidateSize()
     const cameFromFocus = prevMapFocusRef.current != null && mapFocusSessionId == null
     prevMapFocusRef.current = mapFocusSessionId
     markersLayer.current.clearLayers()
@@ -1194,7 +1206,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           .addTo(markersLayer.current)
         bounds.push([c.lat ?? s.lat, c.lng ?? s.lng])
       })
-      if (bounds.length === 1) map.setView(bounds[0], 16)
+      if (mapFocusPoint) map.setView([mapFocusPoint.lat, mapFocusPoint.lng], mapFocusPoint.zoom || 17)
+      else if (bounds.length === 1) map.setView(bounds[0], 16)
       else if (bounds.length > 1) map.fitBounds(L.latLngBounds(bounds), { padding: [60, 60], maxZoom: 16 })
       return
     }
@@ -1263,7 +1276,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     } else {
       map.setView([49.8, 15.5], 8)
     }
-  }, [activePanel, mapLayers, sessions, locationsCatalog, userId, members, mapFocusSessionId])
+  }, [activePanel, mapLayers, sessions, locationsCatalog, userId, members, mapFocusSessionId, mapFocusPoint])
 
   async function backfillBaitPhoto(baitName, photoUrl) {
     const key = (baitName || '').trim().toLowerCase()
@@ -2280,22 +2293,30 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setCollapsedGroups(allKeys)
   }
 
-  // Přepnutí panelu v hlavičce (Výpravy/Revíry/Nástrahy/Úlovky) -- vždycky
-  // vyčistí hledání, ať nezůstane text z jednoho seznamu omylem ve druhém.
-  // "null" (Výpravy) není přepínací -- vždycky vede domů, ne toggle sama na sebe.
-  // Zároveň zruší jakékoli rozpracované umísťování na mapě (přesun bodu,
-  // kreslení oblasti...) -- jinak by placementTarget zůstal nastavený i po
-  // přechodu na jiný panel a appka by tam zbytečně ukazovala mapu, i když
-  // tam mít nemá (viz cancelAllPlacementFlows níže).
+  // Přepnutí panelu v hlavičce (Domů/Mapa/Výpravy/Úlovky) -- vždycky vede
+  // přesně na daný panel (žádné přepínání zpátky na Výpravy při druhém
+  // kliku na stejné tlačítko). Druhý (a každý další) klik na už aktivní
+  // tlačítko navíc appka bere jako "vrať mě do výchozího stavu" -- zruší
+  // detail/filtr/přiblížení toho panelu a appka ukáže jeho základní pohled.
+  // Zároveň appka zruší jakékoli rozpracované umísťování na mapě (přesun
+  // bodu, kreslení oblasti...) -- jinak by placementTarget zůstal nastavený
+  // i po přechodu na jiný panel (viz cancelAllPlacementFlows níže).
   function switchPanel(panel) {
     cancelAllPlacementFlows()
-    setActivePanel((p) => (panel === null ? null : (p === panel ? null : panel)))
+    const isRepeat = activePanel === panel
+    setActivePanel(panel)
     setSearchQuery('')
     setCatchesCategory('all')
     // appka lištu u Mapy nechá sbalenou (jen pár filtrů, ať to na mapě
     // nezabírá zbytečně místo) -- u ostatních panelů ji otevře jako dřív.
     setMobileSheetOpen(panel !== 'map')
     setMapFocusSessionId(null)
+    setMapFocusPoint(null)
+    if (isRepeat) {
+      if (panel === 'catches') setCatchesSortMode('species')
+      else if (panel === 'map') { setMapWho('both'); setMapWhat('catches') }
+      else if (panel === null) setViewMode('aggregate')
+    }
   }
 
   // Jedno centrální místo, co zruší úplně každý rozpracovaný "klikni na
@@ -2376,9 +2397,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // přepne do fokusovaného režimu (jen tahle výprava, viz mapFocusSessionId
   // výše). Appka tím appce vyřeší i výpravy s víc body (přívlač) -- appka
   // ukáže všechny, ne jen jeden zvýrazněný marker uprostřed cizích.
-  function jumpToMapView(session) {
+  function jumpToMapView(session, focusPoint) {
     switchPanel('map')
     setMapFocusSessionId(session.id)
+    setMapFocusPoint(focusPoint || null)
     setMobileSheetOpen(false)
   }
 
@@ -3416,6 +3438,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-soft)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   {(() => { const phase = moonPhaseName(activeSession.session_date); return <><IconMoonPhase phase={phase} size={14} /> {phase}</> })()}
                 </div>
+                <SessionMiniMap session={activeSession} onOpen={() => jumpToMapView(activeSession)} />
               </div>
               <div className="det-block">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -3473,7 +3496,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 {!LURE_TYPES.includes(activeSession.type) && (
                   <div className="coord-list">
                     {(activeSession.rods || []).map((r) => (
-                      <button key={r.id} className="coord-chip" type="button" onClick={() => focusOnPoint(r.lat, r.lng)}>
+                      <button key={r.id} className="coord-chip" type="button" onClick={() => jumpToMapView(activeSession, { lat: r.lat, lng: r.lng, zoom: 17 })}>
                         <IconRevir size={13} color="var(--water-mid)" dotColor="var(--paper)" /> {r.name}: {r.lat?.toFixed(4)}, {r.lng?.toFixed(4)}
                       </button>
                     ))}
@@ -3499,7 +3522,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                     <div className="coord-list">
                       {(activeSession.rods || []).slice(1).map((r) => (
                         <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <button className="coord-chip" type="button" onClick={() => focusOnPoint(r.lat, r.lng)}>
+                          <button className="coord-chip" type="button" onClick={() => jumpToMapView(activeSession, { lat: r.lat, lng: r.lng, zoom: 17 })}>
                             <IconRevir size={13} color="var(--water-mid)" dotColor="var(--paper)" /> {r.lat?.toFixed(4)}, {r.lng?.toFixed(4)}
                           </button>
                           {canEdit && (
@@ -3642,7 +3665,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   <div style={{ height: 1, background: 'var(--paper-line)', margin: '6px 0' }} />
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); switchPanel('baits') }}><IconNastraha size={15} color="var(--water-deep)" /> Nástrahy</button>
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); switchPanel('stations') }}><IconDroplet size={15} color="var(--water-deep)" /> Měrné stanice</button>
-                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowGallery(true) }}><IconGallery size={15} color="var(--water-deep)" /> Galerie</button>
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowRecords(true) }}><IconTrophy size={15} color="var(--amber)" /> Rekordy</button>
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowStats(true) }}><IconChart size={15} color="var(--water-deep)" /> Statistiky</button>
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); exportData() }}><IconDownload size={15} color="var(--water-deep)" /> Export dat</button>
@@ -3689,7 +3711,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       </header>
 
       <div className={`layout ${
-        (activePanel === 'home' || activePanel === 'stations' || activePanel === 'catches') && !mapNeededForInteraction ? 'no-map'
+        (activePanel === 'home' || activePanel === 'stations' || activePanel === 'catches' || activePanel === 'baits') && !mapNeededForInteraction ? 'no-map'
         : activePanel === null && !mapNeededForInteraction ? 'no-map-keep-detail'
         : ''
       }`}>
@@ -4091,19 +4113,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           )}
 
           <div className="desktop-detail-wrap">
-            {activePanel === null && (
+            {activePanel === null && !mapNeededForInteraction && (
               renderDetailStrip() || (
-                !mapNeededForInteraction && (
-                  <div style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--ink-soft)', fontSize: 'var(--fs-sm2)' }}>
-                    Vyber výpravu ze seznamu vlevo.
-                  </div>
-                )
+                <div style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--ink-soft)', fontSize: 'var(--fs-sm2)' }}>
+                  Vyber výpravu ze seznamu vlevo.
+                </div>
               )
             )}
           </div>
         </main>
 
-        {activePanel !== 'home' && activePanel !== 'stations' && activePanel !== 'catches' && (
+        {activePanel !== 'home' && activePanel !== 'stations' && activePanel !== 'catches' && activePanel !== 'baits' && (
           <div className={`mobile-sheet ${mobileSheetOpen ? 'expanded' : ''} ${activePanel === 'map' ? 'map-panel' : ''} ${mobileFullPanel ? 'full-panel' : ''}`}>
             {!mobileFullPanel && (
               <div className="mobile-peek-bar" onClick={() => setMobileSheetOpen((v) => !v)}>
@@ -4114,7 +4134,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             <div className="mobile-sheet-body">
               {activePanel === 'map' ? renderMapControls()
                 : activePanel === 'locations' ? renderLocationsList()
-                : activePanel === 'baits' ? renderBaitsList()
                 : (
                   viewMode === 'detail' && activeSession && !draftSession ? (
                     <>
@@ -4176,15 +4195,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
       {showRecords && (
         <RecordsModal sessions={sessions} userName={userName} userColor={userColor} onClose={() => setShowRecords(false)} onOpenCatch={(c) => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c); setShowRecords(false) }} />
-      )}
-
-      {showGallery && (
-        <GalleryModal
-          sessions={sessions}
-          onClose={() => setShowGallery(false)}
-          onOpenCatch={(c) => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c); setShowGallery(false) }}
-          onOpenBait={(label) => { setShowGallery(false); setBaitsInitialKey(label.trim().toLowerCase()); setShowBaits(true) }}
-        />
       )}
 
       {showBaits && (
@@ -4275,16 +4285,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             const c = ticketCatch
             const s = sessionForCatch(c)
             setTicketCatch(null)
-            setMobileSheetOpen(false)
-            if (!s) { mapInstance.current?.setView([c.lat, c.lng], 16); return }
-            setActivePanel(null)
-            if (activeId === s.id && viewMode === 'detail') {
-              mapInstance.current?.setView([c.lat, c.lng], 16)
-            } else {
-              pendingMapFocusRef.current = { sessionId: s.id, lat: c.lat, lng: c.lng, zoom: 16 }
-              setActiveId(s.id)
-              setViewMode('detail')
-            }
+            if (!s) { switchPanel('map'); return }
+            setActiveId(s.id)
+            setViewMode('detail')
+            jumpToMapView(s, { lat: c.lat, lng: c.lng, zoom: 16 })
           }}
           onOpenSession={() => {
             const s = sessionForCatch(ticketCatch)
@@ -4357,6 +4361,67 @@ function SaveLocationForm({ source, onCancel, onSave }) {
           </form>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Malá samostatná mapka v detailu výpravy -- appka ji drží jako vlastní
+// Leaflet instanci (stejný vzor jako LocationPreviewMap v LocationsModal),
+// ať se nemíchá se stavem té velké, sdílené mapy appky. Neinteraktivní
+// (bez zoomu/tažení) -- klik na ni appku přepne rovnou na velkou mapu.
+function SessionMiniMap({ session, onOpen }) {
+  const mapEl = useRef(null)
+  const mapInst = useRef(null)
+
+  useEffect(() => {
+    if (!mapEl.current) return
+    const map = L.map(mapEl.current, {
+      zoomControl: false, attributionControl: false, dragging: false,
+      scrollWheelZoom: false, doubleClickZoom: false, touchZoom: false, boxZoom: false, keyboard: false,
+    })
+    mapInst.current = map
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map)
+
+    const bounds = []
+    const isLure = LURE_TYPES.includes(session.type)
+
+    if (isLure && session.area) {
+      (session.area || [])
+        .filter((pts) => Array.isArray(pts))
+        .map((pts) => pts.filter((p) => p && typeof p.lat === 'number' && typeof p.lng === 'number'))
+        .filter((pts) => pts.length >= 3)
+        .forEach((pts) => {
+          L.polygon(pts.map((p) => [p.lat, p.lng]), { color: '#6B7A4F', weight: 2, fillColor: '#6B7A4F', fillOpacity: 0.2 }).addTo(map)
+          pts.forEach((p) => bounds.push([p.lat, p.lng]))
+        })
+    }
+
+    if (session.lat != null && session.lng != null) {
+      L.circleMarker([session.lat, session.lng], { radius: 6, color: '#2C6E71', weight: 2, fillColor: '#fff', fillOpacity: 1 }).addTo(map)
+      bounds.push([session.lat, session.lng])
+    }
+    ;(session.rods || []).forEach((r, i) => {
+      if (isLure && i === 0) return // stejný bod jako tečka výpravy výše
+      if (r.lat == null || r.lng == null) return
+      L.circleMarker([r.lat, r.lng], { radius: 5, color: '#B97F35', weight: 2, fillColor: '#fff', fillOpacity: 1 }).addTo(map)
+      bounds.push([r.lat, r.lng])
+    })
+
+    if (bounds.length > 1) map.fitBounds(bounds, { padding: [16, 16], maxZoom: 15 })
+    else if (bounds.length === 1) map.setView(bounds[0], 14)
+    else map.setView([49.8, 15.5], 8)
+    setTimeout(() => map.invalidateSize(), 50)
+
+    return () => { map.remove(); mapInst.current = null }
+  }, [session.id])
+
+  return (
+    <div
+      onClick={onOpen}
+      title="Zobrazit na mapě"
+      style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--paper-line)', cursor: 'pointer' }}
+    >
+      <div ref={mapEl} style={{ width: '100%', height: 130, pointerEvents: 'none' }} />
     </div>
   )
 }

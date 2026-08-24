@@ -1350,3 +1350,79 @@ vůči celému oknu. .layout sám o sobě zabírá jen prostor pod
 hlavičkou (.app je flex sloupec: header má svou vlastní výšku,
 .layout dostane zbytek) -- full-panel se tak teď vejde přesně tam a
 do hlavičky nezasahuje.
+
+ZMĚNA (verze 123) -- velká dávka oprav a drobných funkcí nahlášených
+po vyzkoušení verze 122:
+
+1. Přepínání 4 záložek nahoře (Domů/Mapa/Výpravy/Úlovky) přepracováno.
+   Dřív druhý klik na už aktivní záložku appku vždycky přehodil na
+   Výpravy (kvůli staré XOR logice ve switchPanel). Teď každá záložka
+   vede vždycky sama na sebe a druhý (a každý další) klik na už
+   aktivní záložku appku vrátí do jejího výchozího stavu: Mapa vrátí
+   filtry na výchozí (Vše/Úlovky) a zruší fokus na jednu výpravu,
+   Výpravy se vrátí ze detailu zpátky na seznam, Úlovky vrátí kategorii
+   a řazení na výchozí. Řeší to i bod z hlášení "chci se vrátit na
+   seznam výprav druhým kliknutím na Výpravy".
+
+2. Oprava špatného výchozího přiblížení na záložce Mapa. Leaflet si
+   sám nevšimne, že appka mu CSS displayem znovu odkryla kontejner --
+   držel si starou (často nulovou) velikost z doby, kdy byl schovaný,
+   a fitBounds/setView pak počítaly s touhle špatnou velikostí.
+   Přidáno map.invalidateSize() těsně před každým přepočtem přiblížení
+   -- v efektu záložky Mapa i ve sdíleném efektu, co vykresluje detail
+   výpravy.
+
+3, 6, 7. Oprava "vidím jen část mapy a šedou plochu" při přesunu bodu
+   výpravy, přidání dalšího prutu/místa a přidání úlovku. Dvě příčiny
+   najednou: (a) stejný chybějící invalidateSize() jako u bodu 2 výše
+   -- doplněno na stejném místě. (b) Na desktopu appka pod mapou
+   pořád vykreslovala celý detail výpravy (Podmínky/Pruty/Úlovky),
+   i když se zrovna umísťovalo -- appka tak mapě nechala jen zbytek
+   výšky po odečtení detailu, místo celé dostupné plochy. Detail teď
+   appka schová přesně po dobu umísťování (mapNeededForInteraction),
+   mapa tak dostane celou výšku zpátky.
+
+4. Vyřešeno bodem 1 -- druhý klik na aktivní záložku Výpravy teď
+   vrátí ze detailu zpátky na seznam.
+
+5. Souřadnicové čipy u prutů (v detailu výpravy, "Podmínky") teď
+   proklikávají rovnou na záložku Mapa, přiblíženou přesně na
+   kliknutý prut/místo -- dřív jen tiše přesunuly pohled schované
+   mapy, appka tak neviditelně "nic neudělala". Nová volitelná
+   hodnota mapFocusPoint doplňuje mapFocusSessionId a appce dovolí
+   přiblížit se na konkrétní bod místo celé výpravy.
+
+8. Kliknutí na "Lokace" v detailu úlovku teď přepne na záložku Mapa
+   ve fokusovaném režimu (stejná cesta jako "Zobrazit na mapě" u
+   výpravy) -- dřív appka nastavovala pohled schované mapy na
+   Výpravách, viditelně se nic nestalo. Kliknutí na název výpravy
+   (přechod do detailu výpravy) fungovalo správně už předtím, beze
+   změny.
+
+9. Přidána malá mapka (SessionMiniMap) do detailu výpravy, pod
+   fází měsíce. Vlastní, neinteraktivní Leaflet instance (žádné
+   tažení/zoom), ukáže bod výpravy i případné další pruty/místa,
+   u přívlače nakreslenou oblast. Klik na ni appku přepne na
+   záložku Mapa přesně jako tlačítko "Zobrazit na mapě".
+
+10. Nástrahy jsou teď samostatný seznam přes celou šířku, bez mapy
+    pod ním -- stejné zjednodušení jako appka udělala u Úlovků a
+    Výprav. Otevření konkrétní nástrahy (BaitsModal) beze změny,
+    žádnou mapu nikdy nepotřebovalo.
+
+11. Galerie zrušena úplně -- odstraněné tlačítko z menu, stav
+    showGallery, smazaný i celý soubor GalleryModal.jsx. Fotky
+    zůstávají dostupné přes Úlovky (foto přímo na kartě) a přes
+    detail jednotlivé nástrahy.
+
+12. Oprava roztažených fotek u "Podle druhu" v Úlovcích na desktopu.
+    Úlovky teď appka zabírají celou šířku obrazovky (bez mapy vedle),
+    hero fotka (appka bez stropu na šířku) se tak roztáhla přes celou
+    tuhle šířku. Přidán strop šířky (max-width:640px, vycentrováno)
+    jen na desktopu (media dotaz od 861px) -- mobil zůstal beze
+    změny, tam appka byla plná šířka v pořádku.
+
+NEOVĚŘENO ŽIVĚ, otestovat po nasazení jako první: všechny placement
+flows znovu (bod 3/6/7), obě fokusovaná přiblížení (bod 5, 8, 9),
+a chování všech 4 záložek při opakovaném kliknutí (bod 1) -- na
+mobilu i desktopu.
