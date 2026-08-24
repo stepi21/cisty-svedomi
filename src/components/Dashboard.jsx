@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet.markercluster'
 import { supabase } from '../supabaseClient'
@@ -6,7 +6,7 @@ import CatchTicket from './CatchTicket.jsx'
 import HelpModal from './HelpModal.jsx'
 import GalleryModal from './GalleryModal.jsx'
 import BaitsModal, { computeBaitsList } from './BaitsModal.jsx'
-import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconGallery, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconPlay, IconLocate, IconMoonPhase, IconPressureTrend, IconNewest, IconBoat, IconRiverAuto, IconBell, IconHome, IconMap } from '../lib/icons.jsx'
+import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconGallery, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconPlay, IconLocate, IconMoonPhase, IconPressureTrend, IconBoat, IconRiverAuto, IconBell, IconHome, IconMap } from '../lib/icons.jsx'
 import BaitPicker from './BaitPicker.jsx'
 import LocationsModal from './LocationsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
@@ -115,7 +115,19 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [viewMode, setViewMode] = useState('aggregate') // 'aggregate' | 'detail'
   const [myProfile, setMyProfile] = useState(profile)
   const [showNotifications, setShowNotifications] = useState(false)
-  const [mapLayers, setMapLayers] = useState({ myTrips: true, partyTrips: false, myCatches: true, partyCatches: true })
+  // Mapové vrstvy appka dřív řešila jako 4 nezávislá zaškrtávátka (moje/party
+  // × výpravy/úlovky) -- to je fakticky mřížka Kdo × Co, jen appka nutila
+  // uvažovat nad kombinacemi zvlášť. Teď appka drží jen dvě jednoduché volby
+  // (3 možnosti každá) a mapLayers níže je z nich jen odvozený tvar, ať
+  // appka nemusí měnit vykreslovací logiku mapy pod tím.
+  const [mapWho, setMapWho] = useState('both')   // 'me' | 'party' | 'both'
+  const [mapWhat, setMapWhat] = useState('catches') // 'trips' | 'catches' | 'both'
+  const mapLayers = useMemo(() => ({
+    myTrips: (mapWho === 'me' || mapWho === 'both') && (mapWhat === 'trips' || mapWhat === 'both'),
+    partyTrips: (mapWho === 'party' || mapWho === 'both') && (mapWhat === 'trips' || mapWhat === 'both'),
+    myCatches: (mapWho === 'me' || mapWho === 'both') && (mapWhat === 'catches' || mapWhat === 'both'),
+    partyCatches: (mapWho === 'party' || mapWho === 'both') && (mapWhat === 'catches' || mapWhat === 'both'),
+  }), [mapWho, mapWhat])
   const [stationsList, setStationsList] = useState(null) // null = ještě nenačteno
   const [stationsLoading, setStationsLoading] = useState(false)
   const [expandedStationId, setExpandedStationId] = useState(null)
@@ -2183,28 +2195,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setMobileSheetOpen(true)
   }
 
-  // Rychlý skok zpátky na nejnovější výpravu (appka je řadí sestupně podle data,
-  // takže sessions[0] je vždycky ta nejnovější) -- ať se z hlubší historie/
-  // statistik/galerie dá rychle vrátit "nahoru", bez ručního hledání roku/měsíce.
-  function jumpToNewest() {
-    if (sessions.length === 0) return
-    const newest = sessions[0]
-    setSearchQuery('')
-    setActiveCategory('all')
-    setActiveUserFilter('all')
-    const groups = buildGroups(sessions)
-    if (groups.length) {
-      setCollapsedGroups((prev) => {
-        const next = new Set(prev)
-        next.delete(groups[0].key)
-        if (groups[0].months.length) next.delete(groups[0].months[0].key)
-        return next
-      })
-    }
-    setActiveId(newest.id)
-    setViewMode('detail')
-    setActivePanel(null)
-    setMobileSheetOpen(true)
+  // Appka řadí výpravy vždycky od nejnovější nahoru, takže samostatné
+  // tlačítko "Nejnovější" bylo jen duplicitní cesta k tomu, co udělá i
+  // scroll/sbalení nahoru -- appka ho odstranila (viz jedno přepínací
+  // tlačítko Rozbalit/Sbalit vše níže).
+  function isAllExpanded(list) {
+    const groups = buildGroups(list)
+    return groups.every((y) => !collapsedGroups.has(y.key) && y.months.every((m) => !collapsedGroups.has(m.key)))
   }
 
   function startRelocateCatch(catchId) {
@@ -2682,23 +2679,19 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return (
       <>
         <div className="sb-head"><span>Mapa</span></div>
-        <div style={{ padding: '0 18px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <label className="location-check-row">
-            <input type="checkbox" checked={mapLayers.myTrips} onChange={(e) => setMapLayers((p) => ({ ...p, myTrips: e.target.checked }))} />
-            <span>Moje výpravy</span>
-          </label>
-          <label className="location-check-row">
-            <input type="checkbox" checked={mapLayers.partyTrips} onChange={(e) => setMapLayers((p) => ({ ...p, partyTrips: e.target.checked }))} />
-            <span>Výpravy party</span>
-          </label>
-          <label className="location-check-row">
-            <input type="checkbox" checked={mapLayers.myCatches} onChange={(e) => setMapLayers((p) => ({ ...p, myCatches: e.target.checked }))} />
-            <span>Moje úlovky</span>
-          </label>
-          <label className="location-check-row">
-            <input type="checkbox" checked={mapLayers.partyCatches} onChange={(e) => setMapLayers((p) => ({ ...p, partyCatches: e.target.checked }))} />
-            <span>Úlovky party</span>
-          </label>
+        <div style={{ padding: '0 18px 6px' }}>
+          <div className="field-label" style={{ margin: '0 0 4px' }}>Kdo</div>
+          <div className="filter-row" style={{ padding: 0, marginBottom: 12 }}>
+            {[['me', 'Já'], ['party', 'Parta'], ['both', 'Oba']].map(([val, label]) => (
+              <button key={val} className={`filter-chip ${mapWho === val ? 'active' : ''}`} onClick={() => setMapWho(val)}>{label}</button>
+            ))}
+          </div>
+          <div className="field-label" style={{ margin: '0 0 4px' }}>Co</div>
+          <div className="filter-row" style={{ padding: 0 }}>
+            {[['trips', 'Výpravy'], ['catches', 'Úlovky'], ['both', 'Oba']].map(([val, label]) => (
+              <button key={val} className={`filter-chip ${mapWhat === val ? 'active' : ''}`} onClick={() => setMapWhat(val)}>{label}</button>
+            ))}
+          </div>
         </div>
       </>
     )
@@ -2959,9 +2952,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           />
         </div>
           <div className="sb-toolbar">
-            <button className="new-btn" onClick={expandAll}>Rozbalit vše</button>
-            <button className="new-btn" onClick={collapseAll}>Sbalit vše</button>
-            <button className="new-btn" onClick={jumpToNewest}><IconNewest size={13} color="var(--water-deep)" /> Nejnovější</button>
+            <button className="new-btn" onClick={isAllExpanded(visibleSessions) ? collapseAll : expandAll}>
+              {isAllExpanded(visibleSessions) ? 'Sbalit vše' : 'Rozbalit vše'}
+            </button>
           </div>
           <div className="filter-row">
             {['all', 'dravec', 'bila'].map((cat) => (
