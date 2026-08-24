@@ -28,11 +28,11 @@ const USER_PALETTE = [
 ]
 const CATEGORY_COLOR = { dravec: '#5C7A85', bila: '#C4A572' }
 const SESSION_TYPES = [
-  { value: 'kapr', label: 'Kapři (bod)' },
-  { value: 'privlac', label: 'Přívlač (místa)' },
-  { value: 'muska', label: 'Muška (bod)' },
-  { value: 'plavana', label: 'Plavaná (bod)' },
-  { value: 'jine', label: 'Jiné (bod)' },
+  { value: 'kapr', label: 'Kapři' },
+  { value: 'privlac', label: 'Přívlač' },
+  { value: 'muska', label: 'Muška' },
+  { value: 'plavana', label: 'Plavaná' },
+  { value: 'jine', label: 'Jiné' },
 ]
 // AREA_TYPES zůstává prázdné -- appka už u ŽÁDNÉHO typu nekreslí plochu u
 // NOVÝCH výprav (přívlač byl poslední, co ji používal). Staré výpravy s už
@@ -137,6 +137,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // chce se tam po zrušení fokusu na to samé místo i nadále dívat, jen s
   // doplněnými ostatními výpravami/úlovky podle Kdo/Co.
   const prevMapFocusRef = useRef(null)
+  // Druhý klik na už aktivní záložku Mapa appku vrátí do výchozího stavu --
+  // i kdyby appka zrovna byla ve fokusu na jednu výpravu. Bez týhle pojistky
+  // by výše popsaný "zůstaň přiblížený" mechanismus (cameFromFocus) klidně
+  // zabránil i tomuhle výslovnému požadavku na reset.
+  const mapForceResetRef = useRef(false)
   const [mapWhat, setMapWhat] = useState('catches') // 'trips' | 'catches' | 'both'
   const mapLayers = useMemo(() => ({
     myTrips: (mapWho === 'me' || mapWho === 'both') && (mapWhat === 'trips' || mapWhat === 'both'),
@@ -144,6 +149,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     myCatches: (mapWho === 'me' || mapWho === 'both') && (mapWhat === 'catches' || mapWhat === 'both'),
     partyCatches: (mapWho === 'party' || mapWho === 'both') && (mapWhat === 'catches' || mapWhat === 'both'),
   }), [mapWho, mapWhat])
+  // Domů: appka si pamatuje, kde uživatel scrolloval, ať se po odchodu a
+  // návratu appka vrátí přesně tam (ne nahoru, ne doprostřed náhodně).
+  // Druhý klik na už aktivní Domů appku naopak pošle nahoru, na nejnovější
+  // úlovek -- viz switchPanel a efekt níže na [activePanel, homeNavNonce].
+  const sidebarRef = useRef(null)
+  const homeScrollRef = useRef(0)
+  const pendingHomeScrollModeRef = useRef('top')
+  const [homeNavNonce, setHomeNavNonce] = useState(0)
   const [stationsList, setStationsList] = useState(null) // null = ještě nenačteno
   const [stationsLoading, setStationsLoading] = useState(false)
   const [expandedStationId, setExpandedStationId] = useState(null)
@@ -284,10 +297,23 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // dlaždice mohly vykreslit jen zčásti/špatně. Malé zpoždění, ať CSS
   // stihne mapu zase zviditelnit dřív, než Leaflet měří kontejner.
   useEffect(() => {
-    if (activePanel === 'home' || activePanel === 'stations' || !mapInstance.current) return
+    if (!mapInstance.current) return
+    const mapHidden = activePanel === 'home' || activePanel === 'stations' ||
+      ((activePanel === 'catches' || activePanel === 'baits' || activePanel === null) && !mapNeededForInteraction)
+    if (mapHidden) return
     const t = setTimeout(() => mapInstance.current?.invalidateSize(), 50)
     return () => clearTimeout(t)
-  }, [activePanel])
+  }, [activePanel, mapNeededForInteraction])
+
+  // Domů: po vstupu appka nastaví scroll podle pendingHomeScrollModeRef --
+  // 'top' (druhý klik na už aktivní Domů) appku pošle nahoru, 'restore'
+  // (příchod odjinud) appku vrátí tam, kde uživatel scrolloval naposled.
+  // homeNavNonce appce zaručí, že se efekt spustí i když activePanel
+  // textově zůstává 'home' (druhý klik samotný by React jinak přeskočil).
+  useEffect(() => {
+    if (activePanel !== 'home' || !sidebarRef.current) return
+    sidebarRef.current.scrollTop = pendingHomeScrollModeRef.current === 'top' ? 0 : (homeScrollRef.current || 0)
+  }, [activePanel, homeNavNonce])
 
   useEffect(() => { loadSessions(); loadMembers(); loadBaitCatalog(); loadLocationsCatalog() }, [groupId])
 
@@ -499,7 +525,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const point = { lat: latlng.lat, lng: latlng.lng }
 
     if (target === 'session-point') {
-      setRodPointsDraft((prev) => [...(prev || []), point])
+      setRodPointsDraft((prev) => {
+        const next = [...(prev || []), point]
+        // Po prvním prutu appka přiblíží mapu blíž -- další pruty bývají
+        // jen pár metrů od sebe, na širším přiblížení by se klikalo špatně.
+        if (next.length === 1) mapInstance.current?.setView([point.lat, point.lng], 18)
+        return next
+      })
       return
     }
 
@@ -862,6 +894,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     gpsRequestIdRef.current++ // zneplatní případnou dobíhající GPS odpověď
     setGpsCapturing(false)
     setGpsConfirmStep(null)
+    // Zpětná výprava se obvykle zapisuje na stejném nebo blízkém místě jako
+    // ta poslední -- appka proto mapu rovnou přiblíží tam (sessions appka
+    // drží seřazené od nejnovější), místo aby appka mapu nechala tam, kde
+    // náhodou zůstala od dřívějška.
+    const last = sessions[0]
+    if (last?.lat != null && last?.lng != null) {
+      mapInstance.current?.setView([last.lat, last.lng], 13)
+    }
     setPlacementTarget('shore-point-click')
   }
 
@@ -1147,7 +1187,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     // tohohle by fitBounds/setView níže počítaly se starou (často nulovou)
     // velikostí a appka by skončila přiblížená na nesmyslném místě.
     map.invalidateSize()
-    const cameFromFocus = prevMapFocusRef.current != null && mapFocusSessionId == null
+    const cameFromFocus = !mapForceResetRef.current && prevMapFocusRef.current != null && mapFocusSessionId == null
     prevMapFocusRef.current = mapFocusSessionId
     markersLayer.current.clearLayers()
     aggregateClusterLayer.current.clearLayers()
@@ -1276,6 +1316,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     } else {
       map.setView([49.8, 15.5], 8)
     }
+    mapForceResetRef.current = false
   }, [activePanel, mapLayers, sessions, locationsCatalog, userId, members, mapFocusSessionId, mapFocusPoint])
 
   async function backfillBaitPhoto(baitName, photoUrl) {
@@ -2063,6 +2104,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function chooseCatchOnMap() {
     setCatchChoosing(false)
+    if (activeSession?.lat != null && activeSession?.lng != null) {
+      mapInstance.current?.setView([activeSession.lat, activeSession.lng], 17)
+    }
     setPlacementTarget('catch-point')
   }
 
@@ -2304,6 +2348,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   function switchPanel(panel) {
     cancelAllPlacementFlows()
     const isRepeat = activePanel === panel
+    // appka appce uloží scrollovou pozici Domů těsně předtím, než z něj
+    // odejde -- ať se po návratu jedním kliknutím vrátí přesně tam.
+    if (activePanel === 'home' && panel !== 'home' && sidebarRef.current) {
+      homeScrollRef.current = sidebarRef.current.scrollTop
+    }
+    if (panel === 'home') {
+      pendingHomeScrollModeRef.current = isRepeat ? 'top' : 'restore'
+      setHomeNavNonce((n) => n + 1) // appka appce zaručí, že se scroll efekt spustí i při druhém kliku (activePanel se textově nezmění)
+    }
     setActivePanel(panel)
     setSearchQuery('')
     setCatchesCategory('all')
@@ -2314,8 +2367,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setMapFocusPoint(null)
     if (isRepeat) {
       if (panel === 'catches') setCatchesSortMode('species')
-      else if (panel === 'map') { setMapWho('both'); setMapWhat('catches') }
-      else if (panel === null) setViewMode('aggregate')
+      else if (panel === 'map') { setMapWho('both'); setMapWhat('catches'); mapForceResetRef.current = true }
+      else if (panel === null) { setViewMode('aggregate'); setActiveCategory('all'); setActiveUserFilter('all') }
     }
   }
 
@@ -2414,6 +2467,19 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   function startAddRodToSession(session) {
     addRodToSessionRef.current = { sessionId: session.id, type: session.type }
     setMobileSheetOpen(false)
+    // Appka mapu přiblíží, ať uživatel rovnou vidí, kam kliknout -- u víc
+    // už existujících míst (typicky přívlač) appka ukáže všechna najednou,
+    // ať je vidět, kde už se chytalo, a kam přidat další.
+    const existingPoints = (session.rods || [])
+      .filter((r) => r.lat != null && r.lng != null)
+      .map((r) => [r.lat, r.lng])
+    if (existingPoints.length > 1) {
+      mapInstance.current?.fitBounds(existingPoints, { padding: [60, 60], maxZoom: 17 })
+    } else if (existingPoints.length === 1) {
+      mapInstance.current?.setView(existingPoints[0], 17)
+    } else if (session.lat != null && session.lng != null) {
+      mapInstance.current?.setView([session.lat, session.lng], 17)
+    }
     setPlacementTarget('add-rod-to-session')
   }
 
@@ -3608,7 +3674,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 const items = computeNotifications()
                 return (
                   <div className="type-picker" style={{ position: 'absolute', top: '100%', right: 0, left: 'auto', transform: 'none', marginTop: 6, minWidth: 260, maxWidth: 320, zIndex: 500 }}>
-                    <div className="type-picker-title">Novinky</div>
+                    <div className="type-picker-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                      <span>Novinky</span>
+                      <button type="button" onClick={closeNotifications} style={{ background: 'transparent', border: 'none', color: 'var(--white)', cursor: 'pointer', display: 'flex', padding: 0 }}><IconClose size={14} /></button>
+                    </div>
                     {items.length === 0 ? (
                       <p className="hint-text" style={{ margin: 0 }}>Zatím žádné novinky.</p>
                     ) : (
@@ -3659,7 +3728,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               </button>
               {showMoreMenu && (
                 <div className="type-picker" style={{ position: 'absolute', top: '100%', right: 0, left: 'auto', transform: 'none', marginTop: 6, minWidth: 190, zIndex: 500 }}>
-                  <div className="type-picker-title">{myProfile?.display_name}</div>
+                  <div className="type-picker-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span>{myProfile?.display_name}</span>
+                    <button type="button" onClick={() => setShowMoreMenu(false)} style={{ background: 'transparent', border: 'none', color: 'var(--white)', cursor: 'pointer', display: 'flex', padding: 0 }}><IconClose size={14} /></button>
+                  </div>
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); createInvite() }}>+ pozvat parťáka</button>
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); onSignOut() }}>Odhlásit</button>
                   <div style={{ height: 1, background: 'var(--paper-line)', margin: '6px 0' }} />
@@ -3715,7 +3787,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         : activePanel === null && !mapNeededForInteraction ? 'no-map-keep-detail'
         : ''
       }`}>
-        <aside className="sidebar">
+        <aside className="sidebar" ref={sidebarRef}>
           {activePanel === 'home' ? renderHomeFeed()
             : activePanel === 'stations' ? renderStationsPanel()
             : activePanel === 'map' ? renderMapControls()

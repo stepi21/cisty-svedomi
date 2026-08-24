@@ -1426,3 +1426,54 @@ NEOVĚŘENO ŽIVĚ, otestovat po nasazení jako první: všechny placement
 flows znovu (bod 3/6/7), obě fokusovaná přiblížení (bod 5, 8, 9),
 a chování všech 4 záložek při opakovaném kliknutí (bod 1) -- na
 mobilu i desktopu.
+
+ZMĚNA (verze 124) -- doladění chování po vyzkoušení verze 123:
+
+1. Domů: druhý klik na už aktivní záložku appku pošle úplně nahoru
+   (na nejnovější úlovek). Přechod z Domů na jinou záložku a zpět
+   appku vrátí přesně tam, kde uživatel scrolloval naposled -- appka
+   si scrollovou pozici pamatuje (homeScrollRef), ne appka jen vždycky
+   nahoru ani vždycky doprostřed náhodou.
+
+2. Mapa: druhý klik na už aktivní záložku teď fakt vrátí výchozí
+   pohled (fit na výchozí filtr), i po předchozím fokusu na jednu
+   výpravu. Dřív tomu bránil mechanismus "po zrušení fokusu zůstaň
+   přiblížený" -- appka mu teď dala výslovnou pojistku (mapForceResetRef),
+   co se spustí jen na tenhle konkrétní druhý klik.
+
+3. Výpravy: druhý klik na už aktivní záložku teď navíc vrátí i filtry
+   (kategorie, kdo) na "Vše" -- dřív appka vracela jen seznam misto
+   detailu, filtry appce zůstávaly.
+
+4. Oprava: na mobilu (hlavně Safari) nešlo kliknout na úplně poslední
+   řádek seznamu výprav v klidovém stavu (bez mapy). Přidán stejný
+   spodní odsazovací prostor jako u Domů.
+
+5. Nová výprava (zpětná, ne živá): typová nabídka teď nemá text v
+   závorkách u jednotlivých typů. Prostší popisky, bez "(bod)" a
+   "(místa)".
+
+6. Oprava šedé/useknuté mapy pod typovou nabídkou nové výpravy.
+   Chyběl invalidateSize() přesně v tomhle kroku. Přidán do
+   obecného bezpečnostního efektu, co teď hlídá i tenhle stav.
+
+7. Zpětná výprava: mapa se teď rovnou přiblíží na naposledy použité
+   místo (poslední výprava). Dřív zůstávala tam, kde náhodou byla.
+
+8. Nová výprava, bodové typy: po umístění prvního prutu appka mapu
+   přiblíží blíž (zoom 18). Další prut bývá jen pár metrů od prvního,
+   na širším přiblížení se klikalo špatně. Platí i pro živé výpravy.
+
+9. Přidání úlovku (tlačítko "+ úlovek", klik na mapu): mapa se před
+   čekáním na klik přiblíží na výpravu (zoom 17).
+
+10. Přidání dalšího prutu/místa k už uložené výpravě: mapa se před
+    čekáním na klik přiblíží. Je-li míst víc (typicky přívlač),
+    appka je zobrazí všechny najednou.
+
+11. Doplněn křížek na zavření k panelu Novinky (zvoneček) a k menu
+    "Více" -- dřív šly zavřít jen kliknutím mimo ně.
+
+NEOVĚŘENO ŽIVĚ, otestovat po nasazení: scroll na Domů (oba směry),
+reset Mapy druhým klikem i po fokusu na výpravu, reset filtrů na
+Výpravách druhým klikem, a všechna nová přiblížení mapy (body 6-10).
