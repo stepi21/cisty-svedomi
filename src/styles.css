@@ -180,7 +180,10 @@ header h1 .accent{ color:var(--amber); }
      ukazuje přes vysouvací mobile-sheet nad mapou -- tady žádná mapa
      není, takže sidebar appka rovnou ukáže na celou obrazovku místo
      schovávání a čekání na sheet, co by neměl co překrývat. */
-  .layout.no-map .sidebar{ display:block; position:absolute; inset:0; overflow-y:auto; max-height:none; z-index:5; background:var(--paper); }
+  .layout.no-map .sidebar{
+    display:block; position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    max-height:none; z-index:5; background:var(--paper); padding-bottom:50px;
+  }
 }
 
 /* ---------- mobile bottom sheet (map stays dominant underneath) ---------- */
