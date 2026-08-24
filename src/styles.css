@@ -75,9 +75,19 @@ body{
 /* ---------- app shell ---------- */
 .app{ display:flex; flex-direction:column; min-height:100vh; }
 header{ background:var(--water-deep); color:var(--white); padding:16px 20px; }
-.head-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.head-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; row-gap:10px; }
 header h1{ font-family:'Fraunces', serif; font-weight:600; font-size:var(--fs-4xl); margin:0; }
 header h1 .accent{ color:var(--amber); }
+.live-header-btn{
+  display:inline-flex; align-items:center; gap:6px; flex:none;
+  border:none; background:var(--amber); color:var(--ink);
+  font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:var(--fs-sm2);
+  padding:7px 14px; border-radius:20px; cursor:pointer;
+  box-shadow:0 2px 6px rgba(0,0,0,.2);
+}
+.live-header-btn:hover{ background:var(--amber-deep); }
+.live-header-btn.active{ background:#B4432E; color:#fff; animation:live-pulse 1.8s infinite; }
+.live-header-btn.active:hover{ background:#8F3423; }
 .new-btn.hamburger-btn{ font-size:22px; padding:9px 14px; line-height:1; flex:none; background:var(--white); color:var(--water-deep); border:1px solid var(--white); }
 .new-btn.hamburger-btn:hover{ background:var(--paper); color:var(--water-deep); border-color:var(--paper); }
 .notif-bell-btn{ position:relative; }
@@ -281,25 +291,12 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
   box-shadow:0 4px 12px rgba(0,0,0,.15); cursor:pointer;
 }
 .my-location-btn:hover{ border-color:var(--water-mid); color:var(--water-mid); }
-.live-session-btn{
-  display:inline-flex; align-items:center;
-  position:absolute; bottom:16px; right:16px; z-index:420;
-  background:var(--amber); border:1px solid var(--amber-deep); border-radius:20px;
-  padding:8px 14px; font-family:'IBM Plex Mono', monospace; font-size:var(--fs-sm); font-weight:600; color:#3A2A0F;
-  box-shadow:0 4px 12px rgba(0,0,0,.2); cursor:pointer;
-}
-.live-session-btn:hover{ background:var(--amber-deep); color:#fff; }
 @media (max-width:860px){
   .my-location-btn{
     top:12px; right:12px; bottom:auto; left:auto;
     padding:9px; border-radius:50%; z-index:420;
   }
   .my-location-btn .btn-label{ display:none; }
-  .live-session-btn{
-    top:12px; left:12px; bottom:auto; right:auto;
-    padding:9px; border-radius:50%; z-index:420;
-  }
-  .live-session-btn .btn-label{ display:none; }
 }
 #map{ flex:1; min-height:280px; }
 

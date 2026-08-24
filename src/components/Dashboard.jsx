@@ -6,7 +6,7 @@ import CatchTicket from './CatchTicket.jsx'
 import HelpModal from './HelpModal.jsx'
 import GalleryModal from './GalleryModal.jsx'
 import BaitsModal, { computeBaitsList } from './BaitsModal.jsx'
-import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconGallery, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconPlay, IconLocate, IconMoonPhase, IconPressureTrend, IconBoat, IconRiverAuto, IconBell, IconHome, IconMap } from '../lib/icons.jsx'
+import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconGallery, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconLocate, IconMoonPhase, IconPressureTrend, IconBoat, IconRiverAuto, IconBell, IconHome, IconMap } from '../lib/icons.jsx'
 import BaitPicker from './BaitPicker.jsx'
 import LocationsModal from './LocationsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
@@ -420,6 +420,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   const activeSession = sessions.find((s) => s.id === activeId) || null
+  // appka tímhle zjišťuje, jestli má uživatel rozjetou živou výpravu -- podle
+  // toho hlavičkové tlačítko vedle loga přepíná mezi "Chytat" (jantarová,
+  // spustí novou živou výpravu) a "Probíhá" (pulzující červená, skočí zpátky
+  // do detailu té rozjeté výpravy). Appka to schválně váže jen na vlastní
+  // výpravu -- appka nemá důvod tady hlídat rozjeté výpravy zbytku party.
+  const myLiveSession = sessions.find((s) => s.status === 'in_progress' && s.user_id === userId) || null
   const canEdit = activeSession && activeSession.user_id === userId
   const activeSessionRef = useRef(null)
   useEffect(() => { activeSessionRef.current = activeSession }, [activeSession])
@@ -3257,7 +3263,18 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       </datalist>
       <header>
         <div className="head-row">
-          <h1>Čistý<span className="accent">svědomí</span></h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h1>Čistý<span className="accent">svědomí</span></h1>
+            {myLiveSession ? (
+              <button
+                className="live-header-btn active"
+                onClick={() => { setActivePanel(null); setActiveId(myLiveSession.id); setViewMode('detail'); setMobileSheetOpen(true) }}
+                title="Rozjetá výprava"
+              ><IconLive size={11} color="#fff" /> Probíhá</button>
+            ) : (
+              <button className="live-header-btn" onClick={startNewSessionLive} title="Spustit živou výpravu">Chytat</button>
+            )}
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ position: 'relative' }} ref={notificationsRef}>
               <button
@@ -3350,15 +3367,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               title="Domů"
             ><IconHome size={15} /> Domů</button>
             <button
-              className={`new-btn ${activePanel === null ? 'active-toggle' : ''}`}
-              onClick={() => switchPanel(null)}
-              title="Výpravy"
-            ><IconVyprava size={15} /> Výpravy</button>
-            <button
               className={`new-btn ${activePanel === 'map' ? 'active-toggle' : ''}`}
               onClick={() => switchPanel('map')}
               title="Mapa"
             ><IconMap size={15} /> Mapa</button>
+            <button
+              className={`new-btn ${activePanel === null ? 'active-toggle' : ''}`}
+              onClick={() => switchPanel(null)}
+              title="Výpravy"
+            ><IconVyprava size={15} /> Výpravy</button>
             <button
               className={`new-btn ${activePanel === 'catches' ? 'active-toggle' : ''}`}
               onClick={() => switchPanel('catches')}
@@ -3392,7 +3409,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         <main>
           <div ref={mapRef} id="map" style={{ cursor: isPlacingSomething ? 'crosshair' : '' }} />
           <button className="my-location-btn" onClick={goToMyLocation} title="Moje pozice"><IconLocate size={15} /><span className="btn-label"> Moje pozice</span></button>
-          <button className="live-session-btn" onClick={startNewSessionLive} title="Výprava teď"><IconPlay size={15} /><span className="btn-label"> Výprava teď</span></button>
 
           {pickingType && (
             <div className="type-picker">
