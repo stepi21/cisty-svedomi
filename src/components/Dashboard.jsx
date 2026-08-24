@@ -128,6 +128,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // appka přepne panel běžnou cestou (viz switchPanel) nebo appka klikne na
   // tlačítko "Celá mapa".
   const [mapFocusSessionId, setMapFocusSessionId] = useState(null)
+  // appka si tu pamatuje, jestli appka PŘEDTÍM byla ve fokusu -- když appka
+  // fokus zruší (tlačítko "Celá mapa"), appka nechce mapu zase zoomnout na
+  // "fit všechno", protože appka právě byla přiblížená na konkrétní místo a
+  // chce se tam po zrušení fokusu na to samé místo i nadále dívat, jen s
+  // doplněnými ostatními výpravami/úlovky podle Kdo/Co.
+  const prevMapFocusRef = useRef(null)
   const [mapWhat, setMapWhat] = useState('catches') // 'trips' | 'catches' | 'both'
   const mapLayers = useMemo(() => ({
     myTrips: (mapWho === 'me' || mapWho === 'both') && (mapWhat === 'trips' || mapWhat === 'both'),
@@ -1128,6 +1134,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   useEffect(() => {
     if (activePanel !== 'map' || !mapInstance.current || !markersLayer.current || !aggregateClusterLayer.current || !tripsClusterLayer.current) return
     const map = mapInstance.current
+    const cameFromFocus = prevMapFocusRef.current != null && mapFocusSessionId == null
+    prevMapFocusRef.current = mapFocusSessionId
     markersLayer.current.clearLayers()
     aggregateClusterLayer.current.clearLayers()
     tripsClusterLayer.current.clearLayers()
@@ -1146,7 +1154,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       const bounds = []
       const color = userColor(s.user_id)
       const pointIcon = L.divIcon({
-        html: `<div style="width:22px;height:22px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>`,
+        html: `<div style="width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid ${color};box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>`,
         className: '', iconSize: [22, 22], iconAnchor: [11, 11],
       })
       if (s.lat != null && s.lng != null) {
@@ -1246,7 +1254,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       })
     }
 
-    if (bounds.length > 0) {
+    if (cameFromFocus) {
+      // appka právě zrušila fokus na jednu výpravu -- appka nechá appku na
+      // stejném přiblížení, jen appka doplnila zbytek podle Kdo/Co.
+    } else if (bounds.length > 0) {
       map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
     } else {
       map.setView([49.8, 15.5], 8)
