@@ -2694,7 +2694,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   function renderMapControls() {
     return (
       <>
-        <div className="sb-head"><span>Mapa</span></div>
+        <div className="sb-head"></div>
         <div style={{ padding: '0 18px 6px' }}>
           <div className="field-label" style={{ margin: '0 0 4px' }}>Čí záznamy vidět</div>
           <div className="filter-row" style={{ padding: 0, marginBottom: 12 }}>
@@ -2856,7 +2856,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     )
     return (
       <>
-        <div className="sb-head"><span>Domů</span></div>
+        <div className="sb-head"></div>
         {sorted.length === 0 ? (
           <div style={{ padding: '20px 18px', color: 'var(--ink-soft)', fontSize: 13 }}>
             Zatím žádný úlovek — až někdo z party něco chytí, objeví se tady.
@@ -2903,7 +2903,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       .sort((a, b) => (b.caught_at || b.sessionRef.session_date || '').localeCompare(a.caught_at || a.sessionRef.session_date || ''))
     return (
       <>
-        <div className="sb-head"><span>Úlovky</span></div>
+        <div className="sb-head"></div>
         <div className="filter-row">
           {['all', 'dravec', 'bila'].map((cat) => (
             <button
@@ -2957,8 +2957,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   function renderSessionList() {
     return (
       <>
-          <div className="sb-head">
-            <span>Výpravy</span>
+          <div className="sb-head" style={{ justifyContent: 'flex-end' }}>
             <button className="new-btn" onClick={startNewSession}>+ nová výprava</button>
           </div>
           <div style={{ padding: '0 18px 10px', position: 'relative' }}>

@@ -95,10 +95,10 @@ header h1 .accent{ color:var(--amber); }
 @media (max-width:860px){
   header{ padding:14px 16px; }
   .head-row{ gap:6px; }
-  .head-logo-group{ gap:6px; }
+  .head-logo-group{ gap:9px; }
   .head-icons-group{ gap:5px; }
   header h1{ font-size:20px; }
-  .new-btn.live-toggle{ padding:3px 7px; }
+  .new-btn.live-toggle{ padding:4px 10px; }
   .new-btn.hamburger-btn{ padding:7px 10px; }
 }
 .notif-bell-btn{ position:relative; }
@@ -131,15 +131,18 @@ header h1 .accent{ color:var(--amber); }
    -- to je "varianta B" appky) a ikony zvětší, protože appce zbylo místo. */
 @media (max-width:860px){
   .head-secondary-row{ gap:0; margin-top:10px; }
-  .head-actions-primary{ width:100%; gap:0; }
+  .head-actions-primary{ width:100%; gap:0; border-radius:20px; overflow:hidden; }
   .head-actions-primary .new-btn{
-    flex:1; justify-content:center; border-radius:0; border-style:solid; border-width:1px 0 1px 1px;
+    flex:1; justify-content:center; border-radius:0; border:none;
     padding:11px 4px;
   }
-  .head-actions-primary .new-btn:first-child{ border-radius:20px 0 0 20px; }
-  .head-actions-primary .new-btn:last-child{ border-radius:0 20px 20px 0; border-width:1px; }
   .head-actions-primary .nav-label{ display:none; }
-  .head-actions-primary .new-btn svg{ width:22px; height:auto; }
+  /* appka sjednocuje ikony podle VÝŠKY, ne podle šířky -- rybí ikona (úlovky)
+     má plochý poměr stran (64:34), takže při zarovnání na stejnou šířku jako
+     čtvercové ikony vyjde nápadně nižší/menší. Podle výšky appka dá všem
+     ikonám stejnou vizuální váhu v řádku, šířka se u appky dopočítá sama
+     podle vlastního poměru stran každé ikony. */
+  .head-actions-primary .new-btn svg{ width:auto; height:22px; }
 }
 .invite-banner{
   margin-top:10px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.25);
