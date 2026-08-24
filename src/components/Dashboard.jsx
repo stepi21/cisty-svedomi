@@ -1179,7 +1179,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       })
     }
 
-    if (bounds.length > 0) {
+    if (pendingMapFocusRef.current) {
+      // Appka sem doskočila z detailu výpravy/úlovku (tlačítko "Zobrazit na
+      // mapě") -- appka zaostří přesně na ten bod, ne na fitBounds přes
+      // úplně všechno, což by appka jinak dělala na Mapě vždycky.
+      const f = pendingMapFocusRef.current
+      map.setView([f.lat, f.lng], f.zoom || 15)
+      pendingMapFocusRef.current = null
+    } else if (bounds.length > 0) {
       map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
     } else {
       map.setView([49.8, 15.5], 8)
@@ -2247,6 +2254,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setPlacementTarget('relocate-session-point')
   }
 
+  // Appka doskočí ze detailu výpravy rovnou na záložku Mapa, zaostřenou na
+  // tenhle konkrétní bod -- appka to řeší přes pendingMapFocusRef, co appka
+  // konzumuje v efektu pro souhrnnou mapu (viz výše).
+  function jumpToMapView(session) {
+    if (session.lat == null || session.lng == null) return
+    pendingMapFocusRef.current = { sessionId: session.id, lat: session.lat, lng: session.lng, zoom: 15 }
+    switchPanel('map')
+  }
+
   // Appka umožní přidat nový prut k UŽ ULOŽENÉ výpravě -- na rozdíl od
   // "+ další prut" ve formuláři nové výpravy (co existuje jen PŘED
   // uložením), tohle appka nabízí přímo v detailu hotové výpravy.
@@ -3123,6 +3139,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
                   <h3>Podmínky</h3>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <button className="new-btn" onClick={() => jumpToMapView(activeSession)}><IconMap size={13} /> Zobrazit na mapě</button>
                     <button className="new-btn" onClick={() => duplicateSession(activeSession)}><IconDuplicate size={13} /> Nová jako tahle</button>
                     {canEdit && <button className="new-btn" onClick={() => startRelocateFromCard(activeSession)}><IconRevir size={13} /> Přesunout bod</button>}
                     {canEdit && <button className="new-btn" onClick={() => startEditSession(activeSession)}><IconEdit size={13} /> Upravit výpravu</button>}
