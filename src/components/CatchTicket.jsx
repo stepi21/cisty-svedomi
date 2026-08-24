@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 import { uploadPhoto } from '../lib/storage.js'
 import { moonPhaseName, fetchWeather } from '../lib/weather.js'
@@ -26,6 +26,16 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [pickingRevir, setPickingRevir] = useState(false)
+  // appka tady appce postaví seznam appce dostupných appce fotek (úlovek +
+  // appce nástraha, pokud appka obojí má) -- appka appce klikne na kteroukoli
+  // z nich a appka appce otevře přes celou obrazovku, s možností přepnout na
+  // tu druhou (šipky nebo swipe).
+  const photos = [
+    c.photo_url && { url: c.photo_url, label: c.species },
+    c.bait_photo_url && { url: c.bait_photo_url, label: c.bait || 'Nástraha' },
+  ].filter(Boolean)
+  const [fullscreenIndex, setFullscreenIndex] = useState(null)
+  const touchStartXRef = useRef(null)
   const linkedLocations = (session?.session_locations || [])
     .map((sl) => locationsCatalog.find((l) => l.id === sl.location_id))
     .filter(Boolean)
@@ -186,7 +196,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
             <>
               <div className="ticket-illustration">
                 {c.photo_url
-                  ? <img src={c.photo_url} alt={c.species} className="catch-photo" />
+                  ? <img src={c.photo_url} alt={c.species} className="catch-photo" onClick={() => setFullscreenIndex(photos.findIndex((p) => p.url === c.photo_url))} style={{ cursor: 'zoom-in' }} />
                   : <div style={{ width: 120 }} dangerouslySetInnerHTML={{ __html: fishSVG(color) }} />}
               </div>
               <div className="ticket-stats">
@@ -197,7 +207,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
               <div className="ticket-line"><span className="lab">Nástraha</span><span className="val">{c.bait || '—'}</span></div>
               {c.bait_photo_url && (
                 <div className="ticket-illustration" style={{ marginTop: 6 }}>
-                  <img src={c.bait_photo_url} alt="nástraha" style={{ maxHeight: 90, borderRadius: 8 }} />
+                  <img src={c.bait_photo_url} alt="nástraha" style={{ maxHeight: 90, borderRadius: 8, cursor: 'zoom-in' }} onClick={() => setFullscreenIndex(photos.findIndex((p) => p.url === c.bait_photo_url))} />
                 </div>
               )}
               <div className="ticket-line"><span className="lab">Čas úlovku</span><span className="val">{c.caught_at ? new Date(c.caught_at).toLocaleTimeString('cs-CZ') : '—'}</span></div>
@@ -308,6 +318,33 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
           )}
         </div>
       </div>
+      {fullscreenIndex !== null && photos[fullscreenIndex] && (
+        <div
+          className="fullscreen-photo-overlay"
+          onClick={(e) => e.target === e.currentTarget && setFullscreenIndex(null)}
+          onTouchStart={(e) => { touchStartXRef.current = e.touches[0].clientX }}
+          onTouchEnd={(e) => {
+            if (touchStartXRef.current == null) return
+            const dx = e.changedTouches[0].clientX - touchStartXRef.current
+            touchStartXRef.current = null
+            if (Math.abs(dx) < 40 || photos.length < 2) return
+            setFullscreenIndex((i) => (dx < 0 ? (i + 1) % photos.length : (i - 1 + photos.length) % photos.length))
+          }}
+        >
+          <button className="fullscreen-photo-close" onClick={() => setFullscreenIndex(null)}><IconClose size={20} color="#fff" /></button>
+          <img src={photos[fullscreenIndex].url} alt={photos[fullscreenIndex].label} className="fullscreen-photo-img" />
+          {photos.length > 1 && (
+            <>
+              <button className="fullscreen-photo-nav prev" onClick={() => setFullscreenIndex((i) => (i - 1 + photos.length) % photos.length)}>‹</button>
+              <button className="fullscreen-photo-nav next" onClick={() => setFullscreenIndex((i) => (i + 1) % photos.length)}>›</button>
+              <div className="fullscreen-photo-dots">
+                {photos.map((_, i) => <span key={i} className={i === fullscreenIndex ? 'active' : ''} />)}
+              </div>
+            </>
+          )}
+          <div className="fullscreen-photo-label">{photos[fullscreenIndex].label}</div>
+        </div>
+      )}
     </div>
   )
 }

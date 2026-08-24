@@ -238,6 +238,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [searchQuery, setSearchQuery] = useState('') // hledání ve výpravách (název, revír, druh, nástraha)
   const [catchesCategory, setCatchesCategory] = useState('all') // filtr dravec/bílá ryba v panelu Úlovky
   const [catchesSortMode, setCatchesSortMode] = useState('species') // 'species' | 'date' | 'user' -- appka defaultně řadí podle druhu, tam appka ukazuje rekord
+  const [homeFullscreenPhoto, setHomeFullscreenPhoto] = useState(null) // {url, label} | null -- klik na fotku v appce na Domů appka otevře přímo přes celou obrazovku, bez otevírání celého lístku
 
   useEffect(() => {
     function goOnline() { setIsOnline(true) }
@@ -2969,7 +2970,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 key={c.id} className="feed-card"
                 onClick={() => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c) }}
               >
-                <div className="feed-card-photo">
+                <div
+                  className="feed-card-photo"
+                  onClick={c.photo_url ? (e) => { e.stopPropagation(); setHomeFullscreenPhoto({ url: c.photo_url, label: c.species }) } : undefined}
+                  style={c.photo_url ? { cursor: 'zoom-in' } : undefined}
+                >
                   {c.photo_url
                     ? <img src={c.photo_url} alt={c.species} />
                     : <div className="feed-card-photo-fallback" dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />}
@@ -3051,7 +3056,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
     function CatchRow({ c }) {
       return (
-        <div className="record-row" onClick={() => openCatch(c)}>
+        <div className="record-row" style={{ borderLeft: `3px solid ${userColor(c.sessionRef.user_id)}`, paddingLeft: 15 }} onClick={() => openCatch(c)}>
           <div className="record-head">
             <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
               <div className="fish-mini" style={{ flex: 'none', width: 26, height: 26 }} dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />
@@ -4237,6 +4242,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onUpdated={loadSessions}
           onDeleted={() => { setTicketCatch(null); loadSessions() }}
         />
+      )}
+      {homeFullscreenPhoto && (
+        <div className="fullscreen-photo-overlay" onClick={(e) => e.target === e.currentTarget && setHomeFullscreenPhoto(null)}>
+          <button className="fullscreen-photo-close" onClick={() => setHomeFullscreenPhoto(null)}><IconClose size={20} color="#fff" /></button>
+          <img src={homeFullscreenPhoto.url} alt={homeFullscreenPhoto.label} className="fullscreen-photo-img" />
+          <div className="fullscreen-photo-label">{homeFullscreenPhoto.label}</div>
+        </div>
       )}
       {toast && <div className="save-toast">{toast}</div>}
     </div>
