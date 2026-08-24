@@ -12,9 +12,10 @@ import { useId } from 'react'
 export function IconVyprava({ size = 20, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M5.2 21.4c-.9.6-1.7-.4-1-1.2C6.6 16.6 11 12 14.7 8c1-1 1.6-2.2 2.6-3.1.6-.6 1.6.2 1.2 1-1.1 2.2-2.7 4-4.3 5.8-3.4 3.7-6.1 7-9 9.7Z" fill={color} />
-      <ellipse cx="6.6" cy="18.6" rx="1.7" ry="1.3" fill="none" stroke={color} strokeWidth="1.2" transform="rotate(-30 6.6 18.6)" />
-      <path d="M3 20.8c1.6-1 3.3-.9 4.6.4s3 1.4 4.6.3" stroke={color} strokeWidth="1.1" fill="none" strokeLinecap="round" opacity=".6" />
+      <path d="M4.4 20.6c-.7.5-1.4-.3-.9-1C7.3 15 12 10 16 5.6c.7-.8 1.2-1.7 2-2.4.6-.5 1.4.2 1 .9-.9 1.7-2.1 3.1-3.3 4.5-3.6 4-6.7 7.9-10.2 11.1Z" fill={color} />
+      <circle cx="5.8" cy="18.2" r="1.6" fill="none" stroke={color} strokeWidth="1.2" />
+      <path d="M17 4.4c1.4 2.6 1.6 5.7.6 8.9" stroke={color} strokeWidth="1" fill="none" strokeLinecap="round" opacity=".6" />
+      <circle cx="18" cy="14" r="1" fill={color} opacity=".6" />
     </svg>
   )
 }

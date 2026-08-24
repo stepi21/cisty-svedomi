@@ -3365,22 +3365,22 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               className={`new-btn ${activePanel === 'home' ? 'active-toggle' : ''}`}
               onClick={() => switchPanel('home')}
               title="Domů"
-            ><IconHome size={15} /> Domů</button>
+            ><IconHome size={15} /> <span className="nav-label">Domů</span></button>
             <button
               className={`new-btn ${activePanel === 'map' ? 'active-toggle' : ''}`}
               onClick={() => switchPanel('map')}
               title="Mapa"
-            ><IconMap size={15} /> Mapa</button>
+            ><IconMap size={15} /> <span className="nav-label">Mapa</span></button>
             <button
               className={`new-btn ${activePanel === null ? 'active-toggle' : ''}`}
               onClick={() => switchPanel(null)}
               title="Výpravy"
-            ><IconVyprava size={15} /> Výpravy</button>
+            ><IconVyprava size={15} /> <span className="nav-label">Výpravy</span></button>
             <button
               className={`new-btn ${activePanel === 'catches' ? 'active-toggle' : ''}`}
               onClick={() => switchPanel('catches')}
               title="Úlovky"
-            ><IconUlovek size={15} eyeColor="var(--water-deep)" /> Úlovky</button>
+            ><IconUlovek size={15} eyeColor="var(--water-deep)" /> <span className="nav-label">Úlovky</span></button>
           </div>
         </div>
         {inviteInfo && (

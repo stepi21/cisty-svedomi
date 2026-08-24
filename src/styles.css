@@ -126,15 +126,20 @@ header h1 .accent{ color:var(--amber); }
 .head-actions-primary .new-btn{ display:inline-flex; align-items:center; gap:6px; }
 /* appka na mobilu udělá ze 4 tabů plnošířkový segmentovaný přepínač (stejný
    díl = 25 % šířky) místo pilulek s proměnlivou šířkou -- appka tím zaručí,
-   že se to vejde na jakoukoli šířku displeje, ne jen "obvykle to sedí". */
+   že se to vejde na jakoukoli šířku displeje, ne jen "obvykle to sedí".
+   Appka tu navíc schová popisky (jen 4 ikony appka pozná rychle i bez textu
+   -- to je "varianta B" appky) a ikony zvětší, protože appce zbylo místo. */
 @media (max-width:860px){
   .head-secondary-row{ gap:0; margin-top:10px; }
   .head-actions-primary{ width:100%; gap:0; }
   .head-actions-primary .new-btn{
     flex:1; justify-content:center; border-radius:0; border-style:solid; border-width:1px 0 1px 1px;
+    padding:11px 4px;
   }
   .head-actions-primary .new-btn:first-child{ border-radius:20px 0 0 20px; }
   .head-actions-primary .new-btn:last-child{ border-radius:0 20px 20px 0; border-width:1px; }
+  .head-actions-primary .nav-label{ display:none; }
+  .head-actions-primary .new-btn svg{ width:22px; height:auto; }
 }
 .invite-banner{
   margin-top:10px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.25);
