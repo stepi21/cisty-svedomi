@@ -169,6 +169,15 @@ header h1 .accent{ color:var(--amber); }
 .layout{ display:grid; grid-template-columns:300px 1fr; flex:1; min-height:0; }
 .layout.no-map{ grid-template-columns:1fr; }
 .layout.no-map main{ display:none; }
+/* Výpravy v klidu (bez zakládání/úpravy): appka mapu schová, ale nechá
+   `main` vykreslený, ať umí kdykoli mapu vrátit zpátky (viz
+   mapNeededForInteraction v Dashboard.jsx). Na desktopu appka nechá sloupec
+   s detailem výpravy zaplnit místo, kde dřív byla mapa. */
+.layout.no-map-keep-detail #map{ display:none; }
+.layout.no-map-keep-detail .my-location-btn{ display:none; }
+@media (min-width:861px){
+  .layout.no-map-keep-detail .desktop-detail-wrap{ display:block; flex:1; overflow-y:auto; }
+}
 @media (max-width:860px){
   html, body, #root{ height:100%; overflow:hidden; }
   .app{ position:fixed; inset:0; overflow:hidden; }

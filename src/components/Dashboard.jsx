@@ -2699,6 +2699,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'shore-point-click' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || placementTarget === 'new-location-point' || placementTarget === 'add-rod-to-session' || areaDraft || riverLineDraft || rodPointsDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
 
+  // Výpravy a Úlovky mají velkou mapu skrytou (viz layout níže), ale pořád
+  // potřebují klikat na mapu při zakládání/úpravě výpravy nebo přesunu bodu.
+  // Tahle proměnná pokrývá úplně každý stav, co appka ukazuje jako panel
+  // přímo nad mapou (type-picker, place-hint, potvrzení oblasti...) --
+  // kdykoli je pravdivá, appka mapu vrátí zpátky bez ohledu na aktivní panel.
+  const mapNeededForInteraction = !!(
+    isPlacingSomething || pickingType || locationPickerStep || gpsCapturing || gpsConfirmStep ||
+    catchChoosing || areaDrawChoice || riverConfirm || editingAreasSession || editingAreasLocation || savingLocationFor
+  )
+
   // --- postranní panel/mobilní lišta v režimu "🗺 Mapa" — přepínatelné vrstvy + hledání míst ---
   // --- panel "Měrné stanice" (☰ Více) -- appka ukáže stanice ČHМÚ nejblíž
   // místům, kde parta chytá (průměr GPS bodů vlastních výprav, jinak
@@ -3649,7 +3659,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         )}
       </header>
 
-      <div className={`layout ${activePanel === 'home' || activePanel === 'stations' ? 'no-map' : ''}`}>
+      <div className={`layout ${
+        (activePanel === 'home' || activePanel === 'stations' || activePanel === 'catches') && !mapNeededForInteraction ? 'no-map'
+        : activePanel === null && !mapNeededForInteraction ? 'no-map-keep-detail'
+        : ''
+      }`}>
         <aside className="sidebar">
           {activePanel === 'home' ? renderHomeFeed()
             : activePanel === 'stations' ? renderStationsPanel()
@@ -4048,12 +4062,20 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           )}
 
           <div className="desktop-detail-wrap">
-            {activePanel === null && renderDetailStrip()}
+            {activePanel === null && (
+              renderDetailStrip() || (
+                !mapNeededForInteraction && (
+                  <div style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--ink-soft)', fontSize: 'var(--fs-sm2)' }}>
+                    Vyber výpravu ze seznamu vlevo.
+                  </div>
+                )
+              )
+            )}
           </div>
         </main>
       </div>
 
-      {activePanel !== 'home' && activePanel !== 'stations' && (
+      {activePanel !== 'home' && activePanel !== 'stations' && activePanel !== 'catches' && (
         <div className={`mobile-sheet ${mobileSheetOpen ? 'expanded' : ''} ${activePanel === 'map' ? 'map-panel' : ''}`}>
           <div className="mobile-peek-bar" onClick={() => setMobileSheetOpen((v) => !v)}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{peekLabel()}</span>

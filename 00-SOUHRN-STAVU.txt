@@ -1291,4 +1291,32 @@ stran řeky apod.) -- na souhrnné mapě appka celou výpravu schovávala
 za jeden bod, ostatní místa nebyla vidět vůbec. Opraveno -- appka pro
 LURE_TYPES navíc nakreslí i (s.rods || []).slice(1) (všechna další
 místa kromě prvního, to je duplicitní s hlavním bodem, appka ho
-appka jinde stejně přeskakuje), stejnou ikonou/barvou jako hlavní bod.
+jinde stejně přeskakuje), stejnou ikonou/barvou jako hlavní bod.
+
+ZMĚNA (verze 120): odstraněna velká sdílená mapa ze seznamů Výpravy
+a Úlovky -- obě sekce už měly vlastní cestu k mapě (záložka Mapa,
+tlačítko "Zobrazit na mapě"), takže duplicitní velká mapa vedle
+seznamu byla zbytečná.
+- Úlovky: stejný jednosloupcový layout jako Domů. Mapa je úplně pryč,
+  na mobilu zmizel i dolní vysouvací panel (obsah je rovnou přes celou
+  obrazovku).
+- Výpravy: mapa se schová jen v klidu (procházení seznamu, čtení
+  detailu). Na desktopu detail vybrané výpravy zaplní celou pravou
+  část obrazovky; bez výběru appka ukáže text "Vyber výpravu ze
+  seznamu vlevo". Na mobilu zůstal beze změny dolní vysouvací panel
+  nad mapou, jen mapa pod ním je dočasně skrytá.
+- Mapa se okamžitě vrátí zpátky, kdykoli je potřeba na ni kliknout --
+  nová pomocná hodnota mapNeededForInteraction (Dashboard.jsx) sleduje
+  všechny stavy zakládání/úpravy výpravy, přesunu bodu a kreslení
+  oblasti. Tahle jedna hodnota řídí jak CSS třídu layoutu, tak i
+  mobilní vysouvací panel.
+- Nová CSS třída .layout.no-map-keep-detail (styles.css) -- na rozdíl
+  od starší .no-map schová jen mapu samotnou, ne celý pravý sloupec,
+  takže appka do něj může vykreslit detail výpravy.
+- NEOVĚŘENO ŽIVĚ, otestovat po nasazení jako první: založení nové
+  výpravy (bod i oblast), úprava existující, přesun bodu, přidání
+  prutu/dalšího místa -- appka musí umět zpřístupnit mapu na klikání
+  i z panelu Výpravy/Úlovky, kde je jinak schovaná. Zkontrolovat i
+  přesun úlovku spuštěný z Úlovkového lístku bez přepnutí panelu
+  (relocate-catch) -- to je jediné místo, kde appka potřebuje mapu
+  i z panelu Úlovky.
