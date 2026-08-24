@@ -238,7 +238,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [searchQuery, setSearchQuery] = useState('') // hledání ve výpravách (název, revír, druh, nástraha)
   const [catchesCategory, setCatchesCategory] = useState('all') // filtr dravec/bílá ryba v panelu Úlovky
   const [catchesSortMode, setCatchesSortMode] = useState('species') // 'species' | 'date' | 'user' -- appka defaultně řadí podle druhu, tam appka ukazuje rekord
-  const [homeFullscreenPhoto, setHomeFullscreenPhoto] = useState(null) // {url, label} | null -- klik na fotku v appce na Domů appka otevře přímo přes celou obrazovku, bez otevírání celého lístku
 
   useEffect(() => {
     function goOnline() { setIsOnline(true) }
@@ -2956,6 +2955,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const sorted = all.sort((a, b) =>
       (b.caught_at || b.created_at || b.sessionRef.session_date || '').localeCompare(a.caught_at || a.created_at || b.sessionRef.session_date || '')
     )
+    const HOME_FEED_LIMIT = 20
+    const shown = sorted.slice(0, HOME_FEED_LIMIT)
     return (
       <>
         <div className="sb-head"></div>
@@ -2964,30 +2965,33 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             Zatím žádný úlovek — až někdo z party něco chytí, objeví se tady.
           </div>
         ) : (
-          <div className="home-feed">
-            {sorted.map((c) => (
-              <div
-                key={c.id} className="feed-card"
-                onClick={() => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c) }}
-              >
+          <>
+            <div className="home-feed">
+              {shown.map((c) => (
                 <div
-                  className="feed-card-photo"
-                  onClick={c.photo_url ? (e) => { e.stopPropagation(); setHomeFullscreenPhoto({ url: c.photo_url, label: c.species }) } : undefined}
-                  style={c.photo_url ? { cursor: 'zoom-in' } : undefined}
+                  key={c.id} className="feed-card"
+                  onClick={() => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c) }}
                 >
-                  {c.photo_url
-                    ? <img src={c.photo_url} alt={c.species} />
-                    : <div className="feed-card-photo-fallback" dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />}
-                </div>
-                <div className="feed-card-body">
-                  <div className="feed-card-title">{c.species} {c.length_cm ? <span className="feed-card-length">{c.length_cm} cm</span> : null}</div>
-                  <div className="feed-card-sub">
-                    {userName(c.sessionRef.user_id)} · {c.sessionRef.title} · {relativeTimeLabel(c.caught_at || c.created_at)}
+                  <div className="feed-card-photo">
+                    {c.photo_url
+                      ? <img src={c.photo_url} alt={c.species} />
+                      : <div className="feed-card-photo-fallback" dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />}
+                  </div>
+                  <div className="feed-card-body">
+                    <div className="feed-card-title">{c.species} {c.length_cm ? <span className="feed-card-length">{c.length_cm} cm</span> : null}</div>
+                    <div className="feed-card-sub">
+                      {userName(c.sessionRef.user_id)} · {c.sessionRef.title} · {relativeTimeLabel(c.caught_at || c.created_at)}
+                    </div>
                   </div>
                 </div>
+              ))}
+            </div>
+            {sorted.length > HOME_FEED_LIMIT && (
+              <div style={{ padding: '4px 18px 20px', textAlign: 'center' }}>
+                <button className="new-btn" onClick={() => switchPanel('catches')}>Zobrazit všechny úlovky ({sorted.length}) →</button>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </>
     )
@@ -4242,13 +4246,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onUpdated={loadSessions}
           onDeleted={() => { setTicketCatch(null); loadSessions() }}
         />
-      )}
-      {homeFullscreenPhoto && (
-        <div className="fullscreen-photo-overlay" onClick={(e) => e.target === e.currentTarget && setHomeFullscreenPhoto(null)}>
-          <button className="fullscreen-photo-close" onClick={() => setHomeFullscreenPhoto(null)}><IconClose size={20} color="#fff" /></button>
-          <img src={homeFullscreenPhoto.url} alt={homeFullscreenPhoto.label} className="fullscreen-photo-img" />
-          <div className="fullscreen-photo-label">{homeFullscreenPhoto.label}</div>
-        </div>
       )}
       {toast && <div className="save-toast">{toast}</div>}
     </div>
