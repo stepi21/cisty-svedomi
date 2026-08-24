@@ -121,6 +121,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // (3 možnosti každá) a mapLayers níže je z nich jen odvozený tvar, ať
   // appka nemusí měnit vykreslovací logiku mapy pod tím.
   const [mapWho, setMapWho] = useState('both')   // 'me' | 'party' | 'both'
+  // Appka tímhle drží "fokusovaný" režim mapy -- když appka přijde z detailu
+  // jedné konkrétní výpravy, appka radši ukáže JEN tuhle výpravu (všechny
+  // její body + její úlovky), ne appku zaostřenou uprostřed hromady cizích
+  // výprav ze všech vrstev. Appka to appce vyčistí zpátky na null, kdykoli
+  // appka přepne panel běžnou cestou (viz switchPanel) nebo appka klikne na
+  // tlačítko "Celá mapa".
+  const [mapFocusSessionId, setMapFocusSessionId] = useState(null)
   const [mapWhat, setMapWhat] = useState('catches') // 'trips' | 'catches' | 'both'
   const mapLayers = useMemo(() => ({
     myTrips: (mapWho === 'me' || mapWho === 'both') && (mapWhat === 'trips' || mapWhat === 'both'),
@@ -1124,13 +1131,52 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     markersLayer.current.clearLayers()
     aggregateClusterLayer.current.clearLayers()
     tripsClusterLayer.current.clearLayers()
+
+    // ---------- fokusovaný režim: appka ukáže jen JEDNU vybranou výpravu ----------
+    // Appka sem přijde přes tlačítko "Zobrazit na mapě" v detailu výpravy.
+    // Appka schválně nepoužívá shlukovací vrstvy (nejsou potřeba pro pár
+    // bodů jedné výpravy) a appka ignoruje Kdo/Co vrstvy úplně -- appka tu
+    // ukáže přesně tohle a nic jiného, ať appka nemusí řešit, jak najít
+    // jednu výpravu v hromadě cizích. U přívlače appka nakreslí VŠECHNY
+    // body výpravy (ne jen ten první), přesně proto appka tenhle režim
+    // appce udělala -- zoomToShowLayer na shluknuté mapě tohle neumí.
+    if (mapFocusSessionId) {
+      const s = sessions.find((x) => x.id === mapFocusSessionId)
+      if (!s) return
+      const bounds = []
+      const color = userColor(s.user_id)
+      const pointIcon = L.divIcon({
+        html: `<div style="width:22px;height:22px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>`,
+        className: '', iconSize: [22, 22], iconAnchor: [11, 11],
+      })
+      if (s.lat != null && s.lng != null) {
+        L.marker([s.lat, s.lng], { icon: pointIcon }).bindPopup(s.title).addTo(markersLayer.current)
+        bounds.push([s.lat, s.lng])
+      }
+      if (LURE_TYPES.includes(s.type)) {
+        ;(s.rods || []).slice(1).forEach((r) => {
+          if (r.lat == null || r.lng == null) return
+          L.marker([r.lat, r.lng], { icon: pointIcon }).bindPopup(`${s.title} (další místo)`).addTo(markersLayer.current)
+          bounds.push([r.lat, r.lng])
+        })
+      }
+      ;(s.catches || []).forEach((c) => {
+        if (c.lat == null && s.lat == null) return
+        const fillColor = CATEGORY_COLOR[c.category]
+        const html = `<div style="width:26px;height:26px;background:${fillColor};border-radius:50%;display:flex;align-items:center;justify-content:center;border:4px solid ${color};box-shadow:0 2px 6px rgba(0,0,0,.35)">${fishSVG('#fff')}</div>`
+        const icon = L.divIcon({ html, className: '', iconSize: [26, 26], iconAnchor: [13, 13] })
+        L.marker([c.lat ?? s.lat, c.lng ?? s.lng], { icon })
+          .on('click', () => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c) })
+          .addTo(markersLayer.current)
+        bounds.push([c.lat ?? s.lat, c.lng ?? s.lng])
+      })
+      if (bounds.length === 1) map.setView(bounds[0], 16)
+      else if (bounds.length > 1) map.fitBounds(L.latLngBounds(bounds), { padding: [60, 60], maxZoom: 16 })
+      return
+    }
+
+    // ---------- agregovaný pohled (Kdo/Co vrstvy) ----------
     const bounds = []
-    // appka si tu drží, o kterou konkrétní výpravu appce jde -- když appka
-    // přišla přes "Zobrazit na mapě" a na místě je klidně dvacet dalších
-    // výprav ve shluku, appka potřebuje tenhle marker po zoomu i vizuálně
-    // odlišit, jinak by appka nepoznala, která z hromady to je.
-    const focusSessionId = pendingMapFocusRef.current?.sessionId ?? null
-    let focusMarker = null
 
     if (mapLayers.myTrips || mapLayers.partyTrips) {
       sessions.forEach((s) => {
@@ -1139,32 +1185,25 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         if (!isMine && !mapLayers.partyTrips) return
         if (s.lat == null || s.lng == null) return
         const color = userColor(s.user_id)
-        const isFocus = s.id === focusSessionId
         // L.marker + vlastní divIcon, ne L.circleMarker -- stejný vzor jako
         // úlovky výše. Plugin leaflet.markercluster je stavěný na L.Marker,
         // s L.CircleMarker nemusí spolehlivě fungovat.
-        const html = isFocus
-          ? `<div style="width:26px;height:26px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 0 0 4px rgba(217,160,84,.6),0 2px 8px rgba(0,0,0,.4)"></div>`
-          : `<div style="width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid ${color};box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>`
-        const icon = L.divIcon({ html, className: '', iconSize: isFocus ? [26, 26] : [18, 18], iconAnchor: isFocus ? [13, 13] : [9, 9] })
-        const marker = L.marker([s.lat, s.lng], { icon })
+        const html = `<div style="width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid ${color};box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>`
+        const icon = L.divIcon({ html, className: '', iconSize: [18, 18], iconAnchor: [9, 9] })
+        L.marker([s.lat, s.lng], { icon })
           .bindPopup(`${s.title} — ${userName(s.user_id)}`)
           .on('click', () => { setActivePanel(null); setActiveId(s.id); setViewMode('detail') })
-        marker.addTo(tripsClusterLayer.current)
-        if (isFocus) focusMarker = marker
+          .addTo(tripsClusterLayer.current)
         bounds.push([s.lat, s.lng])
 
         // U přívlače appka může mít i DALŠÍ místa (jez z obou stran řeky
         // apod.) -- appka je na týhle souhrnné mapě nakreslí stejně jako
         // hlavní bod (tečka výpravy appka), ať appka na Mapě neschovává
-        // celou výpravu jen za JEDEN bod, kde jich reálně bylo víc. Appka
-        // je nechává vždy v obyčejném stylu, ať appka nemá dvě "zvýrazněné"
-        // tečky u jedné výpravy a nepůsobí to zmateně.
+        // celou výpravu jen za JEDEN bod, kde jich reálně bylo víc.
         if (LURE_TYPES.includes(s.type)) {
-          const plainIcon = L.divIcon({ html: `<div style="width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid ${color};box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>`, className: '', iconSize: [18, 18], iconAnchor: [9, 9] })
           ;(s.rods || []).slice(1).forEach((r) => {
             if (r.lat == null || r.lng == null) return
-            L.marker([r.lat, r.lng], { icon: plainIcon })
+            L.marker([r.lat, r.lng], { icon })
               .bindPopup(`${s.title} — ${userName(s.user_id)} (další místo)`)
               .on('click', () => { setActivePanel(null); setActiveId(s.id); setViewMode('detail') })
               .addTo(tripsClusterLayer.current)
@@ -1192,27 +1231,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       })
     }
 
-    if (pendingMapFocusRef.current) {
-      // Appka sem doskočila z detailu výpravy/úlovku (tlačítko "Zobrazit na
-      // mapě"). Pokud appka má marker k dispozici (typicky výprava), appka
-      // použije zoomToShowLayer -- appčin plugin sám rozbalí shluk, kdyby
-      // na stejném místě bylo klidně dvacet dalších výprav, a appka pak
-      // otevře popisek, ať je jasné, o kterou výpravu přesně jde. Bez
-      // markeru (např. appka měla jen souřadnice úlovku) appka aspoň
-      // přiblíží na ten bod obyčejně.
-      const f = pendingMapFocusRef.current
-      pendingMapFocusRef.current = null
-      if (focusMarker) {
-        tripsClusterLayer.current.zoomToShowLayer(focusMarker, () => focusMarker.openPopup())
-      } else {
-        map.setView([f.lat, f.lng], f.zoom || 17)
-      }
-    } else if (bounds.length > 0) {
+    if (bounds.length > 0) {
       map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
     } else {
       map.setView([49.8, 15.5], 8)
     }
-  }, [activePanel, mapLayers, sessions, locationsCatalog, userId, members])
+  }, [activePanel, mapLayers, sessions, locationsCatalog, userId, members, mapFocusSessionId])
 
   async function backfillBaitPhoto(baitName, photoUrl) {
     const key = (baitName || '').trim().toLowerCase()
@@ -2237,6 +2261,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setSearchQuery('')
     setCatchesCategory('all')
     setMobileSheetOpen(true)
+    setMapFocusSessionId(null)
   }
 
   // Appka řadí výpravy vždycky od nejnovější nahoru, takže samostatné
@@ -2275,18 +2300,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setPlacementTarget('relocate-session-point')
   }
 
-  // Appka doskočí ze detailu výpravy rovnou na záložku Mapa, zaostřenou na
-  // tenhle konkrétní bod -- appka to řeší přes pendingMapFocusRef, co appka
-  // konzumuje v efektu pro souhrnnou mapu (viz výše). Appka si tu navíc
-  // pojistí, že appka má zapnuté vrstvy "Výpravy" a "Všichni" -- appka na
-  // Mapě defaultně ukazuje jen úlovky, takže bez týhle pojistky by appka
-  // marker vůbec nenašla, kdyby appka měla vrstvu Výpravy zrovna vypnutou.
+  // Appka doskočí ze detailu výpravy rovnou na záložku Mapa, ale appka
+  // NEukáže celou agregovanou mapu se všemi vrstvami -- appka rovnou
+  // přepne do fokusovaného režimu (jen tahle výprava, viz mapFocusSessionId
+  // výše). Appka tím appce vyřeší i výpravy s víc body (přívlač) -- appka
+  // ukáže všechny, ne jen jeden zvýrazněný marker uprostřed cizích.
   function jumpToMapView(session) {
-    if (session.lat == null || session.lng == null) return
-    pendingMapFocusRef.current = { sessionId: session.id, lat: session.lat, lng: session.lng, zoom: 17 }
-    setMapWho('both')
-    setMapWhat('both')
     switchPanel('map')
+    setMapFocusSessionId(session.id)
     setMobileSheetOpen(false)
   }
 
@@ -2735,29 +2756,37 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
 
   function renderMapControls() {
+    const focusedSession = mapFocusSessionId ? sessions.find((s) => s.id === mapFocusSessionId) : null
     return (
       <>
         <div className="sb-head"></div>
-        <div style={{ padding: '0 18px 6px' }}>
-          <div className="field-label" style={{ margin: '0 0 4px' }}>Čí záznamy vidět</div>
-          <div className="filter-row" style={{ padding: 0, marginBottom: 12 }}>
-            {[['me', 'Moje'], ['party', 'Parta'], ['both', 'Všichni']].map(([val, label]) => (
-              <button key={val} className={`filter-chip ${mapWho === val ? 'active' : ''}`} onClick={() => setMapWho(val)}>{label}</button>
-            ))}
+        {focusedSession ? (
+          <div style={{ margin: '0 18px 14px', padding: '10px 12px', background: 'var(--water-soft)', border: '1px solid var(--water-mid)', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--water-deep)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{focusedSession.title}</span>
+            <button className="new-btn" onClick={() => setMapFocusSessionId(null)} style={{ flex: 'none' }}><IconClose size={12} /> Celá mapa</button>
           </div>
-          <div className="field-label" style={{ margin: '0 0 4px' }}>Co ukázat</div>
-          <div className="filter-row" style={{ padding: 0 }}>
-            {[
-              ['trips', 'Výpravy', <IconVyprava key="i" size={13} color={mapWhat === 'trips' ? '#fff' : 'var(--water-deep)'} />],
-              ['catches', 'Úlovky', <IconUlovek key="i" size={13} color={mapWhat === 'catches' ? '#fff' : 'var(--water-deep)'} />],
-              ['both', 'Vše', null],
-            ].map(([val, label, icon]) => (
-              <button key={val} className={`filter-chip ${mapWhat === val ? 'active' : ''}`} onClick={() => setMapWhat(val)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                {icon}{label}
-              </button>
-            ))}
+        ) : (
+          <div style={{ padding: '0 18px 6px' }}>
+            <div className="field-label" style={{ margin: '0 0 4px' }}>Čí záznamy vidět</div>
+            <div className="filter-row" style={{ padding: 0, marginBottom: 12 }}>
+              {[['me', 'Moje'], ['party', 'Parta'], ['both', 'Všichni']].map(([val, label]) => (
+                <button key={val} className={`filter-chip ${mapWho === val ? 'active' : ''}`} onClick={() => setMapWho(val)}>{label}</button>
+              ))}
+            </div>
+            <div className="field-label" style={{ margin: '0 0 4px' }}>Co ukázat</div>
+            <div className="filter-row" style={{ padding: 0 }}>
+              {[
+                ['trips', 'Výpravy', <IconVyprava key="i" size={13} color={mapWhat === 'trips' ? '#fff' : 'var(--water-deep)'} />],
+                ['catches', 'Úlovky', <IconUlovek key="i" size={13} color={mapWhat === 'catches' ? '#fff' : 'var(--water-deep)'} />],
+                ['both', 'Vše', null],
+              ].map(([val, label, icon]) => (
+                <button key={val} className={`filter-chip ${mapWhat === val ? 'active' : ''}`} onClick={() => setMapWhat(val)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  {icon}{label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </>
     )
   }
