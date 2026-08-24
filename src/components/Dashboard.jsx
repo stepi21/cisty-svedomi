@@ -1159,6 +1159,21 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           L.marker([r.lat, r.lng], { icon: pointIcon }).bindPopup(`${s.title} (další místo)`).addTo(markersLayer.current)
           bounds.push([r.lat, r.lng])
         })
+      } else {
+        // appka u bodových typů (kapr/muška/plavaná) appce navíc ukáže
+        // jednotlivé nahozené pruty -- appka je barevně odliší stejně jako
+        // appka dělá v appčině detailu výpravy (rodColors), ať appka pozná
+        // Prut 1 od Prutu 2 i tady na mapě.
+        ;(s.rods || []).forEach((r, i) => {
+          if (r.lat == null || r.lng == null) return
+          const rodColor = rodColors[i % rodColors.length]
+          const rodIcon = L.divIcon({
+            html: `<div style="width:18px;height:18px;border-radius:50%;background:${rodColor};border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4)"></div>`,
+            className: '', iconSize: [18, 18], iconAnchor: [9, 9],
+          })
+          L.marker([r.lat, r.lng], { icon: rodIcon }).bindPopup(r.name || `Prut ${i + 1}`).addTo(markersLayer.current)
+          bounds.push([r.lat, r.lng])
+        })
       }
       ;(s.catches || []).forEach((c) => {
         if (c.lat == null && s.lat == null) return
@@ -2260,7 +2275,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setActivePanel((p) => (panel === null ? null : (p === panel ? null : panel)))
     setSearchQuery('')
     setCatchesCategory('all')
-    setMobileSheetOpen(true)
+    // appka lištu u Mapy nechá sbalenou (jen pár filtrů, appka nechce zabírat
+    // appce mapu zbytečně) -- u ostatních panelů appka appku otevře jako dřív.
+    setMobileSheetOpen(panel !== 'map')
     setMapFocusSessionId(null)
   }
 
