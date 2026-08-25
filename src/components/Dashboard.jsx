@@ -81,16 +81,6 @@ function normalizeSearchText(s) {
   return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 }
 
-// Appka na mobilu appce dole vždycky drží vysouvací lištu (mobile-sheet) i
-// novou spodní navigační lištu -- Leaflet o nich ale samo neví, "fitBounds"/
-// "padding" appka počítá jen z vlastní velikosti mapy, ne z toho, co přes ni
-// appka vizuálně překrývá. Appka proto sama přidá extra spodní odsazení při
-// každém přeostření na mobilu, ať appka nezobrazí špendlík zrovna pod tou
-// schovanou plochou. Desktop appka nechá beze změny (tam se nic nepřekrývá).
-function mapMobileBottomPad() {
-  return typeof window !== 'undefined' && window.matchMedia('(max-width:860px)').matches ? 96 : 0
-}
-
 function resolveHydroStation(linkedLocationIds, locationsCatalog) {
   if (!linkedLocationIds || linkedLocationIds.length !== 1) return null
   const loc = locationsCatalog.find((l) => l.id === linkedLocationIds[0])
@@ -272,60 +262,26 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline) }
   }, [])
 
-  // Appka nevěří jednotce "100dvh" naslepo -- na iPhonu v Chromu appka
-  // zjistila, že appka jednotku dvh počítá špatně (vyjde vyšší, než co je
-  // fakticky vidět), takže appce zůstal obsah dole schovaný pod vlastní
-  // lištou prohlížeče. Appka proto místo toho čte "window.visualViewport",
-  // což je spolehlivější zdroj skutečně viditelné výšky, a uloží ji do CSS
-  // proměnné --app-vh, kterou appka dál používá pro výšku ".app".
-  useEffect(() => {
-    function measure() {
-      const vv = window.visualViewport
-      const h = vv ? vv.height : window.innerHeight
-      document.documentElement.style.setProperty('--app-vh', `${Math.round(h)}px`)
-    }
-    measure()
-    window.addEventListener('resize', measure)
-    window.addEventListener('orientationchange', measure)
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', measure)
-      window.visualViewport.addEventListener('scroll', measure)
-    }
-    return () => {
-      window.removeEventListener('resize', measure)
-      window.removeEventListener('orientationchange', measure)
-      if (window.visualViewport) {
-        window.visualViewport.removeEventListener('resize', measure)
-        window.visualViewport.removeEventListener('scroll', measure)
-      }
-    }
-  }, [])
+  // Appka přestala sama uzavírat/měřit viditelnou výšku (appka to
+  // zkoušela přes "100dvh" i přes výšku naměřenou pomocí visualViewport,
+  // ani jedno se neukázalo spolehlivé napříč Safari/Chrome/appkou na
+  // ploše). Appka appku místo toho nechá chovat se jako normální webová
+  // stránka -- appka se nikam nezamyká, appka nechá scrollovat celou
+  // stránku a appka appce spoléhá na nativní chování prohlížeče (stejně
+  // jako běžná stránka, třeba Seznam.cz).
 
-  // Spodní navigační lištu appka ukazuje jen appce nainstalované na plochu
-  // (žádná lišta prohlížeče kolem) -- appka živým testem zjistila, že v
-  // běžné záložce prohlížeče ta lišta funguje nespolehlivě (zůstávala
-  // schovaná pod lištou Chromu), appka proto v prohlížeči navigaci nechá
-  // nahoře v hlavičce (tak, jak appka fungovala předtím). Appku appka
-  // pozná přes "window.navigator.standalone" (specifický iOS příznak,
-  // spolehlivější než jen CSS "display-mode: standalone") a uloží to jako
-  // třídu na <html>, ať appka může v CSS rozlišit obě situace jednoduchým
-  // selektorem, ne jen media-query.
-  //
-  // Appka appce navíc pozná i konkrétně iPhone Chrome (přes "CriOS" v
-  // user-agentu -- to je specifický řetězec, co Chrome na iOS vždycky
-  // přidá). Appka to potřebuje, protože živým testem appka zjistila, že
-  // jen tenhle konkrétní prohlížeč potřebuje přidat navíc pevnou
-  // bezpečnostní rezervu dole -- v Safari appka appce funguje výška bez
-  // téhle rezervy správně, appka appce by tam jen zbytečně ukrajovala z
-  // appky appky místa.
+  // Spodní navigační lištu appka ukazuje jen v appce nainstalované na
+  // plochu (žádná lišta prohlížeče kolem) -- v běžné záložce appka
+  // navigaci nechá nahoře v hlavičce, jako appka fungovala předtím.
+  // Appku appka pozná přes "window.navigator.standalone" (specifický iOS
+  // příznak, spolehlivější než jen CSS "display-mode: standalone") a
+  // uloží to jako třídu na <html>, ať appka může v CSS rozlišit obě
+  // situace jednoduchým selektorem.
   useEffect(() => {
     const isStandalone = window.navigator.standalone === true
       || window.matchMedia('(display-mode: standalone)').matches
     document.documentElement.classList.toggle('standalone-app', isStandalone)
-    const isChromeIos = /CriOS/.test(window.navigator.userAgent)
-    document.documentElement.classList.toggle('chrome-ios', isChromeIos)
   }, [])
-
 
 
   function showToast(message) {
@@ -1055,7 +1011,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (!mapInstance.current || !pts.length) return
     setMobileSheetOpen(false)
     const bounds = L.latLngBounds(pts.map((p) => [p.lat, p.lng]))
-    mapInstance.current.fitBounds(bounds, { paddingTopLeft: [40, 40], paddingBottomRight: [40, 40 + mapMobileBottomPad()], maxZoom: 17 })
+    mapInstance.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 })
   }
 
 
@@ -1069,7 +1025,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (location.area) {
       const areas = normalizeAreas(location.area)
       const bounds = areas.flat().map((p) => [p.lat, p.lng])
-      if (bounds.length) mapInstance.current.fitBounds(bounds, { paddingTopLeft: [40, 40], paddingBottomRight: [40, 40 + mapMobileBottomPad()], maxZoom: 17 })
+      if (bounds.length) mapInstance.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 })
     } else if (location.lat != null && location.lng != null) {
       mapInstance.current.setView([location.lat, location.lng], 16)
     }
@@ -1182,7 +1138,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           // animate:false ze stejného důvodu jako u Výprav o kus výše --
           // appka nechce nechat zpožděný "moveend" uniknout do pozdější
           // návštěvy Mapy.
-          map.fitBounds(bounds, { paddingTopLeft: [40, 40], paddingBottomRight: [40, 40 + mapMobileBottomPad()], maxZoom: 15, animate: false })
+          map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: false })
         } else {
           map.setView([49.8, 15.5], 8, { animate: false })
         }
@@ -1370,7 +1326,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       // kterou se nic jiného nestará.
       if (mapFocusPoint) map.setView([mapFocusPoint.lat, mapFocusPoint.lng], mapFocusPoint.zoom || 17)
       else if (bounds.length === 1) map.setView(bounds[0], 16)
-      else if (bounds.length > 1) map.fitBounds(L.latLngBounds(bounds), { paddingTopLeft: [60, 60], paddingBottomRight: [60, 60 + mapMobileBottomPad()], maxZoom: 16 })
+      else if (bounds.length > 1) map.fitBounds(L.latLngBounds(bounds), { padding: [60, 60], maxZoom: 16 })
       mapTabHasFitRef.current = true
       mapForceResetRef.current = false
       return
@@ -1437,7 +1393,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     // úplně na pokoji.
     if (mapForceResetRef.current) {
       // Výslovný požadavek (druhý klik na Mapa).
-      if (bounds.length > 0) map.fitBounds(L.latLngBounds(bounds), { paddingTopLeft: [40, 40], paddingBottomRight: [40, 40 + mapMobileBottomPad()], maxZoom: 15 })
+      if (bounds.length > 0) map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
       else map.setView([49.8, 15.5], 8)
       mapTabHasFitRef.current = true
     } else if (!mapTabHasFitRef.current) {
@@ -1449,7 +1405,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       // ze serveru, appka se tak o výchozí přiblížení pokusí znovu, až
       // nějaká data dorazí.
       if (bounds.length > 0) {
-        map.fitBounds(L.latLngBounds(bounds), { paddingTopLeft: [40, 40], paddingBottomRight: [40, 40 + mapMobileBottomPad()], maxZoom: 15 })
+        map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
         mapTabHasFitRef.current = true
       } else {
         map.setView([49.8, 15.5], 8)
@@ -2643,7 +2599,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       .filter((r) => r.lat != null && r.lng != null)
       .map((r) => [r.lat, r.lng])
     if (existingPoints.length > 1) {
-      mapInstance.current?.fitBounds(existingPoints, { paddingTopLeft: [60, 60], paddingBottomRight: [60, 60 + mapMobileBottomPad()], maxZoom: 18 })
+      mapInstance.current?.fitBounds(existingPoints, { padding: [60, 60], maxZoom: 18 })
     } else if (existingPoints.length === 1) {
       mapInstance.current?.setView(existingPoints[0], 18)
     } else if (session.lat != null && session.lng != null) {
@@ -2767,7 +2723,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setEditingAreasLocation({ id: location.id, areas: areas.map((a) => [...a]) })
     setShowLocations(false)
     const bounds = areas.flat().map((p) => [p.lat, p.lng])
-    if (bounds.length) mapInstance.current?.fitBounds(bounds, { paddingTopLeft: [40, 40], paddingBottomRight: [40, 40 + mapMobileBottomPad()], maxZoom: 17 })
+    if (bounds.length) mapInstance.current?.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 })
   }
 
   function removeManagedLocationArea(idx) {
@@ -3124,6 +3080,39 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     )
   }
 
+
+  // appka appce používá stejné 4 tlačítka na dvou místech: nahoře v
+  // hlavičce (desktop a mobil v běžné záložce prohlížeče) a dole jako
+  // samostatnou lištu (appka nainstalovaná na plochu, kde appka appce
+  // funguje "position:sticky" -- viz styles.css). Appka appce sdílí
+  // jednu definici, ať appka appka appce nemusí appka udržovat dvě
+  // kopie stejného seznamu tlačítek.
+  function renderTabButtons() {
+    return (
+      <>
+        <button
+          className={`new-btn ${activePanel === 'home' ? 'active-toggle' : ''}`}
+          onClick={() => switchPanel('home')}
+          title="Domů"
+        ><IconHome size={15} /> <span className="nav-label">Domů</span></button>
+        <button
+          className={`new-btn ${activePanel === 'map' ? 'active-toggle' : ''}`}
+          onClick={() => switchPanel('map')}
+          title="Mapa"
+        ><IconMap size={15} /> <span className="nav-label">Mapa</span></button>
+        <button
+          className={`new-btn ${activePanel === null ? 'active-toggle' : ''}`}
+          onClick={() => switchPanel(null)}
+          title="Výpravy"
+        ><IconVyprava size={15} /> <span className="nav-label">Výpravy</span></button>
+        <button
+          className={`new-btn ${activePanel === 'catches' ? 'active-toggle' : ''}`}
+          onClick={() => switchPanel('catches')}
+          title="Úlovky"
+        ><IconUlovek size={15} eyeColor="var(--water-deep)" /> <span className="nav-label">Úlovky</span></button>
+      </>
+    )
+  }
 
   function renderMapControls() {
     const focusedSession = mapFocusSessionId ? sessions.find((s) => s.id === mapFocusSessionId) : null
@@ -3950,26 +3939,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         </div>
         <div className="head-secondary-row">
           <div className="head-actions-primary">
-            <button
-              className={`new-btn ${activePanel === 'home' ? 'active-toggle' : ''}`}
-              onClick={() => switchPanel('home')}
-              title="Domů"
-            ><IconHome size={15} /> <span className="nav-label">Domů</span></button>
-            <button
-              className={`new-btn ${activePanel === 'map' ? 'active-toggle' : ''}`}
-              onClick={() => switchPanel('map')}
-              title="Mapa"
-            ><IconMap size={15} /> <span className="nav-label">Mapa</span></button>
-            <button
-              className={`new-btn ${activePanel === null ? 'active-toggle' : ''}`}
-              onClick={() => switchPanel(null)}
-              title="Výpravy"
-            ><IconVyprava size={15} /> <span className="nav-label">Výpravy</span></button>
-            <button
-              className={`new-btn ${activePanel === 'catches' ? 'active-toggle' : ''}`}
-              onClick={() => switchPanel('catches')}
-              title="Úlovky"
-            ><IconUlovek size={15} eyeColor="var(--water-deep)" /> <span className="nav-label">Úlovky</span></button>
+            {renderTabButtons()}
           </div>
         </div>
         {inviteInfo && (
@@ -4420,6 +4390,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           </div>
         )}
       </div>
+
+      {/* Spodní navigační lišta appka ukazuje jen v appce nainstalované na
+          plochu (CSS řeší .bottom-tab-bar -- jinde display:none). Musí být
+          tady, AŽ ZA .layout, ne uvnitř <header> jako horní verze --
+          "position:sticky" appka appce vždycky vůči svému vlastnímu
+          rodiči v DOM, ne vůči celé stránce, takže potřebuje sáhnout přes
+          celou zbývající výšku appky, ne jen přes krátkou hlavičku. */}
+      <nav className="bottom-tab-bar">
+        {renderTabButtons()}
+      </nav>
 
       {draftSession && !(placementTarget && placementTarget.startsWith('rod-')) && (
         <SessionFormPanel
