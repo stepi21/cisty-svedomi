@@ -5243,10 +5243,15 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
   }
   function addRod() {
     const label = LURE_TYPES.includes(draft.type) ? 'Místo' : 'Prut'
+    const newIndex = draft.rods.length
     setDraft((d) => ({
       ...d,
       rods: [...d.rods, { name: `${label} ${d.rods.length + 1}`, lat: d.point.lat, lng: d.point.lng, baits: [{ name: '', photoFile: null }] }],
     }))
+    // Rovnou zapne čekání na klik pro tenhle nový prut/místo -- jinak by
+    // appka jen přidala duplicitní souřadnice bez možnosti je hned
+    // změnit, a uživatel by musel kliknout na tlačítko dole ručně.
+    onArmRod(newIndex)
   }
   // U přívlače appka nabízí přidání dalšího místa rovnou přes GPS (appka
   // ho nemusí ručně klikat na mapě) -- appka to hodí do stejného pole
@@ -5268,14 +5273,15 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
     )
   }
   // U zpětné výpravy appka GPS nenabízí (appka totiž není fyzicky na
-  // místě) -- další místo appka přidá na souřadnice hlavního bodu a
-  // necháte si ho přesunout kliknutím na mapu, stejně jako appka appce
-  // umožňuje u dalšího prutu bodového typu.
+  // místě) -- další místo appka přidá na souřadnice hlavního bodu a rovnou
+  // zapne čekání na klik na mapu, ať uživatel hned ví, kam ho přesunout.
   function addLurePlaceManual() {
+    const newIndex = draft.rods.length
     setDraft((d) => ({
       ...d,
       rods: [...d.rods, { name: `Místo ${d.rods.length + 1}`, lat: d.point.lat, lng: d.point.lng, baits: [] }],
     }))
+    onArmRod(newIndex)
   }
   function removeRod(index) {
     setDraft((d) => ({ ...d, rods: d.rods.filter((_, i) => i !== index) }))

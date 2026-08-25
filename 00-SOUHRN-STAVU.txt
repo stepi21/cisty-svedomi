@@ -1840,3 +1840,14 @@ appka nabídne GPS jako dřív, u zpětné nabídne "+ Přidat další místo",
 co dá pozici hlavního bodu a necháte si ji přesunout kliknutím na
 mapu (tlačítko "pozice na mapě: lat, lng"), stejně jako to už funguje
 u prutů bodových typů a u detailu už uložené výpravy.
+
+DOLADĚNÍ (verze 138): tlačítko "+ Přidat další místo" z verze 137
+přidalo nové místo na duplicitní souřadnice hlavního bodu, ale
+nezapnulo zároveň čekání na klik na mapu -- appka tak jen tiše
+přidávala další a další místa se stejnými souřadnicemi, bez možnosti
+je hned přesunout.
+
+Oprava: appka teď po přidání nového místa (i nového prutu u bodových
+typů, stejná chyba tam) rovnou zapne čekání na klik -- další klik na
+mapu tak už rovnou umístí ten nový bod, žádné dodatečné tlačítko
+navíc.
