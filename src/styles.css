@@ -206,10 +206,11 @@ header h1 .accent{ color:var(--amber); }
 }
 @keyframes toast-in{ from{ opacity:0; transform:translate(-50%,10px); } to{ opacity:1; transform:translate(-50%,0); } }
 @media (max-width:860px){
-  /* Appka nechá toast vyskočit nad spodní navigační lištu, ne pod/do ní
-     -- ta ale existuje jen v appce nainstalované na plochu (viz výše),
-     appka proto tohle odsazení navíc dává jen tam. */
-  html.standalone-app .save-toast{ bottom:calc(var(--bottom-nav-h) + var(--safe-bottom, env(safe-area-inset-bottom)) + 16px); }
+  /* Appka nechá toast vyskočit nad spodní navigační lištu v appce
+     nainstalované na plochu, a nad pevnou bezpečnostní rezervou v
+     iPhone Chromu (stejný důvod jako u .layout výše). */
+  html.standalone-app .save-toast{ bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 16px); }
+  html.chrome-ios .save-toast{ bottom:106px; }
 }
 
 .layout{ display:grid; grid-template-columns:300px 1fr; flex:1; min-height:0; }
@@ -255,18 +256,20 @@ header h1 .accent{ color:var(--amber); }
    vysouvací sheet i seznamy uvnitř .layout nikdy nezajedou pod lištu. */
 @media (max-width:860px){
   html.standalone-app .layout{
-    margin-bottom:calc(var(--bottom-nav-h) + var(--safe-bottom, env(safe-area-inset-bottom)));
+    margin-bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
   }
 }
-/* V běžné záložce prohlížeče appka žádnou spodní lištu nemá, ale appka
-   živým testem zjistila, že appka naměřená výška appky (--app-vh) v
-   iPhone Chromu pořád spolehlivě nevyloučí jeho vlastní spodní lištu
-   (mapa/seznamy appce zůstávaly zčásti schované pod ní). Appka proto v
-   běžné záložce prohlížeče navíc nechá pevnou bezpečnostní rezervu --
-   stejný princip, jaký appka používala před touhle úpravou (viz historie
-   verzí 142-144 v souhrnu appky). */
+/* iPhone Chrome má appce vlastní spodní lištu, kterou appka nedokáže
+   spolehlivě vyloučit ani přes appku naměřenou výšku (--app-vh) -- mapa
+   a seznamy appce zůstávaly zčásti schované pod ní (živý test). Appka
+   proto jen pro tenhle konkrétní prohlížeč (appka appku pozná přes
+   "CriOS" v user-agentu, viz Dashboard.jsx) navíc nechá pevnou
+   bezpečnostní rezervu -- stejný princip, jaký appka používala před
+   touhle úpravou (viz historie verzí 142-144 v souhrnu appky). Safari
+   žádnou takovou rezervu nedostane, tam appka počítá výšku správně i
+   bez ní. */
 @media (max-width:860px){
-  html:not(.standalone-app) .layout{ margin-bottom:90px; }
+  html.chrome-ios .layout{ margin-bottom:90px; }
 }
 
 /* ---------- mobile bottom sheet (map stays dominant underneath) ---------- */
@@ -570,16 +573,16 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
   .catch-ticket-modal .ticket-close{ display:none; }
   .catch-ticket-modal .ticket-body{ flex:1; overflow-y:auto; }
 }
-/* Odspoda appka nechává místo pro spodní navigační lištu jen v appce
-   nainstalované na plochu -- v běžné záložce prohlížeče appka žádnou
-   spodní lištu nemá, ale appka tam přesto nechá pevnou bezpečnostní
-   rezervu (stejný důvod jako u .layout výše -- appka appce naměřená
-   výška appky spolehlivě nevyloučí lištu Chromu). */
+/* Odspoda appka nechává místo pro spodní navigační lištu v appce
+   nainstalované na plochu, a pevnou bezpečnostní rezervu jen v iPhone
+   Chromu (stejný důvod jako u .layout výše) -- Safari v běžné záložce
+   appka žádnou rezervu nedostane, tam appka výšku appky počítá správně
+   i bez ní. */
 @media (max-width:860px){
   html.standalone-app .catch-ticket-modal{
-    bottom:calc(var(--bottom-nav-h) + var(--safe-bottom, env(safe-area-inset-bottom)));
+    bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
   }
-  html:not(.standalone-app) .catch-ticket-modal{ bottom:90px; }
+  html.chrome-ios .catch-ticket-modal{ bottom:90px; }
 }
 .ticket-illustration{ display:flex; justify-content:center; margin:6px 0 14px; }
 .ticket-stats{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
@@ -608,15 +611,15 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
     position:absolute; top:auto; bottom:0; left:0; right:0; max-height:70%;
   }
 }
-/* Panel appka zastaví nad spodní navigační lištou jen v appce
-   nainstalované na plochu -- v běžné záložce prohlížeče appka žádnou
-   spodní lištu nemá, ale appka tam přesto nechá pevnou bezpečnostní
-   rezervu (stejný důvod jako u .layout výše). */
+/* Panel appka zastaví nad spodní navigační lištou v appce nainstalované
+   na plochu, a nad pevnou bezpečnostní rezervou jen v iPhone Chromu
+   (stejný důvod jako u .layout výše). Safari v běžné záložce žádnou
+   rezervu nedostane. */
 @media (max-width:860px){
   html.standalone-app .side-panel{
-    bottom:calc(var(--bottom-nav-h) + var(--safe-bottom, env(safe-area-inset-bottom)));
+    bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
   }
-  html:not(.standalone-app) .side-panel{ bottom:90px; }
+  html.chrome-ios .side-panel{ bottom:90px; }
 }
 
 /* ---------- type picker / placement hints (floating over map) ---------- */
