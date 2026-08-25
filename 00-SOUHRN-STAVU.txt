@@ -1830,3 +1830,13 @@ jako předtím: Mapa (nastavit pozici) -> Domů -> Výpravy (jen
 prohlížet, neklikat "Zobrazit na mapě") -> zpátky na Mapu. A taky
 běžné věci znovu: založení nové výpravy, "Zobrazit na mapě" z
 Výpravy, druhý klik na Mapa, "Moje pozice".
+
+OPRAVA (verze 137): u zpětné výpravy typu přívlač formulář pro
+založení nové výpravy nabízel přidání dalšího místa jen přes GPS,
+i když výprava nebyla živá -- GPS tam nedávalo smysl.
+
+Oprava: formulář teď rozlišuje podle draft.live -- u živé výpravy
+appka nabídne GPS jako dřív, u zpětné nabídne "+ Přidat další místo",
+co dá pozici hlavního bodu a necháte si ji přesunout kliknutím na
+mapu (tlačítko "pozice na mapě: lat, lng"), stejně jako to už funguje
+u prutů bodových typů a u detailu už uložené výpravy.

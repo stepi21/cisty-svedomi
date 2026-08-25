@@ -5267,6 +5267,16 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
       { enableHighAccuracy: true, timeout: 8000 }
     )
   }
+  // U zpětné výpravy appka GPS nenabízí (appka totiž není fyzicky na
+  // místě) -- další místo appka přidá na souřadnice hlavního bodu a
+  // necháte si ho přesunout kliknutím na mapu, stejně jako appka appce
+  // umožňuje u dalšího prutu bodového typu.
+  function addLurePlaceManual() {
+    setDraft((d) => ({
+      ...d,
+      rods: [...d.rods, { name: `Místo ${d.rods.length + 1}`, lat: d.point.lat, lng: d.point.lng, baits: [] }],
+    }))
+  }
   function removeRod(index) {
     setDraft((d) => ({ ...d, rods: d.rods.filter((_, i) => i !== index) }))
   }
@@ -5509,13 +5519,21 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
                   <div className="coord-list" style={{ marginBottom: 8 }}>
                     {draft.rods.slice(1).map((r, idx) => (
                       <div key={idx + 1} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span className="coord-chip">{r.lat.toFixed(4)}, {r.lng.toFixed(4)}</span>
+                        {draft.live ? (
+                          <span className="coord-chip">{r.lat.toFixed(4)}, {r.lng.toFixed(4)}</span>
+                        ) : (
+                          <button type="button" className="new-btn" style={{ flex: 1 }} onClick={() => onArmRod(idx + 1)}><IconRevir size={13} /> pozice na mapě: {r.lat.toFixed(4)}, {r.lng.toFixed(4)}</button>
+                        )}
                         <button type="button" className="ticket-close" style={{ position: 'static', color: 'var(--ink-soft)' }} onClick={() => removeRod(idx + 1)}><IconClose size={14} /></button>
                       </div>
                     ))}
                   </div>
                 )}
-                <button type="button" className="new-btn" onClick={addRodViaGps} style={{ marginBottom: 12 }}>+ Další bod pomocí GPS</button>
+                {draft.live ? (
+                  <button type="button" className="new-btn" onClick={addRodViaGps} style={{ marginBottom: 12 }}>+ Další bod pomocí GPS</button>
+                ) : (
+                  <button type="button" className="new-btn" onClick={addLurePlaceManual} style={{ marginBottom: 12 }}>+ Přidat další místo</button>
+                )}
               </>
             ) : (
               <button type="button" className="new-btn" onClick={addRod} style={{ marginBottom: 12 }}>+ další prut</button>
