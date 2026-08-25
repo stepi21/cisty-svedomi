@@ -1344,57 +1344,58 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       rememberedMapViewRef.current = { lat: c.lat, lng: c.lng, zoom: map.getZoom() }
     }
 
-    if (mapForceResetRef.current) {
-      // Výslovný požadavek (druhý klik na Mapa) -- appka spočítá čerstvé
-      // přiblížení podle právě nastaveného (výchozího) filtru, bez ohledu
-      // na cokoli zapamatované, a hned appka i zapíše výsledek jako novou
-      // zapamatovanou pozici (appka nečeká na "moveend", ten by u
-      // animovaného přiblížení mohl dorazit později, než appka stihne
-      // odejít jinam).
-      if (bounds.length > 0) map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
-      else map.setView([49.8, 15.5], 8)
-      rememberCurrentView()
-    } else if (rememberedMapViewRef.current) {
-      // appka aktivně vrátí mapu na naposledy zapamatovanou pozici --
-      // sdílená Leaflet mapa mezitím mohla být použitá i jinde (např.
-      // Výpravy ji na chvíli přesunuly na detail prohlížené výpravy), tak
-      // ji appka nenechá jen "tak jak je", ale vrátí ji tam, kde uživatel
-      // Mapu naposledy sám nechal.
-      const v = rememberedMapViewRef.current
-      map.setView([v.lat, v.lng], v.zoom)
-    } else if (bounds.length > 0) {
-      // Úplně první návštěva záložky Mapa v týhle appce -- appka nemá co
-      // vracet, spočítá tedy výchozí přiblížení a rovnou ho i zapamatuje.
-      map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
-      rememberCurrentView()
-      // Krátce po startu appky (refresh stránky) nemusí být kontejner
-      // mapy ještě v konečné velikosti (fonty/layout se ještě mohly
-      // doskládat) -- invalidateSize() na začátku efektu to nemusí
-      // stihnout zachytit. Appka proto o chvíli později přiblížení
-      // zopakuje, ať appka nezůstane mírně posunutá/oddálená.
-      const boundsForRecheck = L.latLngBounds(bounds)
-      setTimeout(() => {
-        if (!mapInstance.current) return
-        mapInstance.current.invalidateSize()
-        mapInstance.current.fitBounds(boundsForRecheck, { padding: [40, 40], maxZoom: 15 })
-        const c = mapInstance.current.getCenter()
-        rememberedMapViewRef.current = { lat: c.lat, lng: c.lng, zoom: mapInstance.current.getZoom() }
-      }, 150)
-    } else {
-      // Prázdné souřadnice tu můžou znamenat dvě různé věci: appka
-      // opravdu nemá žádné úlovky/výpravy, NEBO se ještě jen nestihla
-      // načíst data ze serveru (typicky hned po refreshi stránky, než
-      // doběhne první dotaz). Appka si proto tenhle výchozí pohled
-      // NEZAPAMATOVÁVÁ -- kdyby to udělala a data by pak dorazila o
-      // chvilku později, uzamkla by si navždy tenhle "prázdný" pohled
-      // místo skutečného přiblížení na data.
-      map.setView([49.8, 15.5], 8)
-      setTimeout(() => {
-        if (!mapInstance.current) return
-        mapInstance.current.invalidateSize()
-      }, 150)
+    function applyMapPosition() {
+      if (mapForceResetRef.current) {
+        // Výslovný požadavek (druhý klik na Mapa) -- appka spočítá čerstvé
+        // přiblížení podle právě nastaveného (výchozího) filtru, bez
+        // ohledu na cokoli zapamatované, a hned appka i zapíše výsledek
+        // jako novou zapamatovanou pozici.
+        if (bounds.length > 0) map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
+        else map.setView([49.8, 15.5], 8)
+        rememberCurrentView()
+      } else if (rememberedMapViewRef.current) {
+        // appka aktivně vrátí mapu na naposledy zapamatovanou pozici --
+        // sdílená Leaflet mapa mezitím mohla být použitá i jinde (např.
+        // Výpravy ji na chvíli přesunuly na detail prohlížené výpravy),
+        // tak ji appka nenechá jen "tak jak je", ale vrátí ji tam, kde
+        // uživatel Mapu naposledy sám nechal.
+        const v = rememberedMapViewRef.current
+        map.setView([v.lat, v.lng], v.zoom)
+      } else if (bounds.length > 0) {
+        // Úplně první návštěva záložky Mapa v týhle appce -- appka nemá
+        // co vracet, spočítá tedy výchozí přiblížení a rovnou ho i
+        // zapamatuje.
+        map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
+        rememberCurrentView()
+      } else {
+        // Prázdné souřadnice tu můžou znamenat dvě různé věci: appka
+        // opravdu nemá žádné úlovky/výpravy, NEBO se ještě jen nestihla
+        // načíst data ze serveru (typicky hned po refreshi stránky, než
+        // doběhne první dotaz). Appka si proto tenhle výchozí pohled
+        // NEZAPAMATOVÁVÁ -- kdyby to udělala a data by pak dorazila o
+        // chvilku později, uzamkla by si navždy tenhle "prázdný" pohled
+        // místo skutečného přiblížení na data.
+        map.setView([49.8, 15.5], 8)
+      }
+      mapForceResetRef.current = false
     }
-    mapForceResetRef.current = false
+
+    applyMapPosition()
+    // Krátce po startu appky (refresh stránky) nemusí být kontejner mapy
+    // hned v konečné velikosti (fonty/layout se ještě mohly doskládat) --
+    // invalidateSize() výše na začátku efektu to nemusí stihnout zachytit.
+    // Dvojitý requestAnimationFrame počká, až prohlížeč doopravdy dokončí
+    // rozvržení stránky (spolehlivější než odhadované zpoždění přes
+    // setTimeout), a appka pak stejné rozhodnutí zopakuje se správnou
+    // velikostí kontejneru. Když bylo přiblížení už napoprvé správně,
+    // druhý běh jen potvrdí to samé -- appka appce tím nic nepokazí.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!mapInstance.current) return
+        mapInstance.current.invalidateSize()
+        applyMapPosition()
+      })
+    })
   }, [activePanel, mapLayers, sessions, locationsCatalog, userId, members, mapFocusSessionId, mapFocusPoint, mapResetNonce])
 
   async function backfillBaitPhoto(baitName, photoUrl) {
@@ -2463,7 +2464,26 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         setCatchesSortMode('species')
         if (sidebarRef.current) sidebarRef.current.scrollTop = 0
       }
-      else if (panel === 'map') { setMapWho('both'); setMapWhat('catches'); mapForceResetRef.current = true; setMapResetNonce((n) => n + 1) }
+      else if (panel === 'map') {
+        setMapWho('both'); setMapWhat('catches')
+        mapForceResetRef.current = true
+        setMapResetNonce((n) => n + 1)
+        // Reset appka provede rovnou tady, synchronně -- nespoléhá jen na
+        // to, že se stihne spustit mapový efekt dřív, než uživatel
+        // rychlým dalším kliknutím přepne jinam. Efekt níže reset stejně
+        // ještě jednou zopakuje (kvůli překreslení značek), ale pozice a
+        // zapamatovaná hodnota jsou správně nastavené už teď.
+        if (mapInstance.current) {
+          const map = mapInstance.current
+          const bounds = []
+          sessions.forEach((s) => (s.catches || []).forEach((c) => bounds.push([c.lat ?? s.lat, c.lng ?? s.lng])))
+          map.invalidateSize()
+          if (bounds.length > 0) map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
+          else map.setView([49.8, 15.5], 8)
+          const c = map.getCenter()
+          rememberedMapViewRef.current = { lat: c.lat, lng: c.lng, zoom: map.getZoom() }
+        }
+      }
       else if (panel === null) {
         setViewMode('aggregate'); setActiveCategory('all'); setActiveUserFilter('all')
         if (sidebarRef.current) sidebarRef.current.scrollTop = 0
