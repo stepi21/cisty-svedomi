@@ -289,8 +289,20 @@ header h1 .accent{ color:var(--amber); }
      bez zjevného konfliktu zůstávala schovaná -- appka proto klíčové
      vlastnosti appce jistí přes "!important", ať appce žádné jiné
      pravidlo nemůže vyhrát. */
-  .layout:not(.no-map):not(.no-map-keep-detail){ position:relative !important; min-height:100vh !important; }
+  .layout:not(.no-map):not(.no-map-keep-detail){ position:relative !important; flex:1 !important; min-height:0 !important; }
   .layout:not(.no-map):not(.no-map-keep-detail) main{ position:absolute !important; inset:0 !important; z-index:1 !important; }
+  /* .app v běžné záložce prohlížeče má jinak min-height:0 (viz výše --
+     kvůli krátkým panelům jako Domů), takže by .layout výše nemělo do
+     čeho růst (flex:1 by neměl žádný volný prostor k rozdělení) a
+     zhroutilo by se na 0px -- lišta i mapa by tak byly mimo obrazovku
+     úplně. Když je zrovna aktivní tenhle "plovoucí" layout (Mapa/
+     Revíry), appka .app protáhne na celou VIDITELNOU výšku obrazovky
+     (100dvh, ne 100vh -- to druhé na mobilu počítá s adresním řádkem
+     schovaným, což ve chvíli načtení/přepnutí obvykle není pravda, a
+     appka tak měla lištu vysunutou pod dolní okraj viditelné plochy).
+     Selektor :has() appce dovolí tohle zapnout jen pro tenhle jeden
+     případ, beze zásahu do ostatních panelů. */
+  .app:has(> .layout:not(.no-map):not(.no-map-keep-detail)){ min-height:100vh; min-height:100dvh; }
   .mobile-sheet:not(.full-panel){
     display:flex !important;
     position:absolute !important; left:0 !important; right:0 !important; bottom:0 !important; z-index:60 !important;
