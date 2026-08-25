@@ -1697,3 +1697,26 @@ ten je ale sám o sobě teď mnohem spolehlivější.
 NEOVĚŘENO ŽIVĚ, otestovat po nasazení: tvrdý refresh, druhý klik na
 Mapa (i s rychlým přepnutím jinam hned potom), a obecně proklikávání
 mezi Mapou a ostatními záložkami několikrát za sebou rychle po sobě.
+
+NÁVRAT K VERZI 129 (verze 132) -- verze 131 to podle testu ještě
+zhoršila oproti verzi 129, přestože měla opravovat regresi z verze
+130.
+
+Rozhodnutí: appka se přestala pokoušet o chytřejší časování (dvojitý
+requestAnimationFrame, čekání na platnou velikost kontejneru) --
+tohle appka nemůže spolehlivě otestovat mimo skutečný prohlížeč, a
+dva pokusy po sobě věci zhoršily místo zlepšily. Appka vrátila
+mapový efekt přesně na to, co bylo ve verzi 129 (jednoduché, přímé
+přiřazení pozice + jeden setTimeout(150ms) pro dohnání velikosti
+kontejneru po refreshi) -- podle uživatele to fungovalo skoro dobře.
+
+ZNÁMÝ NEDOŘEŠENÝ PROBLÉM: tvrdý refresh a hned první klik na Mapu
+appka pořád nemusí zobrazit ve správné pozici (drobné posunutí/
+oddálení, druhý klik to spolehlivě opraví). Příčina je pravděpodobně
+v tom, že appka počítá přiblížení dřív, než má kontejner mapy úplně
+doskládanou velikost (layout/fonty). Bez možnosti appka tohle ověřit
+v opravdovém prohlížeči (jen mimo-prohlížečová simulace, co odhalí
+pády, ale ne časování rozvržení stránky) je risk dalších pokusů o
+opravu vyšší než jejich přínos -- doporučuju tenhle jeden konkrétní
+detail buď zatím nechat být (řeší se druhým kliknutím), nebo ho
+otestovat/opravit až s reálným přístupem do prohlížeče.
