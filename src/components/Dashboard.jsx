@@ -142,6 +142,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // by výše popsaný "zůstaň přiblížený" mechanismus (cameFromFocus) klidně
   // zabránil i tomuhle výslovnému požadavku na reset.
   const mapForceResetRef = useRef(false)
+  // appka mapu poprvé automaticky přiblíží na výchozí filtr (Vše +
+  // Úlovky), ale POTOM ji nechá být, kdykoli se jen změní filtr, nebo
+  // uživatel ze záložky odejde a jedním kliknutím se vrátí -- appka mapu
+  // přeostří jen na výslovný požadavek, tedy druhý klik na Mapa (viz
+  // mapForceResetRef výše).
+  const mapHasFitRef = useRef(false)
   const [mapWhat, setMapWhat] = useState('catches') // 'trips' | 'catches' | 'both'
   const mapLayers = useMemo(() => ({
     myTrips: (mapWho === 'me' || mapWho === 'both') && (mapWhat === 'trips' || mapWhat === 'both'),
@@ -154,6 +160,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // Druhý klik na už aktivní Domů appku naopak pošle nahoru, na nejnovější
   // úlovek -- viz switchPanel a efekt níže na [activePanel, homeNavNonce].
   const sidebarRef = useRef(null)
+  // Výpravy na mobilu v klidu se drží mimo sidebarRef -- ukazují se přes
+  // vlastní full-panel kontejner (mobile-sheet-body). Potřeba vlastní ref,
+  // ať jde na druhý klik posunout na začátek i tenhle případ.
+  const mobileSheetBodyRef = useRef(null)
   const homeScrollRef = useRef(0)
   const pendingHomeScrollModeRef = useRef('top')
   const [homeNavNonce, setHomeNavNonce] = useState(0)
@@ -522,7 +532,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         const next = [...(prev || []), point]
         // Po prvním prutu appka přiblíží mapu blíž -- další pruty bývají
         // jen pár metrů od sebe, na širším přiblížení by se klikalo špatně.
-        if (next.length === 1) mapInstance.current?.setView([point.lat, point.lng], 18)
+        if (next.length === 1) mapInstance.current?.setView([point.lat, point.lng], 19)
         return next
       })
       return
@@ -636,6 +646,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
     if (target.startsWith('edit-rod-')) {
       const rodId = target.slice('edit-rod-'.length)
+      setPlacementTarget(null)
+      supabase.from('rods').update({ lat: point.lat, lng: point.lng }).eq('id', rodId).then(({ error }) => {
+        if (error) alert(error.message)
+        else loadSessions()
+      })
+      return
+    }
+
+    if (target.startsWith('relocate-lure-place-')) {
+      const rodId = target.slice('relocate-lure-place-'.length)
       setPlacementTarget(null)
       supabase.from('rods').update({ lat: point.lat, lng: point.lng }).eq('id', rodId).then(({ error }) => {
         if (error) alert(error.message)
@@ -887,14 +907,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     gpsRequestIdRef.current++ // zneplatní případnou dobíhající GPS odpověď
     setGpsCapturing(false)
     setGpsConfirmStep(null)
-    // Zpětná výprava se obvykle zapisuje na stejném nebo blízkém místě jako
-    // ta poslední -- appka proto mapu rovnou přiblíží tam (sessions appka
-    // drží seřazené od nejnovější), místo aby appka mapu nechala tam, kde
-    // náhodou zůstala od dřívějška.
-    const last = sessions[0]
-    if (last?.lat != null && last?.lng != null) {
-      mapInstance.current?.setView([last.lat, last.lng], 13)
-    }
     setPlacementTarget('shore-point-click')
   }
 
@@ -988,6 +1000,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       riverConfirm || areaDrawChoice || editingAreasLocation || editingAreasSession || savingLocationFor ||
       gpsConfirmStep || gpsCapturing
     )
+
+    // Zakládání úplně nové výpravy (od typové nabídky až po otevřený
+    // formulář): appka schválně nekreslí ŽÁDNÉ staré výpravy ani úlovky
+    // (čistá mapa, ať appka nepůsobí zmateně) a mapu ani nepřesouvá --
+    // zůstane tam, kde uživatel mapu naposled nechal. Vrstvy appka nechá
+    // vyčištěné (viz clearLayers výše), dál se v tomhle renderu nic
+    // nekreslí ani nepřeostřuje.
+    const isCreatingNewSession = pickingType || !!locationPickerStep || !!rodPointsDraft || !!draftSession ||
+      placementTarget === 'session-point' || placementTarget === 'shore-point-click'
+    if (isCreatingNewSession) return
 
     // Záložka Mapa má vlastní, samostatný useEffect (přepínatelné vrstvy
     // moje/party výpravy, moje/party úlovky, revíry) -- tenhle starší,
@@ -1165,7 +1187,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         map.setView([49.8, 15.5], 8)
       }
     }
-  }, [activeSession, activeCategory, activeUserFilter, viewMode, sessions, locationsCatalog, activePanel, placementTarget, areaDraft, riverLineDraft, rodPointsDraft, riverConfirm, areaDrawChoice, editingAreasLocation, editingAreasSession, savingLocationFor])
+  }, [activeSession, activeCategory, activeUserFilter, viewMode, sessions, locationsCatalog, activePanel, placementTarget, areaDraft, riverLineDraft, rodPointsDraft, riverConfirm, areaDrawChoice, editingAreasLocation, editingAreasSession, savingLocationFor, pickingType, locationPickerStep, draftSession])
 
   // --- záložka 🗺 Mapa: přepínatelné vrstvy (moje/party výpravy, moje/party
   // úlovky, revíry), samostatně od agregovaného pohledu výše. Úlovky i
@@ -1214,13 +1236,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           bounds.push([r.lat, r.lng])
         })
       } else {
-        // appka u bodových typů (kapr/muška/plavaná) appce navíc ukáže
-        // jednotlivé nahozené pruty -- appka je barevně odliší stejně jako
-        // appka dělá v appčině detailu výpravy (rodColors), ať appka pozná
+        // appka u bodových typů (kapr/muška/plavaná): jediný prut appka
+        // ukáže v barvě uživatele (stejná identita jako u přívlače), dva a
+        // víc prutů appka odliší barvami prutů (rodColors), ať appka pozná
         // Prut 1 od Prutu 2 i tady na mapě.
-        ;(s.rods || []).forEach((r, i) => {
-          if (r.lat == null || r.lng == null) return
-          const rodColor = rodColors[i % rodColors.length]
+        const rods = (s.rods || []).filter((r) => r.lat != null && r.lng != null)
+        rods.forEach((r, i) => {
+          const rodColor = rods.length === 1 ? color : rodColors[i % rodColors.length]
           const rodIcon = L.divIcon({
             html: `<div style="width:18px;height:18px;border-radius:50%;background:${rodColor};border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4)"></div>`,
             className: '', iconSize: [18, 18], iconAnchor: [9, 9],
@@ -1242,6 +1264,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       if (mapFocusPoint) map.setView([mapFocusPoint.lat, mapFocusPoint.lng], mapFocusPoint.zoom || 17)
       else if (bounds.length === 1) map.setView(bounds[0], 16)
       else if (bounds.length > 1) map.fitBounds(L.latLngBounds(bounds), { padding: [60, 60], maxZoom: 16 })
+      mapHasFitRef.current = true
+      mapForceResetRef.current = false
       return
     }
 
@@ -1301,13 +1325,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       })
     }
 
-    if (cameFromFocus) {
-      // appka právě zrušila fokus na jednu výpravu -- appka nechá appku na
-      // stejném přiblížení, jen appka doplnila zbytek podle Kdo/Co.
+    if (cameFromFocus || (mapHasFitRef.current && !mapForceResetRef.current)) {
+      // appka nechá mapu tam, kde je -- buď appka právě zrušila fokus na
+      // jednu výpravu, nebo appka jen změnila filtr / se vrátila na
+      // záložku Mapa jedním kliknutím. Přeostření appka udělá jen na
+      // výslovný požadavek (druhý klik na Mapa).
     } else if (bounds.length > 0) {
       map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
+      mapHasFitRef.current = true
     } else {
       map.setView([49.8, 15.5], 8)
+      mapHasFitRef.current = true
     }
     mapForceResetRef.current = false
   }, [activePanel, mapLayers, sessions, locationsCatalog, userId, members, mapFocusSessionId, mapFocusPoint])
@@ -2098,7 +2126,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   function chooseCatchOnMap() {
     setCatchChoosing(false)
     if (activeSession?.lat != null && activeSession?.lng != null) {
-      mapInstance.current?.setView([activeSession.lat, activeSession.lng], 17)
+      mapInstance.current?.setView([activeSession.lat, activeSession.lng], 18)
     }
     setPlacementTarget('catch-point')
   }
@@ -2359,9 +2387,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setMapFocusSessionId(null)
     setMapFocusPoint(null)
     if (isRepeat) {
-      if (panel === 'catches') setCatchesSortMode('species')
+      if (panel === 'catches') {
+        setCatchesSortMode('species')
+        if (sidebarRef.current) sidebarRef.current.scrollTop = 0
+      }
       else if (panel === 'map') { setMapWho('both'); setMapWhat('catches'); mapForceResetRef.current = true }
-      else if (panel === null) { setViewMode('aggregate'); setActiveCategory('all'); setActiveUserFilter('all') }
+      else if (panel === null) {
+        setViewMode('aggregate'); setActiveCategory('all'); setActiveUserFilter('all')
+        if (sidebarRef.current) sidebarRef.current.scrollTop = 0
+        if (mobileSheetBodyRef.current) mobileSheetBodyRef.current.scrollTop = 0
+      }
     }
   }
 
@@ -2413,6 +2448,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   function startRelocateCatch(catchId) {
     relocateCatchIdRef.current = catchId
+    const c = sessions.flatMap((s) => s.catches || []).find((cc) => cc.id === catchId)
+    if (c?.lat != null && c?.lng != null) mapInstance.current?.setView([c.lat, c.lng], 19)
     setTicketCatch(null)
     setMobileSheetOpen(false)
     setPlacementTarget('relocate-catch')
@@ -2422,6 +2459,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const s = editingSession
     await saveEditSession()
     relocateSessionIdRef.current = s.id
+    if (s.lat != null && s.lng != null) mapInstance.current?.setView([s.lat, s.lng], 19)
     setMobileSheetOpen(false)
     setPlacementTarget('relocate-session-point')
   }
@@ -2434,6 +2472,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // místě -- takhle jsou od sebe jasně oddělené.
   function startRelocateFromCard(session) {
     relocateSessionIdRef.current = session.id
+    if (session.lat != null && session.lng != null) mapInstance.current?.setView([session.lat, session.lng], 19)
     setMobileSheetOpen(false)
     setPlacementTarget('relocate-session-point')
   }
@@ -2467,9 +2506,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       .filter((r) => r.lat != null && r.lng != null)
       .map((r) => [r.lat, r.lng])
     if (existingPoints.length > 1) {
-      mapInstance.current?.fitBounds(existingPoints, { padding: [60, 60], maxZoom: 17 })
+      mapInstance.current?.fitBounds(existingPoints, { padding: [60, 60], maxZoom: 18 })
     } else if (existingPoints.length === 1) {
-      mapInstance.current?.setView(existingPoints[0], 17)
+      mapInstance.current?.setView(existingPoints[0], 18)
     } else if (session.lat != null && session.lng != null) {
       mapInstance.current?.setView([session.lat, session.lng], 17)
     }
@@ -2520,6 +2559,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const { error } = await supabase.from('rods').delete().eq('id', rod.id)
     if (error) { alert(error.message); return }
     await loadSessions()
+  }
+
+  // Přesun libovolného místa u přívlače -- první místo appka přesouvá
+  // úplně stejně jako hlavní bod výpravy (jsou to koneckonců stejná data,
+  // viz startRelocateFromCard), další místa mají vlastní jednoduchý flow.
+  function startRelocateLurePlace(session, rod) {
+    const isMain = session.rods?.[0]?.id === rod.id
+    if (isMain) { startRelocateFromCard(session); return }
+    if (rod.lat != null && rod.lng != null) mapInstance.current?.setView([rod.lat, rod.lng], 19)
+    setMobileSheetOpen(false)
+    setPlacementTarget(`relocate-lure-place-${rod.id}`)
   }
 
   function startManageAreas(session) {
@@ -2820,7 +2870,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return `${prefix}${visibleSessions.length} výprav · ${catchCount} úlovků`
   }
 
-  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'shore-point-click' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || placementTarget === 'new-location-point' || placementTarget === 'add-rod-to-session' || areaDraft || riverLineDraft || rodPointsDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')))
+  const isPlacingSomething = placementTarget === 'session-point' || placementTarget === 'shore-point-click' || placementTarget === 'catch-point' || placementTarget === 'relocate-session-point' || placementTarget === 'relocate-catch' || placementTarget === 'new-location-point' || placementTarget === 'add-rod-to-session' || areaDraft || riverLineDraft || rodPointsDraft || (placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-') || placementTarget.startsWith('relocate-lure-place-')))
 
   // Výpravy a Úlovky mají velkou mapu skrytou (viz layout níže), ale pořád
   // potřebují klikat na mapu při zakládání/úpravě výpravy nebo přesunu bodu.
@@ -3467,7 +3517,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button className="new-btn" onClick={() => jumpToMapView(activeSession)}><IconMap size={13} /> Zobrazit na mapě</button>
                     <button className="new-btn" onClick={() => duplicateSession(activeSession)}><IconDuplicate size={13} /> Nová jako tahle</button>
-                    {canEdit && <button className="new-btn" onClick={() => startRelocateFromCard(activeSession)}><IconRevir size={13} /> Přesunout bod</button>}
+                    {canEdit && !LURE_TYPES.includes(activeSession.type) && <button className="new-btn" onClick={() => startRelocateFromCard(activeSession)}><IconRevir size={13} /> Přesunout bod</button>}
                     {canEdit && <button className="new-btn" onClick={() => startEditSession(activeSession)}><IconEdit size={13} /> Upravit výpravu</button>}
                   </div>
                 </div>
@@ -3513,7 +3563,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--ink-soft)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   {(() => { const phase = moonPhaseName(activeSession.session_date); return <><IconMoonPhase phase={phase} size={14} /> {phase}</> })()}
                 </div>
-                <SessionMiniMap session={activeSession} onOpen={() => jumpToMapView(activeSession)} />
+                <SessionMiniMap session={activeSession} userColor={userColor(activeSession.user_id)} onOpen={() => jumpToMapView(activeSession)} />
               </div>
               <div className="det-block">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -3539,7 +3589,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                       baitCategory={baitCategoryFor(activeSession.type)}
                       onAddBait={addBaitToCatalog}
                       onBackfillBaitPhoto={backfillBaitPhoto}
-                      onArmPosition={() => setPlacementTarget(`edit-rod-${r.id}`)}
+                      onArmPosition={() => {
+                        if (r.lat != null && r.lng != null) mapInstance.current?.setView([r.lat, r.lng], 19)
+                        setPlacementTarget(`edit-rod-${r.id}`)
+                      }}
                       onDone={() => { setEditingRodId(null); loadSessions() }}
                       onCancel={() => setEditingRodId(null)}
                       onDeleteRod={() => { setEditingRodId(null); loadSessions() }}
@@ -3582,7 +3635,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               {LURE_TYPES.includes(activeSession.type) && (
                 <div className="det-block">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <h3>Další místa</h3>
+                    <h3>Místa</h3>
                     {canEdit && (
                       activeSession.status === 'in_progress' ? (
                         <button className="new-btn" onClick={() => addLurePlaceViaGps(activeSession)}>+ Další bod pomocí GPS</button>
@@ -3591,21 +3644,23 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                       )
                     )}
                   </div>
-                  {(activeSession.rods || []).length <= 1 ? (
-                    <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Chytáš jen z jednoho místa. Pokud jsi zkoušel i jinde (např. jez z druhého břehu), přidej ho sem.</div>
-                  ) : (
-                    <div className="coord-list">
-                      {(activeSession.rods || []).slice(1).map((r) => (
-                        <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <button className="coord-chip" type="button" onClick={() => jumpToMapView(activeSession, { lat: r.lat, lng: r.lng, zoom: 17 })}>
-                            <IconRevir size={13} color="var(--water-mid)" dotColor="var(--paper)" /> {r.lat?.toFixed(4)}, {r.lng?.toFixed(4)}
-                          </button>
-                          {canEdit && (
-                            <button className="ticket-close" style={{ position: 'static', color: 'var(--ink-soft)' }} onClick={() => deleteLurePlace(r)}><IconClose size={14} /></button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                  <div className="coord-list">
+                    {(activeSession.rods || []).map((r, i) => (
+                      <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <button className="coord-chip" type="button" style={{ flex: 1 }} onClick={() => jumpToMapView(activeSession, { lat: r.lat, lng: r.lng, zoom: 17 })}>
+                          <IconRevir size={13} color="var(--water-mid)" dotColor="var(--paper)" /> Místo {i + 1}: {r.lat?.toFixed(4)}, {r.lng?.toFixed(4)}
+                        </button>
+                        {canEdit && (
+                          <button className="new-btn" type="button" title="Přesunout" onClick={() => startRelocateLurePlace(activeSession, r)}><IconRevir size={13} /></button>
+                        )}
+                        {canEdit && i > 0 && (
+                          <button className="ticket-close" style={{ position: 'static', color: 'var(--ink-soft)' }} onClick={() => deleteLurePlace(r)}><IconClose size={14} /></button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {(activeSession.rods || []).length <= 1 && (
+                    <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 8 }}>Chytáš jen z jednoho místa. Pokud jsi zkoušel i jinde (např. jez z druhého břehu), přidej ho sem.</div>
                   )}
                 </div>
               )}
@@ -4186,7 +4241,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             </div>
           )}
 
-          {placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-')) && (
+          {placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-') || placementTarget.startsWith('relocate-lure-place-')) && (
             <div className="place-hint">
               Klikni na mapu pro pozici {LURE_TYPES.includes(editingSession?.type || activeSession?.type) ? 'místa' : 'prutu'}.
               <button className="ticket-close" onClick={() => setPlacementTarget(null)}><IconClose size={16} /></button>
@@ -4212,7 +4267,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 <span className="peek-chevron">{mobileSheetOpen ? '▾' : '▴'}</span>
               </div>
             )}
-            <div className="mobile-sheet-body">
+            <div className="mobile-sheet-body" ref={mobileSheetBodyRef}>
               {activePanel === 'map' ? renderMapControls()
                 : activePanel === 'locations' ? renderLocationsList()
                 : (
@@ -4450,7 +4505,7 @@ function SaveLocationForm({ source, onCancel, onSave }) {
 // Leaflet instanci (stejný vzor jako LocationPreviewMap v LocationsModal),
 // ať se nemíchá se stavem té velké, sdílené mapy appky. Neinteraktivní
 // (bez zoomu/tažení) -- klik na ni appku přepne rovnou na velkou mapu.
-function SessionMiniMap({ session, onOpen }) {
+function SessionMiniMap({ session, userColor, onOpen }) {
   const mapEl = useRef(null)
   const mapInst = useRef(null)
 
@@ -4465,6 +4520,10 @@ function SessionMiniMap({ session, onOpen }) {
 
     const bounds = []
     const isLure = LURE_TYPES.includes(session.type)
+    const pointIcon = L.divIcon({
+      html: `<div style="width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid ${userColor};box-shadow:0 1px 5px rgba(0,0,0,.35)"></div>`,
+      className: '', iconSize: [16, 16], iconAnchor: [8, 8],
+    })
 
     if (isLure && session.area) {
       (session.area || [])
@@ -4477,16 +4536,33 @@ function SessionMiniMap({ session, onOpen }) {
         })
     }
 
-    if (session.lat != null && session.lng != null) {
-      L.circleMarker([session.lat, session.lng], { radius: 6, color: '#2C6E71', weight: 2, fillColor: '#fff', fillOpacity: 1 }).addTo(map)
-      bounds.push([session.lat, session.lng])
+    if (isLure) {
+      // appka u přívlače kreslí VŠECHNY body (hlavní i další místa) stejnou
+      // bílou tečkou s lemem v barvě uživatele -- stejná identita jako na
+      // velké mapě ve fokusovaném režimu.
+      if (session.lat != null && session.lng != null) {
+        L.marker([session.lat, session.lng], { icon: pointIcon }).addTo(map)
+        bounds.push([session.lat, session.lng])
+      }
+      ;(session.rods || []).slice(1).forEach((r) => {
+        if (r.lat == null || r.lng == null) return
+        L.marker([r.lat, r.lng], { icon: pointIcon }).addTo(map)
+        bounds.push([r.lat, r.lng])
+      })
+    } else {
+      // Bodové typy: jediný prut appka ukáže v barvě uživatele, dva a víc
+      // appka odliší barvami prutů -- stejné pravidlo jako na velké mapě.
+      const rods = (session.rods || []).filter((r) => r.lat != null && r.lng != null)
+      rods.forEach((r, i) => {
+        const rodColor = rods.length === 1 ? userColor : rodColors[i % rodColors.length]
+        const rodIcon = L.divIcon({
+          html: `<div style="width:16px;height:16px;border-radius:50%;background:${rodColor};border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.35)"></div>`,
+          className: '', iconSize: [16, 16], iconAnchor: [8, 8],
+        })
+        L.marker([r.lat, r.lng], { icon: rodIcon }).addTo(map)
+        bounds.push([r.lat, r.lng])
+      })
     }
-    ;(session.rods || []).forEach((r, i) => {
-      if (isLure && i === 0) return // stejný bod jako tečka výpravy výše
-      if (r.lat == null || r.lng == null) return
-      L.circleMarker([r.lat, r.lng], { radius: 5, color: '#B97F35', weight: 2, fillColor: '#fff', fillOpacity: 1 }).addTo(map)
-      bounds.push([r.lat, r.lng])
-    })
 
     if (bounds.length > 1) map.fitBounds(bounds, { padding: [16, 16], maxZoom: 15 })
     else if (bounds.length === 1) map.setView(bounds[0], 14)
@@ -4494,7 +4570,7 @@ function SessionMiniMap({ session, onOpen }) {
     setTimeout(() => map.invalidateSize(), 50)
 
     return () => { map.remove(); mapInst.current = null }
-  }, [session.id])
+  }, [session.id, userColor])
 
   return (
     <div

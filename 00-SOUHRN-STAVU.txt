@@ -1505,3 +1505,44 @@ ZMĚNA (verze 124) -- doladění chování po vyzkoušení verze 123:
 NEOVĚŘENO ŽIVĚ, otestovat po nasazení: scroll na Domů (oba směry),
 reset Mapy druhým klikem i po fokusu na výpravu, reset filtrů na
 Výpravách druhým klikem, a všechna nová přiblížení mapy (body 6-10).
+
+ZMĚNA (verze 126) -- velká úprava chování mapy po dalším kole
+připomínek:
+
+1. Mapa: přepracovaná logika přiblížení. Výchozí stav (Vše + Úlovky,
+   fit na všechny úlovky) beze změny. Nově ale appka mapu NEPŘEOSTŘÍ
+   při pouhé změně filtru (Kdo/Co) ani při návratu na záložku Mapa
+   jedním kliknutím -- zůstane přesně tam, kde byla. Přeostření appka
+   udělá jen na výslovný požadavek: druhý klik na už aktivní záložku
+   Mapa. Nová pomocná hodnota mapHasFitRef hlídá, jestli už appka
+   jednou automaticky přiblížila od posledního resetu.
+
+2. Ještě větší přiblížení při umísťování bodů: druhý a další prut při
+   zakládání nové výpravy (zoom 19), přesun bodu z karty výpravy
+   (nově appka přiblíží i tam, zoom 19), úprava pozice jednotlivého
+   prutu (zoom 19), přesun úlovku (zoom 19), přidání dalšího
+   prutu/místa a přidání úlovku (zoom 18).
+
+3. Sladěné barvy bodů mezi miniaturní mapkou v detailu výpravy a
+   velkou mapou (fokusovaný režim): přívlač -- všechny body (hlavní i
+   další místa) bílé tečky s lemem v barvě uživatele. Bodové typy
+   (kapr/muška/plavaná) -- jediný prut v barvě uživatele, dva a víc
+   prutů v barvách prutů (rodColors), stejně na obou mapách.
+
+4. Přívlač: hlavní bod a "Další místa" sloučeny do jednoho seznamu
+   "Místa" v detailu výpravy. Každé místo (včetně prvního) má teď
+   vlastní tlačítko na přesun -- dřív šel přesunout jen ten první bod
+   (přes "Přesunout bod" nahoře), ostatní místa ne.
+
+5. Druhý klik na už aktivní záložku Výpravy nebo Úlovky teď navíc
+   vyjede úplně nahoru (stejně jako u Domů) -- dřív jen resetoval
+   filtry/detail, ale zůstal uprostřed seznamu, kde uživatel byl.
+
+6. Zakládání nové výpravy: appka teď nekreslí žádné staré výpravy ani
+   úlovky na pozadí (čistá mapa) a mapu ani nepřesouvá -- zůstane
+   přesně tam, kde byla naposled. Platí stejně pro typovou nabídku i
+   pro následné umísťování bodů -- pozadí obou kroků je teď sjednocené.
+
+NEOVĚŘENO ŽIVĚ, otestovat po nasazení: chování mapy při přepínání
+filtrů a mezi záložkami (bod 1), sloučená "Místa" u přívlače (bod 4),
+a čistou/nepřesunutou mapu při zakládání nové výpravy (bod 6).
