@@ -84,6 +84,15 @@ body{
 
 /* ---------- app shell ---------- */
 .app{ display:flex; flex-direction:column; min-height:100vh; }
+/* Appka v běžné záložce prohlížeče (Chrome/Safari, NE appka na ploše)
+   nepotřebuje appku roztáhnout na aspoň jednu celou obrazovku -- appka
+   ji nechá přesně tak vysokou, jak potřebuje obsah, ať nezbývá prázdná
+   plocha dole na krátkých panelech (třeba Mapě). Appka na ploše tohle
+   min-height potřebuje ponechat -- sticky spodní lišta by se jinak na
+   krátkém obsahu nedostala úplně dolů. */
+@media (max-width:860px){
+  html:not(.standalone-app) .app{ min-height:0; }
+}
 header{ background:var(--water-deep); color:var(--white); padding:16px 20px; }
 .head-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .head-logo-group{ display:flex; align-items:center; gap:10px; min-width:0; }

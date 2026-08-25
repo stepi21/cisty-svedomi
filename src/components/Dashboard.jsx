@@ -180,6 +180,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [locationsCatalog, setLocationsCatalog] = useState([])
   const [savingLocationFor, setSavingLocationFor] = useState(null) // {title, revir, area, lat, lng} — normalizovaný zdroj pro uložení do katalogu
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false)
+  // Lišta je teď normální blok v toku stránky, ne plovoucí overlay --
+  // po rozbalení se tak nový obsah objeví DOLE (roste stránka), ne
+  // nahoře přes mapu jako dřív. Appka proto po rozbalení sama
+  // doscrolluje na tenhle blok, ať se nový obsah dostane do záběru.
+  const mobileSheetRef = useRef(null)
+  useEffect(() => {
+    if (mobileSheetOpen && mobileSheetRef.current) {
+      mobileSheetRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [mobileSheetOpen])
   const [loading, setLoading] = useState(true)
   const [ticketCatch, setTicketCatch] = useState(null)
   const ticketCatchRef = useRef(null)
@@ -4368,7 +4378,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         </main>
 
         {activePanel !== 'home' && activePanel !== 'stations' && activePanel !== 'catches' && activePanel !== 'baits' && (
-          <div className={`mobile-sheet ${mobileSheetOpen ? 'expanded' : ''} ${activePanel === 'map' ? 'map-panel' : ''} ${mobileFullPanel ? 'full-panel' : ''}`}>
+          <div ref={mobileSheetRef} className={`mobile-sheet ${mobileSheetOpen ? 'expanded' : ''} ${activePanel === 'map' ? 'map-panel' : ''} ${mobileFullPanel ? 'full-panel' : ''}`}>
             {!mobileFullPanel && (
               <div className="mobile-peek-bar" onClick={() => setMobileSheetOpen((v) => !v)}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{peekLabel()}</span>
