@@ -4,6 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Čistý svědomí</title>
+
+    <!-- Standardní web manifest -- hlavně pro Android/Chrome "Přidat na
+         plochu" a jako obecný popis appky pro prohlížeč. -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#123B52">
+
+    <!-- iOS Safari se řídí těmito tagy vlastními, ne manifestem výše --
+         "capable" appce zajistí, že appka po přidání na plochu poběží bez
+         adresního řádku a tlačítek prohlížeče kolem, jako opravdická appka. -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Čistý svědomí">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
   </head>

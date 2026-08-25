@@ -1869,3 +1869,20 @@ NEOVĚŘENO ŽIVĚ, otestovat prosím znovu na mobilu i desktopu:
 "+ Přidat další místo" u zpětné výpravy s přívlačem -- formulář musí
 zmizet, mapa musí být klikatelná, po kliknutí se musí formulář vrátit
 s novým místem na správné pozici.
+
+DOPLNĚK (verze 140) -- appka nainstalovatelná na plochu (iPhone i
+Android):
+- Nová vlastní ikonka appky (rybí motiv, barvy appky -- water-deep +
+  amber), v souborech public/apple-touch-icon.png (180px),
+  public/icon-192.png a public/icon-512.png.
+- public/manifest.json -- standardní web manifest pro Android/Chrome.
+- index.html doplněn o apple-mobile-web-app-* tagy pro iOS Safari --
+  appka po přidání na plochu poběží bez adresního řádku/tlačítek
+  prohlížeče kolem, s vlastní ikonkou a barvou stavového řádku.
+
+Uživatel měl appku na iPhonu už dřív přidanou přes Safari "Přidat na
+plochu" (bez týhle úpravy appka nemá manifest ani apple ikonku) --
+starou zástupku doporučeno smazat a appku znovu přidat, ať se
+projeví nová ikonka i chování bez adresního řádku (Safari tyhle věci
+zachytí jen v momentě přidání, nedotáhne je zpětně na existující
+zástupku).
