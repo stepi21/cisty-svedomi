@@ -261,49 +261,6 @@ header h1 .accent{ color:var(--amber); }
   header{ position:sticky; top:0; z-index:100; }
 }
 
-/* Normální tok stránky sedí jen pro dlouhé seznamy (Domů, Výpravy,
-   Úlovky) -- appka to živým testem ověřila, tam funguje dobře. Pro
-   Mapu (a jakýkoli jiný panel, co ukazuje mapu spolu s lištou) to ale
-   nesedí -- appka lištu vrací zpátky k plovoucímu chování: mapa
-   vyplní celou dostupnou plochu vespod, lišta se přes ni jen zespoda
-   vysune NAHOŘ (roste směrem do mapy, ne dolů po stránce). Appka to
-   pozná podle toho, že .mobile-sheet nemá třídu ".full-panel" (tu
-   appka dává jen tam, kde mapa vůbec není). */
-@media (max-width:860px){
-  .layout:not(.no-map):not(.no-map-keep-detail){
-    position:relative; min-height:100vh;
-  }
-  .layout:not(.no-map):not(.no-map-keep-detail) main{
-    position:absolute; inset:0; display:block; z-index:1;
-  }
-  .mobile-sheet:not(.full-panel){
-    position:absolute; left:0; right:0; bottom:0; z-index:60;
-    height:56px; max-height:75%;
-    transition:height .25s ease;
-    flex:none;
-  }
-  .mobile-sheet:not(.full-panel).expanded{ height:75%; }
-  /* Mapa má ve vysunutém stavu jen pár řádků filtrů (Kdo/Co), ne dlouhý
-     seznam -- appka proto nechá výšku "auto" s max. stropem, ať appka
-     nedrží zbytečně prázdnou plochu jen proto, že jinde appka počítala
-     s dlouhým seznamem. */
-  .mobile-sheet:not(.full-panel).map-panel.expanded{ height:auto; max-height:min(45%, 320px); }
-}
-
-/* Appka na ploše potřebuje "výpravu v klidu" (mobile-sheet.full-panel,
-   bez mapy) roztáhnout na celou zbývající výšku -- jinak by spodní
-   navigační lišta (position:sticky) nedosáhla úplně dolů. Appka ale
-   zároveň nechá poslední viditelný blok roztáhnout se spolu s ní --
-   jeho vlastní bílé pozadí tak vyplní ten prostor. Mapu appka řeší
-   samostatně (viz blok výše) -- tam sheet plave nad mapou a žádné
-   další roztahování nepotřebuje. */
-@media (max-width:860px){
-  html.standalone-app .layout.no-map-keep-detail{ flex:1; }
-  html.standalone-app .mobile-sheet.full-panel{ flex:1; display:flex; flex-direction:column; }
-  html.standalone-app .mobile-sheet.full-panel .mobile-sheet-body{ flex:1; }
-  html.standalone-app .layout.no-map .sidebar{ flex:1; }
-}
-
 /* ---------- mobile bottom sheet ---------- */
 .mobile-sheet{ display:none; }
 @media (max-width:860px){
@@ -321,11 +278,37 @@ header h1 .accent{ color:var(--amber); }
   .peek-chevron{ color:var(--ink-soft); font-size:var(--fs-sm); }
   .mobile-sheet-body{ display:none; padding:0 0 16px; overflow-y:auto; flex:1; }
   .mobile-sheet.expanded .mobile-sheet-body{ display:block; }
-  /* "Plná" appce (bez mapy nad ní, výpravy v klidu apod.) ukáže obsah
-     vždycky -- žádná peek-lišta se tam v JS vůbec nevykresluje. */
   .mobile-sheet.full-panel .mobile-sheet-body{ display:block; padding-top:8px; }
   .mobile-sheet .detail-strip{ display:block; padding:12px 18px; }
   .mobile-sheet .det-block{ margin-bottom:18px; }
+
+  /* Normální tok appce sedí jen pro dlouhé seznamy (Domů, Výpravy,
+     Úlovky). Pro Mapu (a jiný panel s mapou) appka lištu vrací zpátky
+     k plovoucímu chování -- mapa vyplní celou plochu, lišta se přes ni
+     zespoda vysune NAHORU. Appka tohle pravidlo dává sem, AŽ ZA
+     ".mobile-sheet{display:flex}" výše, ať appka má jistotu, že
+     appce nic dalšího tohle nepřepíše. */
+  .layout:not(.no-map):not(.no-map-keep-detail){ position:relative; min-height:100vh; }
+  .layout:not(.no-map):not(.no-map-keep-detail) main{ position:absolute; inset:0; z-index:1; }
+  .mobile-sheet:not(.full-panel){
+    position:absolute; left:0; right:0; bottom:0; z-index:60;
+    height:56px; max-height:75%;
+    transition:height .25s ease;
+  }
+  .mobile-sheet:not(.full-panel).expanded{ height:75%; }
+  .mobile-sheet:not(.full-panel).map-panel.expanded{ height:auto; max-height:min(45%, 320px); }
+}
+
+/* Appka na ploše potřebuje "výpravu v klidu" (mobile-sheet.full-panel,
+   bez mapy) roztáhnout na celou zbývající výšku -- jinak by spodní
+   navigační lišta (position:sticky) nedosáhla úplně dolů. Mapu appka
+   řeší samostatně (blok výše) -- tam sheet plave nad mapou a žádné
+   další roztahování nepotřebuje. */
+@media (max-width:860px){
+  html.standalone-app .layout.no-map-keep-detail{ flex:1; }
+  html.standalone-app .mobile-sheet.full-panel{ flex:1; display:flex; flex-direction:column; }
+  html.standalone-app .mobile-sheet.full-panel .mobile-sheet-body{ flex:1; }
+  html.standalone-app .layout.no-map .sidebar{ flex:1; }
 }
 
 .sidebar{ background:var(--white); border-right:1px solid var(--paper-line); overflow-y:auto; max-height:calc(100vh - 92px); }
