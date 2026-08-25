@@ -1851,3 +1851,21 @@ Oprava: appka teď po přidání nového místa (i nového prutu u bodových
 typů, stejná chyba tam) rovnou zapne čekání na klik -- další klik na
 mapu tak už rovnou umístí ten nový bod, žádné dodatečné tlačítko
 navíc.
+
+DOLADĚNÍ (verze 139): formulář nové výpravy (SessionFormPanel) se
+při umísťování prutu/místa na mapu vůbec neschovával -- appka to
+zapomněla přidat od začátku, na desktopu to díky umístění panelu
+napravo šlo obejít, na mobilu (panel přes spodních 70% obrazovky) uz
+appka na mapu prakticky neviděla vůbec.
+
+Oprava: panel se teď dočasně schová po dobu, co appka čeká na klik
+pro umístění prutu/místa (placementTarget začíná na "rod-"). Zase se
+ukáže zpátky po umístění nebo zrušení (křížek v bublině "Klikni na
+mapu..."). Opravena i drobnost -- ta bublina občas ukazovala špatný
+typ výpravy ("prutu" místo "místa") u zrovna rozepsané nové výpravy,
+teď bere typ i z rozepsaného formuláře, ne jen z existující výpravy.
+
+NEOVĚŘENO ŽIVĚ, otestovat prosím znovu na mobilu i desktopu:
+"+ Přidat další místo" u zpětné výpravy s přívlačem -- formulář musí
+zmizet, mapa musí být klikatelná, po kliknutí se musí formulář vrátit
+s novým místem na správné pozici.

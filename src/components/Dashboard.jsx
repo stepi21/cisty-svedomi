@@ -4315,7 +4315,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
           {placementTarget && (placementTarget.startsWith('rod-') || placementTarget.startsWith('edit-rod-') || placementTarget.startsWith('relocate-lure-place-')) && (
             <div className="place-hint">
-              Klikni na mapu pro pozici {LURE_TYPES.includes(editingSession?.type || activeSession?.type) ? 'místa' : 'prutu'}.
+              Klikni na mapu pro pozici {LURE_TYPES.includes(editingSession?.type || draftSession?.type || activeSession?.type) ? 'místa' : 'prutu'}.
               <button className="ticket-close" onClick={() => setPlacementTarget(null)}><IconClose size={16} /></button>
             </div>
           )}
@@ -4355,7 +4355,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         )}
       </div>
 
-      {draftSession && (
+      {draftSession && !(placementTarget && placementTarget.startsWith('rod-')) && (
         <SessionFormPanel
           draft={draftSession}
           setDraft={setDraftSession}
