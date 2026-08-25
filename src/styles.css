@@ -93,7 +93,7 @@ header h1 .accent{ color:var(--amber); }
    fontům appky (Fraunces/IBM Plex Mono) na šířkách 320-390px, ať se řádek 1
    nikdy nezalomí ani nepřekryje, ani na nejmenších běžných telefonech. */
 @media (max-width:860px){
-  header{ padding:14px 16px; }
+  header{ padding:14px 16px; padding-top:calc(14px + env(safe-area-inset-top)); }
   .head-row{ gap:6px; }
   .head-logo-group{ gap:9px; }
   .head-icons-group{ gap:5px; }
@@ -191,7 +191,7 @@ header h1 .accent{ color:var(--amber); }
      schovávání a čekání na sheet, co by neměl co překrývat. */
   .layout.no-map .sidebar{
     display:block; position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
-    max-height:none; z-index:5; background:var(--paper); padding-bottom:50px;
+    max-height:none; z-index:5; background:var(--paper); padding-bottom:calc(16px + env(safe-area-inset-bottom));
   }
 }
 
@@ -225,7 +225,7 @@ header h1 .accent{ color:var(--amber); }
   }
   .peek-chevron{ color:var(--ink-soft); font-size:var(--fs-sm); }
   .mobile-sheet-body{ overflow-y:auto; padding:0 0 16px; flex:1; }
-  .mobile-sheet.full-panel .mobile-sheet-body{ padding-top:8px; padding-bottom:50px; }
+  .mobile-sheet.full-panel .mobile-sheet-body{ padding-top:8px; padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
   .mobile-sheet .detail-strip{ display:block; padding:12px 18px; }
   .mobile-sheet .det-block{ margin-bottom:18px; }
 }

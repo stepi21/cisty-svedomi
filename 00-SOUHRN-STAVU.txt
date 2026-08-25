@@ -1886,3 +1886,28 @@ starou zástupku doporučeno smazat a appku znovu přidat, ať se
 projeví nová ikonka i chování bez adresního řádku (Safari tyhle věci
 zachytí jen v momentě přidání, nedotáhne je zpětně na existující
 zástupku).
+
+OPRAVA (verze 141) -- appka nainstalovaná na plochu (verze 140) měla
+dva vizuální problémy, vidět na screenshotu z iPhonu.
+
+1. Hlavička appky se překrývala s hodinkami/stavovým řádkem iOS.
+   Příčina: "apple-mobile-web-app-status-bar-style: black-translucent"
+   appka nechá jet přes celou obrazovku i pod stavový řádek, ale
+   appka sama o tom nevěděla a nenechávala tam místo. Opraveno --
+   hlavička má na mobilu nově horní odsazení
+   "calc(14px + env(safe-area-inset-top))", počítá se tedy dynamicky
+   podle konkrétního telefonu (výřez/hodinky).
+
+2. Zbytečně velké prázdné místo dole na Domů a na Výpravách v klidu.
+   Příčina: appka měla natvrdo 50px spodního odsazení -- to bylo
+   řešení starého problému (Safari lišta dole schovávala poslední
+   řádek seznamu). V appce na celou obrazovku appka žádnou takovou
+   lištu nemá, takže těch 50px byl už jen zbytečný prostor. Nahrazeno
+   "calc(16px + env(safe-area-inset-bottom))" -- rezervuje jen tolik
+   místa, kolik konkrétní telefon skutečně potřebuje (typicky kolem
+   home indikátoru u novějších iPhonů), na starších telefonech/webu
+   prakticky žádné.
+
+NEOVĚŘENO ŽIVĚ, otestovat po nasazení na appce nainstalované na
+ploše iPhonu: hlavička nesmí přesahovat pod hodinky, dole nesmí být
+zbytečná prázdná plocha.
