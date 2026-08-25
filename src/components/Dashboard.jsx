@@ -2990,6 +2990,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // sbalitelnou lištu nad mapou, protože mapa je stejně schovaná.
   const mobileFullPanel = activePanel === null && !mapNeededForInteraction
 
+  // Appka appku na mobilu scrolluje jako běžnou stránku (žádné vnitřní
+  // scroll-boxy jako dřív) -- dlouhý seznam (Domů/Výpravy/Úlovky) tak
+  // appku mohl nechat odscrollovanou daleko dolů, a appka se pak na
+  // panelu s mapou (mnohem kratší stránka) zobrazila mimo záběr, jako
+  // by lišta zmizela úplně. Appka proto při každé změně panelu/pohledu
+  // appku vrátí na začátek stránky, bez ohledu na to, kterým
+  // konkrétním tlačítkem se tam uživatel dostal.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [activePanel, viewMode])
+
   // Na "Domů" a dalších panelech bez mapy appka mapu jen schová přes CSS
   // (display:none), ne že by ji odpojila z DOM -- Leaflet instance tak
   // zůstává živá, jen si při schování zapamatuje rozměry 0x0. Při návratu
