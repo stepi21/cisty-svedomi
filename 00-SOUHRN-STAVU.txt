@@ -1794,3 +1794,39 @@ NEOVĚŘENO ŽIVĚ, otestovat prosím přesně podle postupu, co appka
 pomohl najít: Mapa (nastavit si pozici) -> Domů -> Výpravy (jen
 prohlédnout pár výprav, NEKLIKAT na "Zobrazit na mapě") -> zpátky na
 Mapu. Pozice musí zůstat stejná jako na začátku.
+
+VELKÁ ZMĚNA (verze 136) -- animate:false z verze 135 problém pořád
+neopravilo (potvrzeno testem). Po čtyřech neúspěšných opravách stejné
+chyby na sdílené mapě appka přistoupila k větší, ale jistější změně.
+
+Řešení: záložka Mapa má teď VLASTNÍ, samostatnou Leaflet instanci
+(mapTabInstance), oddělenou od té sdílené (mapInstance, používané
+Výpravami pro umísťování bodů). Žádná akce na Výpravách -- ani
+zapomenutá, ani budoucí -- s ní teď nemůže hýbat, protože je to úplně
+jiný objekt.
+
+Konkrétně:
+- Nový <div id="map-tab-view"> jen pro Mapu, s vlastní sadou vrstev
+  (markery, shluky úlovků, shluky výprav) -- vzniká a mizí nezávisle
+  na té sdílené mapě.
+- Odstraněna celá "zapamatuj/obnov" mašinérie (rememberedMapViewRef,
+  activePanelRef, listener "moveend") -- u samostatné mapy appka nemá
+  co zapamatovávat, nikdo jiný s ní nehýbe, sama drží svou pozici.
+- Mapa appce spočítá výchozí přiblížení jen JEDNOU (mapTabHasFitRef),
+  nebo na výslovný reset (druhý klik) -- jinak appka mapu nechá úplně
+  na pokoji, ať se děje na Výpravách/Úlovcích/Domů cokoliv.
+- "Moje pozice" a založení nové výpravy appka správně cílí na tu
+  mapu, co je zrovna vidět.
+
+Tohle je zásadnější zásah než předchozí čtyři pokusy, ale řeší
+problém tím, že appka odstranila samotnou PŘÍČINU (sdílený objekt),
+místo aby appka dál hádala timing. Ověřeno syntax kontrolou a
+skutečným SSR vykreslením -- interaktivní test v prohlížeči se
+bohužel nepodařilo spustit (nestabilní sandbox), takže tohle je
+opatrnější, ale ne stoprocentně jistý krok.
+
+NEOVĚŘENO ŽIVĚ, otestovat prosím úplně od začátku, stejným postupem
+jako předtím: Mapa (nastavit pozici) -> Domů -> Výpravy (jen
+prohlížet, neklikat "Zobrazit na mapě") -> zpátky na Mapu. A taky
+běžné věci znovu: založení nové výpravy, "Zobrazit na mapě" z
+Výpravy, druhý klik na Mapa, "Moje pozice".

@@ -131,11 +131,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // na konkrétní souřadnicový chip (jeden prut/místo), appka se přiblíží
   // rovnou na tenhle bod, ne jen na "vejde se celá výprava".
   const [mapFocusPoint, setMapFocusPoint] = useState(null) // {lat, lng, zoom}
-  // Jediné místo pravdy pro "kde má být Mapa přiblížená" -- nezávislé na
-  // tom, co s tou samou sdílenou Leaflet mapou mezitím dělají jiné panely
-  // (např. Výpravy). Aktualizuje se přes listener "moveend" v map-init
-  // efektu níže, ale jen dokud je uživatel opravdu na záložce Mapa.
-  const rememberedMapViewRef = useRef(null) // {lat, lng, zoom} | null
   // Druhý klik na už aktivní záložku Mapa appku vrátí do výchozího stavu.
   const mapForceResetRef = useRef(false)
   // Donutí mapový efekt spustit se znovu i v případě, že se ani jedna
@@ -234,11 +229,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [editingAreasSession, setEditingAreasSession] = useState(null) // {id, areas:[]} — správa oblastí u uložené výpravy
   const [editingAreasLocation, setEditingAreasLocation] = useState(null) // {id, areas:[]} — správa oblastí u místa v katalogu
   const [activePanel, setActivePanel] = useState('home') // null | 'home' | 'map' | 'stations' | 'locations' | 'baits' | 'catches' — jen jeden panel může být aktivní najednou; appka se vždycky po otevření ukáže na Domů, ne se vrací tam, kde uživatel skončil naposled
-  // Čerstvá kopie activePanel pro použití uvnitř listeneru "moveend" na
-  // mapě (viz map-init efekt) -- ten se registruje jen jednou při vzniku
-  // mapy, takže by jinak viděl navždy tu první (zastaralou) hodnotu.
-  const activePanelRef = useRef(activePanel)
-  useEffect(() => { activePanelRef.current = activePanel }, [activePanel])
   const [baitsStartAdding, setBaitsStartAdding] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false) // "☰ Více" — méně časté akce schované z hlavičky
   const moreMenuRef = useRef(null)
@@ -299,6 +289,20 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const aggregateClusterLayer = useRef(null) // shlukovaná vrstva úlovků v souhrnném pohledu -- oddělená od markersLayer, protože ten drží i polygony/kruhy (revíry, detail výpravy), co shlukování nepodporuje
   const tripsClusterLayer = useRef(null) // shlukovaná vrstva výprav na záložce Mapa -- oddělená od úlovků, ať se čísla ve dvou různých kolečkách nemíchají dohromady
   const draftLayer = useRef(null)
+
+  // Záložka Mapa má VLASTNÍ, samostatnou Leaflet instanci -- ne tu sdílenou
+  // výše. Po opakovaných chybách, kdy si appka mapu na Výpravách přesouvala
+  // pro potřeby umísťování bodů a tenhle přesun se pak nechtěně "propsal" i
+  // do Mapy (bez ohledu na to, kolik pojistek appka přidala), je nejjistější
+  // řešení mít dvě oddělené mapy, se kterými si appka nemůže vzájemně
+  // šlapat na paty. Mapa tak přirozeně drží svou pozici sama -- nikdo jiný
+  // s ní nehýbe, appka nepotřebuje žádné složité "zapamatuj/obnov".
+  const mapTabRef = useRef(null)
+  const mapTabInstance = useRef(null)
+  const mapTabMarkersLayer = useRef(null)
+  const mapTabAggregateClusterLayer = useRef(null)
+  const mapTabTripsClusterLayer = useRef(null)
+  const mapTabHasFitRef = useRef(false) // appka spočítá výchozí přiblížení jen jednou (nebo na výslovný reset), pak mapu nechá být
 
   // Na "Domů" appka mapu jen schová přes CSS (display:none), ne že by ji
   // odpojila z DOM -- Leaflet instance tak zůstává živá, jen si při
@@ -518,19 +522,37 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     draftLayer.current = L.layerGroup().addTo(map)
 
     map.on('click', (e) => handleMapClickRef.current?.(e.latlng))
-    // Appka si tady průběžně pamatuje polohu mapy (střed + zoom) -- ale JEN
-    // dokud je uživatel opravdu na záložce Mapa (activePanelRef appka drží
-    // čerstvý přes samostatný efekt níže). Zásahy jiných částí appky do
-    // sdílené mapy (třeba když appka na Výpravách posouvá mapu na detail
-    // prohlížené výpravy) appka takhle ignoruje, protože se netýkají
-    // toho, co má appka na Mapě "pamatovat".
-    map.on('moveend', () => {
-      if (activePanelRef.current !== 'map') return
-      const c = map.getCenter()
-      rememberedMapViewRef.current = { lat: c.lat, lng: c.lng, zoom: map.getZoom() }
-    })
     mapInstance.current = map
     return () => { map.remove(); mapInstance.current = null }
+  }, [])
+
+  // --- init samostatné mapy pro záložku Mapa, jednou ---
+  useEffect(() => {
+    if (!mapTabRef.current || mapTabInstance.current) return
+    const map = L.map(mapTabRef.current).setView([49.8, 15.5], 8)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: 'Podklad: OpenStreetMap',
+      maxZoom: 19,
+    }).addTo(map)
+    mapTabMarkersLayer.current = L.layerGroup().addTo(map)
+    mapTabAggregateClusterLayer.current = L.markerClusterGroup({
+      maxClusterRadius: 50,
+      iconCreateFunction: (cluster) => L.divIcon({
+        html: `<div style="width:36px;height:36px;background:var(--water-deep);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:13px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)">${cluster.getChildCount()}</div>`,
+        className: '',
+        iconSize: [36, 36],
+      }),
+    }).addTo(map)
+    mapTabTripsClusterLayer.current = L.markerClusterGroup({
+      maxClusterRadius: 40,
+      iconCreateFunction: (cluster) => L.divIcon({
+        html: `<div style="width:32px;height:32px;background:var(--amber-deep);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:12px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)">${cluster.getChildCount()}</div>`,
+        className: '',
+        iconSize: [32, 32],
+      }),
+    }).addTo(map)
+    mapTabInstance.current = map
+    return () => { map.remove(); mapTabInstance.current = null }
   }, [])
 
   function handleMapClick(latlng) {
@@ -1106,12 +1128,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       // Appka mapu nepřeostří, dokud uživatel čeká na klik (přidávání
       // prutu, přesun úlovku...) -- stejný důvod jako u agregovaného
       // pohledu výše, jinak by appka smazala uživateli jeho přiblížení
-      // pokaždé, když appka jen začne čekat na další klik. Appka navíc
-      // tohle přeostření dělá JEN na panelu Výpravy (activePanel === null)
+      // pokaždé, když appka jen začne čekat na další klik. Appka tohle
+      // přeostření navíc dělá jen na panelu Výpravy (activePanel === null)
       // -- viewMode i activeSession totiž zůstávají nastavené i po
-      // přepnutí na jinou záložku (třeba Mapu), a bez týhle podmínky by
-      // appka klidně přesouvala sdílenou mapu podle staré výpravy i tam,
-      // kde už to nemá co dělat.
+      // přepnutí na jinou záložku, takže by appka jinak zbytečně
+      // přesouvala tuhle (skrytou) sdílenou mapu i tam, kde na tom
+      // nezáleží.
       if (!isDrawingNow && activePanel === null) {
         if (suppressSessionFitRef.current) {
           // Spotřebuje se přesně tady -- appka právě dokončila přesun bodu
@@ -1125,12 +1147,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           map.setView([f.lat, f.lng], f.zoom || 16, { animate: false })
           pendingMapFocusRef.current = null
         } else {
-          // animate:false je tu důležité, ne jen kosmetika -- animovaný
-          // přesun by "moveend" vyvolal až se zpožděním (~250ms). Kdyby
-          // uživatel mezitím rychle přepnul na Mapu, ten opožděný event by
-          // appka mylně zapsala jako novou pozici Mapy (activePanelRef by
-          // už v tu chvíli ukazoval 'map'), i když šlo jen o starý přesun
-          // z prohlížení výpravy.
           map.setView([activeSession.lat, activeSession.lng], 14, { animate: false })
         }
       }
@@ -1213,16 +1229,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // jinak barevné, ať jde na první pohled poznat, co číslo počítá) -- revíry
   // ne (jejich počet bývá výrazně menší, shlukování by tam spíš překáželo).
   useEffect(() => {
-    if (activePanel !== 'map' || !mapInstance.current || !markersLayer.current || !aggregateClusterLayer.current || !tripsClusterLayer.current) return
-    const map = mapInstance.current
+    if (activePanel !== 'map' || !mapTabInstance.current || !mapTabMarkersLayer.current || !mapTabAggregateClusterLayer.current || !mapTabTripsClusterLayer.current) return
+    const map = mapTabInstance.current
     // Mapa mohla být donedávna schovaná (jiný panel ji schovává přes CSS) --
     // Leaflet si o sobě nezjistí novou velikost sám, jen na požádání. Bez
     // tohohle by fitBounds/setView níže počítaly se starou (často nulovou)
     // velikostí a appka by skončila přiblížená na nesmyslném místě.
     map.invalidateSize()
-    markersLayer.current.clearLayers()
-    aggregateClusterLayer.current.clearLayers()
-    tripsClusterLayer.current.clearLayers()
+    mapTabMarkersLayer.current.clearLayers()
+    mapTabAggregateClusterLayer.current.clearLayers()
+    mapTabTripsClusterLayer.current.clearLayers()
 
     // ---------- fokusovaný režim: appka ukáže jen JEDNU vybranou výpravu ----------
     // Appka sem přijde přes tlačítko "Zobrazit na mapě" v detailu výpravy.
@@ -1243,19 +1259,19 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       })
       if (LURE_TYPES.includes(s.type)) {
         if (s.lat != null && s.lng != null) {
-          L.marker([s.lat, s.lng], { icon: makePointIcon(1) }).bindPopup(`${s.title} (Místo 1)`).addTo(markersLayer.current)
+          L.marker([s.lat, s.lng], { icon: makePointIcon(1) }).bindPopup(`${s.title} (Místo 1)`).addTo(mapTabMarkersLayer.current)
           bounds.push([s.lat, s.lng])
         }
         ;(s.rods || []).slice(1).forEach((r, i) => {
           if (r.lat == null || r.lng == null) return
-          L.marker([r.lat, r.lng], { icon: makePointIcon(i + 2) }).bindPopup(`${s.title} (Místo ${i + 2})`).addTo(markersLayer.current)
+          L.marker([r.lat, r.lng], { icon: makePointIcon(i + 2) }).bindPopup(`${s.title} (Místo ${i + 2})`).addTo(mapTabMarkersLayer.current)
           bounds.push([r.lat, r.lng])
         })
       } else {
         // Bodové typy appka appce navíc ukáže bod "kde stojíš" (appka ho
         // nastavuje přes GPS/ruční klik, je to jiná souřadnice než pruty).
         if (s.lat != null && s.lng != null) {
-          L.marker([s.lat, s.lng], { icon: makePointIcon() }).bindPopup(s.title).addTo(markersLayer.current)
+          L.marker([s.lat, s.lng], { icon: makePointIcon() }).bindPopup(s.title).addTo(mapTabMarkersLayer.current)
           bounds.push([s.lat, s.lng])
         }
         // appka u bodových typů (kapr/muška/plavaná): jediný prut appka
@@ -1269,7 +1285,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             html: `<div style="width:18px;height:18px;border-radius:50%;background:${rodColor};border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4)"></div>`,
             className: '', iconSize: [18, 18], iconAnchor: [9, 9],
           })
-          L.marker([r.lat, r.lng], { icon: rodIcon }).bindPopup(r.name || `Prut ${i + 1}`).addTo(markersLayer.current)
+          L.marker([r.lat, r.lng], { icon: rodIcon }).bindPopup(r.name || `Prut ${i + 1}`).addTo(mapTabMarkersLayer.current)
           bounds.push([r.lat, r.lng])
         })
       }
@@ -1280,19 +1296,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         const icon = L.divIcon({ html, className: '', iconSize: [26, 26], iconAnchor: [13, 13] })
         L.marker([c.lat ?? s.lat, c.lng ?? s.lng], { icon })
           .on('click', () => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c) })
-          .addTo(markersLayer.current)
+          .addTo(mapTabMarkersLayer.current)
         bounds.push([c.lat ?? s.lat, c.lng ?? s.lng])
       })
+      // Fokus appka přepočítá vždycky znovu -- na rozdíl od agregovaného
+      // pohledu appka nemusí nic "pamatovat", je to samostatná mapa, o
+      // kterou se nic jiného nestará.
       if (mapFocusPoint) map.setView([mapFocusPoint.lat, mapFocusPoint.lng], mapFocusPoint.zoom || 17)
       else if (bounds.length === 1) map.setView(bounds[0], 16)
       else if (bounds.length > 1) map.fitBounds(L.latLngBounds(bounds), { padding: [60, 60], maxZoom: 16 })
-      // Appka i fokusovaný "skok na výpravu/místo" zapamatuje jako novou
-      // pozici Mapy -- předtím na to úplně zapomínala, takže po návratu
-      // z fokusu appka ukázala starší, jinou pozici.
-      {
-        const c = map.getCenter()
-        rememberedMapViewRef.current = { lat: c.lat, lng: c.lng, zoom: map.getZoom() }
-      }
+      mapTabHasFitRef.current = true
       mapForceResetRef.current = false
       return
     }
@@ -1315,7 +1328,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         L.marker([s.lat, s.lng], { icon })
           .bindPopup(`${s.title} — ${userName(s.user_id)}`)
           .on('click', () => { setActivePanel(null); setActiveId(s.id); setViewMode('detail') })
-          .addTo(tripsClusterLayer.current)
+          .addTo(mapTabTripsClusterLayer.current)
         bounds.push([s.lat, s.lng])
 
         // U přívlače appka může mít i DALŠÍ místa (jez z obou stran řeky
@@ -1328,7 +1341,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             L.marker([r.lat, r.lng], { icon })
               .bindPopup(`${s.title} — ${userName(s.user_id)} (další místo)`)
               .on('click', () => { setActivePanel(null); setActiveId(s.id); setViewMode('detail') })
-              .addTo(tripsClusterLayer.current)
+              .addTo(mapTabTripsClusterLayer.current)
             bounds.push([r.lat, r.lng])
           })
         }
@@ -1347,67 +1360,41 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           const icon = L.divIcon({ html, className: '', iconSize: [28, 28], iconAnchor: [14, 14] })
           L.marker([c.lat ?? s.lat, c.lng ?? s.lng], { icon })
             .on('click', () => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c) })
-            .addTo(aggregateClusterLayer.current)
+            .addTo(mapTabAggregateClusterLayer.current)
           bounds.push([c.lat ?? s.lat, c.lng ?? s.lng])
         })
       })
     }
 
-    function rememberCurrentView() {
-      const c = map.getCenter()
-      rememberedMapViewRef.current = { lat: c.lat, lng: c.lng, zoom: map.getZoom() }
-    }
-
-    function applyPosition() {
-      if (mapForceResetRef.current) {
-        // Výslovný požadavek (druhý klik na Mapa) -- appka spočítá čerstvé
-        // přiblížení podle právě nastaveného (výchozího) filtru, bez
-        // ohledu na cokoli zapamatované, a hned appka i zapíše výsledek
-        // jako novou zapamatovanou pozici.
-        if (bounds.length > 0) map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
-        else map.setView([49.8, 15.5], 8)
-        rememberCurrentView()
-      } else if (rememberedMapViewRef.current) {
-        // appka aktivně vrátí mapu na naposledy zapamatovanou pozici --
-        // sdílená Leaflet mapa mezitím mohla být použitá i jinde (např.
-        // Výpravy ji na chvíli přesunuly na detail prohlížené výpravy),
-        // tak ji appka nenechá jen "tak jak je", ale vrátí ji tam, kde
-        // uživatel Mapu naposledy sám nechal.
-        const v = rememberedMapViewRef.current
-        map.setView([v.lat, v.lng], v.zoom)
-      } else if (bounds.length > 0) {
-        // Úplně první návštěva záložky Mapa v týhle appce -- appka nemá
-        // co vracet, spočítá tedy výchozí přiblížení a rovnou ho i
-        // zapamatuje.
+    // Tohle je teď samostatná mapa -- nikdo jiný s ní nehýbe, appka proto
+    // pozici počítá jen jednou (nebo na výslovný reset), a jinak ji nechá
+    // úplně na pokoji.
+    if (mapForceResetRef.current) {
+      // Výslovný požadavek (druhý klik na Mapa).
+      if (bounds.length > 0) map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
+      else map.setView([49.8, 15.5], 8)
+      mapTabHasFitRef.current = true
+    } else if (!mapTabHasFitRef.current) {
+      // Appka spočítá výchozí přiblížení jen při úplně první návštěvě
+      // záložky Mapa v týhle appce -- při každé další appka mapu nechá
+      // tak, jak ji uživatel sám nastavil, ať už jde jen o změnu filtru,
+      // nebo o návrat z jiné záložky. Prázdné souřadnice appka NEBERE
+      // jako "hotovo" -- data se totiž mohla ještě jen nestihnout načíst
+      // ze serveru, appka se tak o výchozí přiblížení pokusí znovu, až
+      // nějaká data dorazí.
+      if (bounds.length > 0) {
         map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
-        rememberCurrentView()
+        mapTabHasFitRef.current = true
       } else {
-        // Prázdné souřadnice tu můžou znamenat dvě různé věci: appka
-        // opravdu nemá žádné úlovky/výpravy, NEBO se ještě jen nestihla
-        // načíst data ze serveru (typicky hned po refreshi stránky, než
-        // doběhne první dotaz). Appka si proto tenhle výchozí pohled
-        // NEZAPAMATOVÁVÁ -- kdyby to udělala a data by pak dorazila o
-        // chvilku později, uzamkla by si navždy tenhle "prázdný" pohled
-        // místo skutečného přiblížení na data.
         map.setView([49.8, 15.5], 8)
       }
-      mapForceResetRef.current = false
     }
+    mapForceResetRef.current = false
 
-    applyPosition()
-    // Přechod na záložku Mapa z některých jiných panelů (hlavně Výpravy,
-    // kde se mezitím mění rozložení sloupců) nemusí appce v tu chvíli
-    // ještě dát definitivní velikost kontejneru mapy. Appka proto o
-    // jeden snímek později přiblížení zopakuje, ať nezůstane mírně
-    // vychýlené. `cancelled` appka nastaví na true, kdykoli se tenhle
-    // efekt spustí znovu nebo appka odejde jinam -- tahle kontrola se
-    // tak nikdy nespustí opožděně na už neplatném stavu (přesně tohle
-    // předchozímu pokusu chybělo).
     let cancelled = false
     const rafId = requestAnimationFrame(() => {
-      if (cancelled || !mapInstance.current) return
-      mapInstance.current.invalidateSize()
-      applyPosition()
+      if (cancelled || !mapTabInstance.current) return
+      mapTabInstance.current.invalidateSize()
     })
     return () => { cancelled = true; cancelAnimationFrame(rafId) }
   }, [activePanel, mapLayers, sessions, locationsCatalog, userId, members, mapFocusSessionId, mapFocusPoint, mapResetNonce])
@@ -1723,7 +1710,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   function goToMyLocation() {
     if (!navigator.geolocation) { alert('Tento prohlížeč neumí zjistit pozici.'); return }
     navigator.geolocation.getCurrentPosition(
-      (pos) => { mapInstance.current?.setView([pos.coords.latitude, pos.coords.longitude], 16) },
+      (pos) => {
+        const target = activePanel === 'map' ? mapTabInstance.current : mapInstance.current
+        target?.setView([pos.coords.latitude, pos.coords.longitude], 16)
+      },
       () => alert('Nepodařilo se zjistit pozici. Zkontroluj, že appka má povolení k lokaci.'),
       { enableHighAccuracy: true, timeout: 8000 }
     )
@@ -1786,13 +1776,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   // --- začátek tvorby nové výpravy ---
-  // Před spuštěním nové výpravy appka mapu vrátí na naposledy zapamatovanou
-  // pozici Mapy (viz rememberedMapViewRef) -- appka tak ukáže stejné pozadí
-  // jako naposledy na záložce Mapa, ne to, kde sdílená mapa náhodou zůstala
-  // od prohlížení jiné výpravy.
+  // Před spuštěním nové výpravy appka mapu (tu sdílenou, na Výpravách)
+  // vrátí na aktuální pozici záložky Mapa -- appka tak ukáže stejné pozadí
+  // jako naposledy na Mapě, ne to, kde sdílená mapa náhodou zůstala od
+  // prohlížení jiné výpravy.
   function restoreRememberedMapView() {
-    const v = rememberedMapViewRef.current
-    if (v) mapInstance.current?.setView([v.lat, v.lng], v.zoom)
+    if (!mapTabInstance.current || !mapInstance.current) return
+    const c = mapTabInstance.current.getCenter()
+    mapInstance.current.setView([c.lat, c.lng], mapTabInstance.current.getZoom(), { animate: false })
   }
   function startNewSession() { restoreRememberedMapView(); pendingLiveRef.current = false; setPickingType(true); setMobileSheetOpen(false); setActivePanel(null) }
   function startNewSessionLive() { restoreRememberedMapView(); pendingLiveRef.current = true; setPickingType(true); setMobileSheetOpen(false); setActivePanel(null) }
@@ -2454,13 +2445,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (activePanel === 'home' && panel !== 'home' && sidebarRef.current) {
       homeScrollRef.current = sidebarRef.current.scrollTop
     }
-    // Odchod ze záložky Mapa appka zachytí synchronně tady -- nespoléhá jen
-    // na Leaflet event "moveend" (ten může u animovaného přiblížení dorazit
-    // se zpožděním, a rychlé přepnutí záložky by ho tak mohlo předběhnout).
-    if (activePanel === 'map' && panel !== 'map' && mapInstance.current) {
-      const c = mapInstance.current.getCenter()
-      rememberedMapViewRef.current = { lat: c.lat, lng: c.lng, zoom: mapInstance.current.getZoom() }
-    }
     if (panel === 'home') {
       pendingHomeScrollModeRef.current = isRepeat ? 'top' : 'restore'
       setHomeNavNonce((n) => n + 1) // appka appce zaručí, že se scroll efekt spustí i při druhém kliku (activePanel se textově nezmění)
@@ -2983,7 +2967,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // kontejner.
   useEffect(() => {
     if (!mapInstance.current) return
-    const mapHidden = activePanel === 'home' || activePanel === 'stations' ||
+    const mapHidden = activePanel === 'home' || activePanel === 'stations' || activePanel === 'map' ||
       ((activePanel === 'catches' || activePanel === 'baits' || activePanel === null) && !mapNeededForInteraction)
     if (mapHidden) return
     const t = setTimeout(() => mapInstance.current?.invalidateSize(), 50)
@@ -3950,7 +3934,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
 
         <main>
-          <div ref={mapRef} id="map" style={{ cursor: isPlacingSomething ? 'crosshair' : '' }} />
+          <div ref={mapRef} id="map" style={{ cursor: isPlacingSomething ? 'crosshair' : '', display: activePanel === 'map' ? 'none' : undefined }} />
+          <div ref={mapTabRef} id="map-tab-view" style={{ display: activePanel === 'map' ? 'block' : 'none' }} />
           <button className="my-location-btn" onClick={goToMyLocation} title="Moje pozice"><IconLocate size={15} /><span className="btn-label"> Moje pozice</span></button>
 
           {pickingType && (

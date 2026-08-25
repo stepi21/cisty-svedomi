@@ -399,6 +399,7 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
   .my-location-btn .btn-label{ display:none; }
 }
 #map{ flex:1; min-height:280px; }
+#map-tab-view{ flex:1; min-height:280px; }
 
 .detail-strip{ background:var(--white); border-top:1px solid var(--paper-line); padding:16px 22px; display:grid; grid-template-columns:1.1fr 1fr 1.4fr; gap:22px; }
 .live-banner{
