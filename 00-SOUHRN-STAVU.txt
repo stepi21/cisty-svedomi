@@ -1911,3 +1911,24 @@ dva vizuální problémy, vidět na screenshotu z iPhonu.
 NEOVĚŘENO ŽIVĚ, otestovat po nasazení na appce nainstalované na
 ploše iPhonu: hlavička nesmí přesahovat pod hodinky, dole nesmí být
 zbytečná prázdná plocha.
+
+OPRAVA REGRESE (verze 142): oprava spodního odsazení z verze 141
+udělala Android Chrome horší -- to původní natvrdo dané 50px totiž
+chránilo hlavně před LIŠTOU PROHLÍŽEČE (tlačítka zpět/vpřed/karty
+dole v Chromu), ne před hardwarovým výřezem telefonu. To "safe area"
+(env(safe-area-inset-bottom)) vůbec nepokrývá -- ta platí jen na
+skutečný hardware (výřez, home indikátor), ne na UI prohlížeče.
+
+Oprava: appka teď rozlišuje přes CSS "display-mode: standalone" --
+appka nainstalovaná na plochu (žádná lišta prohlížeče kolem) dostane
+menší odsazení jen podle skutečné "safe area" telefonu, appka běžící
+v obyčejné záložce prohlížeče (Chrome i Safari) dostane zpátky těch
+původních 50px, co lištu prohlížeče appce spolehlivě obejdou. Funguje
+to samo, bez potřeby cokoli rozlišovat podle konkrétního telefonu
+nebo appky -- appka se sama pozná, jestli běží nainstalovaná, nebo v
+prohlížeči, a podle toho zvolí to správné odsazení.
+
+NEOVĚŘENO ŽIVĚ, otestovat po nasazení na všech třech scénářích:
+Android Chrome v prohlížeči (musí jít doscrollovat úplně dolů),
+appka nainstalovaná na iPhonu (nesmí být zbytečné volné místo dole),
+a appka nainstalovaná na Androidu, pokud appka je k dispozici.

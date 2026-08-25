@@ -191,8 +191,16 @@ header h1 .accent{ color:var(--amber); }
      schovávání a čekání na sheet, co by neměl co překrývat. */
   .layout.no-map .sidebar{
     display:block; position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
-    max-height:none; z-index:5; background:var(--paper); padding-bottom:calc(16px + env(safe-area-inset-bottom));
+    max-height:none; z-index:5; background:var(--paper); padding-bottom:50px;
   }
+}
+/* Appka nainstalovaná na plochu (žádná lišta prohlížeče kolem) potřebuje
+   dole jen tolik místa, kolik odpovídá skutečnému výřezu/home indikátoru
+   telefonu -- to appka pozná přes "display-mode: standalone". V běžném
+   prohlížeči (Chrome/Safari v záložce) je těch 50px výše naopak potřeba
+   kvůli liště prohlížeče, kterou žádná "safe area" nepokrývá. */
+@media (max-width:860px) and (display-mode: standalone){
+  .layout.no-map .sidebar{ padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
 }
 
 /* ---------- mobile bottom sheet (map stays dominant underneath) ---------- */
@@ -225,9 +233,12 @@ header h1 .accent{ color:var(--amber); }
   }
   .peek-chevron{ color:var(--ink-soft); font-size:var(--fs-sm); }
   .mobile-sheet-body{ overflow-y:auto; padding:0 0 16px; flex:1; }
-  .mobile-sheet.full-panel .mobile-sheet-body{ padding-top:8px; padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
+  .mobile-sheet.full-panel .mobile-sheet-body{ padding-top:8px; padding-bottom:50px; }
   .mobile-sheet .detail-strip{ display:block; padding:12px 18px; }
   .mobile-sheet .det-block{ margin-bottom:18px; }
+}
+@media (max-width:860px) and (display-mode: standalone){
+  .mobile-sheet.full-panel .mobile-sheet-body{ padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
 }
 
 .sidebar{ background:var(--white); border-right:1px solid var(--paper-line); overflow-y:auto; max-height:calc(100vh - 92px); }
