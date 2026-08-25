@@ -1932,3 +1932,31 @@ NEOVĚŘENO ŽIVĚ, otestovat po nasazení na všech třech scénářích:
 Android Chrome v prohlížeči (musí jít doscrollovat úplně dolů),
 appka nainstalovaná na iPhonu (nesmí být zbytečné volné místo dole),
 a appka nainstalovaná na Androidu, pokud appka je k dispozici.
+
+
+DOLADĚNÍ (verze 143) -- po dalším testu na dvou zbylých případech:
+
+1. iPhone Chrome (prohlížeč): 50px z verze 142 pořád nestačilo --
+   Chrome pro iOS má vlastní, výrazně vyšší spodní lištu než Safari
+   (appka se navíc při rolování schovává a zase ukazuje, typické
+   chování Chromu). Zvětšeno na 90px, ať appka bezpečně obejde i tuhle
+   vyšší variantu.
+
+2. iPhone appka na ploše: na záložce Mapa (a dalších s klasickou
+   vysouvací lištou, ne jen s tou celoplošnou variantou z Výprav)
+   zůstával prázdný pruh pod lištou -- lišta měla výšku napevno danou
+   (56px/70vh/42vh), bez ohledu na home indikátor. V appce na celou
+   obrazovku tenhle prostor pod lištou ukazoval barvu pozadí appky
+   (papírová), ne pozadí samotné lišty, proto to vypadalo jako
+   zbytečná mezera. Přidán prostor navíc jen v appce na ploše (přes
+   "display-mode: standalone", stejný trik jako u bodu 1 předchozí
+   verze) -- lišta je teď o kousek vyšší a ten navíc prostor vyplní
+   svým vlastním pozadím, ne barvou appky za ní.
+
+NEOVĚŘENO ŽIVĚ, otestovat prosím znovu: iPhone Chrome (musí jít
+doscrollovat úplně dolů, i po puštění prstu), appka na ploše iPhonu
+na záložce Mapa i ostatních (žádná zbytečná mezera pod lištou dole).
+Upřímně -- tohle je už čtvrtý pokus o doladění mobilních okrajů bez
+možnosti to sám vyzkoušet na živém zařízení, takže berte prosím
+každou další drobnost, na kterou narazíte, jako užitečnou zpětnou
+vazbu, ne jako důvod k obavám.
