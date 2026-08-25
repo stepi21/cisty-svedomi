@@ -1771,3 +1771,26 @@ NEOVĚŘENO ŽIVĚ, otestovat prosím hlavně: přechod ze záložky Výpravy
 (z detailu konkrétní výpravy) přímo na Mapu -- musí appka ukázat
 zapamatovanou pozici, ne pozici té výpravy. A znovu i tvrdý refresh
 a rychlé opakované klikání mezi Mapou a ostatními záložkami.
+
+DALŠÍ NÁLEZ (verze 135) -- uživatel přesně určil, že stačí PROHLÍŽET
+výpravu (bez kliknutí na "Zobrazit na mapě"), a Mapa se pak vrátí na
+místo té výpravy místo zapamatované pozice.
+
+Skutečná příčina: appka při pouhém prohlížení výpravy centruje mapu
+na její pozici (kvůli budoucímu umísťování bodů) přes map.setView().
+Pokud přitom zoom zůstává STEJNÝ jako předtím (typicky: prohlížíš víc
+výprav za sebou), Leaflet tenhle přesun potichu ANIMUJE -- a událost
+"moveend" tak dorazí až se zpožděním (~250ms), ne hned. Pokud uživatel
+mezitím stihne rychle přepnout na záložku Mapa, appka ten opožděný
+"moveend" mylně zapíše jako NOVOU pozici Mapy, protože appka si v tu
+chvíli už myslí, že je uživatel na Mapě.
+
+Oprava: appka na tenhle konkrétní setView() (a na obdobný v sekci
+Revíry, co má stejnou zranitelnost) přidala "{ animate: false }" --
+přesun je teď vždycky okamžitý, "moveend" dorazí hned, žádné okno
+pro únik do jiné záložky.
+
+NEOVĚŘENO ŽIVĚ, otestovat prosím přesně podle postupu, co appka
+pomohl najít: Mapa (nastavit si pozici) -> Domů -> Výpravy (jen
+prohlédnout pár výprav, NEKLIKAT na "Zobrazit na mapě") -> zpátky na
+Mapu. Pozice musí zůstat stejná jako na začátku.

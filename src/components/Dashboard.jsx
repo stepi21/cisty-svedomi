@@ -1091,9 +1091,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           // "vyprchala" moc brzy a pozdější reálné oddálení by neblokovala.
           suppressLocationsFitRef.current = false
         } else if (bounds.length) {
-          map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 })
+          // animate:false ze stejného důvodu jako u Výprav o kus výše --
+          // appka nechce nechat zpožděný "moveend" uniknout do pozdější
+          // návštěvy Mapy.
+          map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: false })
         } else {
-          map.setView([49.8, 15.5], 8)
+          map.setView([49.8, 15.5], 8, { animate: false })
         }
       }
       return
@@ -1119,10 +1122,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           suppressSessionFitRef.current = false
         } else if (pendingMapFocusRef.current && pendingMapFocusRef.current.sessionId === activeSession.id) {
           const f = pendingMapFocusRef.current
-          map.setView([f.lat, f.lng], f.zoom || 16)
+          map.setView([f.lat, f.lng], f.zoom || 16, { animate: false })
           pendingMapFocusRef.current = null
         } else {
-          map.setView([activeSession.lat, activeSession.lng], 14)
+          // animate:false je tu důležité, ne jen kosmetika -- animovaný
+          // přesun by "moveend" vyvolal až se zpožděním (~250ms). Kdyby
+          // uživatel mezitím rychle přepnul na Mapu, ten opožděný event by
+          // appka mylně zapsala jako novou pozici Mapy (activePanelRef by
+          // už v tu chvíli ukazoval 'map'), i když šlo jen o starý přesun
+          // z prohlížení výpravy.
+          map.setView([activeSession.lat, activeSession.lng], 14, { animate: false })
         }
       }
 
