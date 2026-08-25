@@ -1630,3 +1630,24 @@ přepnout pryč a zpátky (musí zůstat na výchozí, ne se vrátit na
 starou přiblíženou), tvrdý refresh stránky (mapa musí sednout na
 místo hned, ne až po druhém kliku), a zrušení nové výpravy s
 návratem na Mapa.
+
+ZMĚNA (verze 129) -- oprava dvou dalších chyb po testu verze 128:
+
+1. Skutečná příčina chyby po refreshi (verze 128 to nespravila): pokud
+   appka na Mapu naklikala DŘÍV, než se stihla ze serveru vůbec načíst
+   data (typicky hned po refreshi), appka si jako "zapamatovanou
+   pozici" navždy uzamkla prázdný výchozí pohled -- a i když pak data
+   dorazila o chvíli později, appka se k reálnému přiblížení na ně
+   už nikdy nedostala (myslela si, že už zapamatovanou pozici má).
+   Opraveno: appka si prázdný pohled (bez dat) už nepamatuje, jen
+   reálné přiblížení na skutečná data nebo výslovný reset.
+
+2. Oprava: fokusovaný "skok" na výpravu/konkrétní místo (kliknutí na
+   souřadnicový chip, "Zobrazit na mapě") appka vůbec nezapamatovávala
+   jako novou pozici Mapy -- doplněno. Tohle pravděpodobně způsobovalo
+   i druhé nahlášené chování (mapa se po zrušení "změnit místo" vracela
+   na starší pozici, ne na tu, odkud appka na mapu naposledy skočila).
+
+NEOVĚŘENO ŽIVĚ, otestovat po nasazení: tvrdý refresh a rovnou první
+klik na Mapa (musí sednout hned), skok z Výpravy na konkrétní místo
+na mapě a návrat na Mapu jindy (musí appka ukázat tu stejnou pozici).

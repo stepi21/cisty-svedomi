@@ -1272,6 +1272,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       if (mapFocusPoint) map.setView([mapFocusPoint.lat, mapFocusPoint.lng], mapFocusPoint.zoom || 17)
       else if (bounds.length === 1) map.setView(bounds[0], 16)
       else if (bounds.length > 1) map.fitBounds(L.latLngBounds(bounds), { padding: [60, 60], maxZoom: 16 })
+      // Appka i fokusovaný "skok na výpravu/místo" zapamatuje jako novou
+      // pozici Mapy -- předtím na to úplně zapomínala, takže po návratu
+      // z fokusu appka ukázala starší, jinou pozici.
+      {
+        const c = map.getCenter()
+        rememberedMapViewRef.current = { lat: c.lat, lng: c.lng, zoom: map.getZoom() }
+      }
       mapForceResetRef.current = false
       return
     }
@@ -1374,8 +1381,18 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         rememberedMapViewRef.current = { lat: c.lat, lng: c.lng, zoom: mapInstance.current.getZoom() }
       }, 150)
     } else {
+      // Prázdné souřadnice tu můžou znamenat dvě různé věci: appka
+      // opravdu nemá žádné úlovky/výpravy, NEBO se ještě jen nestihla
+      // načíst data ze serveru (typicky hned po refreshi stránky, než
+      // doběhne první dotaz). Appka si proto tenhle výchozí pohled
+      // NEZAPAMATOVÁVÁ -- kdyby to udělala a data by pak dorazila o
+      // chvilku později, uzamkla by si navždy tenhle "prázdný" pohled
+      // místo skutečného přiblížení na data.
       map.setView([49.8, 15.5], 8)
-      rememberCurrentView()
+      setTimeout(() => {
+        if (!mapInstance.current) return
+        mapInstance.current.invalidateSize()
+      }, 150)
     }
     mapForceResetRef.current = false
   }, [activePanel, mapLayers, sessions, locationsCatalog, userId, members, mapFocusSessionId, mapFocusPoint, mapResetNonce])
