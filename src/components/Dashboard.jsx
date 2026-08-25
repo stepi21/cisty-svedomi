@@ -81,6 +81,16 @@ function normalizeSearchText(s) {
   return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 }
 
+// Appka na mobilu appce dole vždycky drží vysouvací lištu (mobile-sheet) i
+// novou spodní navigační lištu -- Leaflet o nich ale samo neví, "fitBounds"/
+// "padding" appka počítá jen z vlastní velikosti mapy, ne z toho, co přes ni
+// appka vizuálně překrývá. Appka proto sama přidá extra spodní odsazení při
+// každém přeostření na mobilu, ať appka nezobrazí špendlík zrovna pod tou
+// schovanou plochou. Desktop appka nechá beze změny (tam se nic nepřekrývá).
+function mapMobileBottomPad() {
+  return typeof window !== 'undefined' && window.matchMedia('(max-width:860px)').matches ? 96 : 0
+}
+
 function resolveHydroStation(linkedLocationIds, locationsCatalog) {
   if (!linkedLocationIds || linkedLocationIds.length !== 1) return null
   const loc = locationsCatalog.find((l) => l.id === linkedLocationIds[0])
@@ -989,7 +999,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (!mapInstance.current || !pts.length) return
     setMobileSheetOpen(false)
     const bounds = L.latLngBounds(pts.map((p) => [p.lat, p.lng]))
-    mapInstance.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 })
+    mapInstance.current.fitBounds(bounds, { paddingTopLeft: [40, 40], paddingBottomRight: [40, 40 + mapMobileBottomPad()], maxZoom: 17 })
   }
 
 
@@ -1003,7 +1013,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (location.area) {
       const areas = normalizeAreas(location.area)
       const bounds = areas.flat().map((p) => [p.lat, p.lng])
-      if (bounds.length) mapInstance.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 })
+      if (bounds.length) mapInstance.current.fitBounds(bounds, { paddingTopLeft: [40, 40], paddingBottomRight: [40, 40 + mapMobileBottomPad()], maxZoom: 17 })
     } else if (location.lat != null && location.lng != null) {
       mapInstance.current.setView([location.lat, location.lng], 16)
     }
@@ -1116,7 +1126,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           // animate:false ze stejného důvodu jako u Výprav o kus výše --
           // appka nechce nechat zpožděný "moveend" uniknout do pozdější
           // návštěvy Mapy.
-          map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: false })
+          map.fitBounds(bounds, { paddingTopLeft: [40, 40], paddingBottomRight: [40, 40 + mapMobileBottomPad()], maxZoom: 15, animate: false })
         } else {
           map.setView([49.8, 15.5], 8, { animate: false })
         }
@@ -1304,7 +1314,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       // kterou se nic jiného nestará.
       if (mapFocusPoint) map.setView([mapFocusPoint.lat, mapFocusPoint.lng], mapFocusPoint.zoom || 17)
       else if (bounds.length === 1) map.setView(bounds[0], 16)
-      else if (bounds.length > 1) map.fitBounds(L.latLngBounds(bounds), { padding: [60, 60], maxZoom: 16 })
+      else if (bounds.length > 1) map.fitBounds(L.latLngBounds(bounds), { paddingTopLeft: [60, 60], paddingBottomRight: [60, 60 + mapMobileBottomPad()], maxZoom: 16 })
       mapTabHasFitRef.current = true
       mapForceResetRef.current = false
       return
@@ -1371,7 +1381,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     // úplně na pokoji.
     if (mapForceResetRef.current) {
       // Výslovný požadavek (druhý klik na Mapa).
-      if (bounds.length > 0) map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
+      if (bounds.length > 0) map.fitBounds(L.latLngBounds(bounds), { paddingTopLeft: [40, 40], paddingBottomRight: [40, 40 + mapMobileBottomPad()], maxZoom: 15 })
       else map.setView([49.8, 15.5], 8)
       mapTabHasFitRef.current = true
     } else if (!mapTabHasFitRef.current) {
@@ -1383,7 +1393,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       // ze serveru, appka se tak o výchozí přiblížení pokusí znovu, až
       // nějaká data dorazí.
       if (bounds.length > 0) {
-        map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
+        map.fitBounds(L.latLngBounds(bounds), { paddingTopLeft: [40, 40], paddingBottomRight: [40, 40 + mapMobileBottomPad()], maxZoom: 15 })
         mapTabHasFitRef.current = true
       } else {
         map.setView([49.8, 15.5], 8)
@@ -2577,7 +2587,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       .filter((r) => r.lat != null && r.lng != null)
       .map((r) => [r.lat, r.lng])
     if (existingPoints.length > 1) {
-      mapInstance.current?.fitBounds(existingPoints, { padding: [60, 60], maxZoom: 18 })
+      mapInstance.current?.fitBounds(existingPoints, { paddingTopLeft: [60, 60], paddingBottomRight: [60, 60 + mapMobileBottomPad()], maxZoom: 18 })
     } else if (existingPoints.length === 1) {
       mapInstance.current?.setView(existingPoints[0], 18)
     } else if (session.lat != null && session.lng != null) {
@@ -2701,7 +2711,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setEditingAreasLocation({ id: location.id, areas: areas.map((a) => [...a]) })
     setShowLocations(false)
     const bounds = areas.flat().map((p) => [p.lat, p.lng])
-    if (bounds.length) mapInstance.current?.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 })
+    if (bounds.length) mapInstance.current?.fitBounds(bounds, { paddingTopLeft: [40, 40], paddingBottomRight: [40, 40 + mapMobileBottomPad()], maxZoom: 17 })
   }
 
   function removeManagedLocationArea(idx) {

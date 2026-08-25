@@ -4,7 +4,7 @@ import { uploadPhoto } from '../lib/storage.js'
 import { moonPhaseName, fetchWeather } from '../lib/weather.js'
 import { fetchWaterConditions, findNearestStations, WATER_PRECISION_LABEL, SPA_LEVEL_INFO } from '../lib/hydrology.js'
 import BaitPicker from './BaitPicker.jsx'
-import { IconClose, IconEdit, IconTrash, IconCamera, IconRevir, IconCalendar, IconThermometer, IconGauge, IconWind, IconMoonPhase, IconDroplet, IconRefresh, IconPressureTrend } from '../lib/icons.jsx'
+import { IconClose, IconArrowLeft, IconEdit, IconTrash, IconCamera, IconRevir, IconCalendar, IconThermometer, IconGauge, IconWind, IconMoonPhase, IconDroplet, IconRefresh, IconPressureTrend } from '../lib/icons.jsx'
 
 const CATEGORY_COLOR = { dravec: '#5C7A85', bila: '#C4A572' }
 
@@ -163,7 +163,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
   }
 
   return (
-    <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-bg show catch-ticket-modal" onClick={(e) => e.target === e.currentTarget && onClose()}>
       {pickingRevir && (
         <div className="modal-bg show bait-picker-modal" onClick={(e) => e.target === e.currentTarget && setPickingRevir(false)}>
           <div className="ticket" style={{ maxWidth: 320 }}>
@@ -184,6 +184,9 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
         </div>
       )}
       <div className="ticket">
+        <div className="ticket-mobile-backbar">
+          <button type="button" onClick={onClose}><IconArrowLeft size={16} /> Zpět</button>
+        </div>
         <div className="ticket-top">
           <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
           <div className="eyebrow">Úlovkový lístek</div>

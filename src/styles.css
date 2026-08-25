@@ -27,6 +27,13 @@
   --fs-2xl:19px;      /* čísla na úlovkovém lístku */
   --fs-3xl:24px;      /* nadpis v ticketu / na přihlášení */
   --fs-4xl:26px;      /* název appky v hlavičce */
+
+  /* Výška spodní navigační lišty na mobilu (appka appce nechá "syrovou"
+     výšku bez safe-area -- ta se přičítá zvlášť přes env(), protože se
+     liší telefon od telefonu). Appka to drží jako proměnnou, ať appka
+     nemusí stejné číslo opisovat na víc míst (lišta samotná, odsazení
+     obsahu nad ní, spodní panely). */
+  --bottom-nav-h:58px;
 }
 *{box-sizing:border-box;}
 html,body,#root{margin:0;padding:0;height:100%;}
@@ -95,7 +102,12 @@ header h1 .accent{ color:var(--amber); }
 @media (max-width:860px){
   header{ padding:14px 16px; padding-top:calc(14px + env(safe-area-inset-top)); }
   .head-row{ gap:6px; }
-  .head-logo-group{ gap:9px; }
+  /* appka appce dřív musela mít tuhle mezeru stlačenou na 9px, protože se
+     na stejný řádek musely vejít i 4 taby pod tím (druhá řada hlavičky).
+     Ty teď appka přesunula do samostatné spodní lišty (viz níže), appka
+     tak má víc jistoty a mezeru mezi názvem appky a tlačítkem Chytat
+     appka mohla trochu uvolnit. */
+  .head-logo-group{ gap:13px; }
   .head-icons-group{ gap:5px; }
   header h1{ font-size:20px; }
   .new-btn.live-toggle{ padding:4px 10px; }
@@ -124,17 +136,29 @@ header h1 .accent{ color:var(--amber); }
 .whoami{ font-family:'IBM Plex Mono', monospace; font-size:var(--fs-sm); color:#B9CFCB; align-self:center; }
 .head-actions .new-btn, .head-actions-primary .new-btn, .head-actions-secondary .new-btn{ color:#E7EFEC; border-color:rgba(255,255,255,.3); }
 .head-actions-primary .new-btn{ display:inline-flex; align-items:center; gap:6px; }
-/* appka na mobilu udělá ze 4 tabů plnošířkový segmentovaný přepínač (stejný
-   díl = 25 % šířky) místo pilulek s proměnlivou šířkou -- appka tím zaručí,
-   že se to vejde na jakoukoli šířku displeje, ne jen "obvykle to sedí".
-   Appka tu navíc schová popisky (jen 4 ikony appka pozná rychle i bez textu
-   -- to je "varianta B" appky) a ikony zvětší, protože appce zbylo místo. */
+/* appka na mobilu udělá ze 4 tabů samostatnou spodní navigační lištu
+   (jako běžné mobilní appky), ne druhou řadu v hlavičce nahoře -- appka
+   toho dosáhne čistě přes CSS, beze změny JSX/pořadí prvků: <header>
+   nemá appce nastavené "position", takže position:absolute appce
+   "uteče" mimo hlavičku rovnou k .app (appka appce dala position:relative
+   výše) -- takhle appka appce zajistí, že se lišta dostane přesně ke
+   spodku SKUTEČNĚ viditelné plochy (.app{height:100dvh}), ne k okraji
+   "layout viewportu", který appku v mobilních prohlížečích historicky
+   zrazoval (viz komentáře u .app a .mobile-sheet výše). */
 @media (max-width:860px){
-  .head-secondary-row{ gap:0; margin-top:10px; }
-  .head-actions-primary{ width:100%; gap:0; border-radius:20px; overflow:hidden; }
+  .head-secondary-row{
+    position:absolute; left:0; right:0; bottom:0; z-index:460;
+    margin-top:0; gap:0;
+    background:var(--water-deep);
+    height:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
+    padding-bottom:env(safe-area-inset-bottom);
+    box-sizing:border-box;
+    box-shadow:0 -2px 10px rgba(0,0,0,.15);
+  }
+  .head-actions-primary{ width:100%; height:var(--bottom-nav-h); gap:0; }
   .head-actions-primary .new-btn{
     flex:1; justify-content:center; border-radius:0; border:none;
-    padding:11px 4px;
+    padding:0;
   }
   .head-actions-primary .nav-label{ display:none; }
   /* appka sjednocuje ikony podle VÝŠKY, ne podle šířky -- rybí ikona (úlovky)
@@ -165,6 +189,13 @@ header h1 .accent{ color:var(--amber); }
   animation: toast-in .2s ease;
 }
 @keyframes toast-in{ from{ opacity:0; transform:translate(-50%,10px); } to{ opacity:1; transform:translate(-50%,0); } }
+@media (max-width:860px){
+  /* Appka appce nechá toast vyskočit nad novou spodní navigační lištu,
+     ne pod/do ní -- bez týhle úpravy by appce zůstal jen 24px od
+     skutečného spodku obrazovky, což by appku appce zavedlo přímo do
+     zóny lišty. */
+  .save-toast{ bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 16px); }
+}
 
 .layout{ display:grid; grid-template-columns:300px 1fr; flex:1; min-height:0; }
 .layout.no-map{ grid-template-columns:1fr; }
@@ -178,52 +209,72 @@ header h1 .accent{ color:var(--amber); }
 @media (min-width:861px){
   .layout.no-map-keep-detail .desktop-detail-wrap{ display:block; flex:1; overflow-y:auto; }
 }
+/* Appka na mobilu appce dřív držela výšku přes "position:fixed; inset:0"
+   a k tomu ručně dohádané pixelové odsazení dole (různé pro Safari/Chrome/
+   appku na ploše) -- to appce fungovalo nespolehlivě, protože "100vh"/fixed
+   pozicování se v mobilních prohlížečích počítá jinak podle toho, jestli je
+   zrovna vidět lišta prohlížeče (schovává se/objevuje při scrollu). "100dvh"
+   ("dynamic viewport height") je jednotka appce udělaná přesně na tohle --
+   appka se automaticky přizpůsobí SKUTEČNĚ viditelné ploše, appka tak už
+   nemusí hádat pixely zvlášť pro každý prohlížeč/appku na ploše. */
 @media (max-width:860px){
   html, body, #root{ height:100%; overflow:hidden; }
-  .app{ position:fixed; inset:0; overflow:hidden; }
-  .layout{ grid-template-columns:1fr; position:relative; overflow:hidden; }
+  .app{ height:100dvh; position:relative; overflow:hidden; }
+  .layout{
+    grid-template-columns:1fr; position:relative; overflow:hidden;
+    /* appka appce zkrátí .layout přesně o výšku nové spodní navigační
+       lišty (+ její vlastní safe-area rezerva) -- mapa, vysouvací sheet
+       i seznamy uvnitř .layout appce tak nikdy nezajedou pod lištu, appka
+       to nemusí řešit zvlášť u každého z nich. */
+    margin-bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
+  }
   .sidebar{ display:none; }
   .desktop-detail-wrap{ display:none; }
   main{ position:absolute; inset:0; }
   /* "Domů" (bez mapy): appka na mobilu obvykle sidebar schovává a obsah
      ukazuje přes vysouvací mobile-sheet nad mapou -- tady žádná mapa
      není, takže sidebar appka rovnou ukáže na celou obrazovku místo
-     schovávání a čekání na sheet, co by neměl co překrývat. */
+     schovávání a čekání na sheet, co by neměl co překrývat. Skutečný
+     výřez/home indikátor appka řeší už spodní navigační lišta (viz
+     .head-secondary-row výše), appka tu proto appce stačí jen malý
+     pevný odstup pro pohodlí při scrollování, ne další env() navíc. */
   .layout.no-map .sidebar{
     display:block; position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
-    max-height:none; z-index:5; background:var(--paper); padding-bottom:90px;
+    max-height:none; z-index:5; background:var(--paper);
+    padding-bottom:16px;
   }
-}
-/* Appka nainstalovaná na plochu (žádná lišta prohlížeče kolem) potřebuje
-   dole jen tolik místa, kolik odpovídá skutečnému výřezu/home indikátoru
-   telefonu -- to appka pozná přes "display-mode: standalone". V běžném
-   prohlížeči (Chrome/Safari v záložce) je těch 50px výše naopak potřeba
-   kvůli liště prohlížeče, kterou žádná "safe area" nepokrývá. */
-@media (max-width:860px) and (display-mode: standalone){
-  .layout.no-map .sidebar{ padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
 }
 
 /* ---------- mobile bottom sheet (map stays dominant underneath) ---------- */
 .mobile-sheet{ display:none; }
 @media (max-width:860px){
+  /* position:absolute vůči .layout (appka appce dala position:relative
+     výše), ne position:fixed vůči celému oknu prohlížeče -- appka tak
+     lištu ukotví přesně ke spodku SKUTEČNĚ viditelné plochy appky (viz
+     .app{height:100dvh} výše), místo aby appka hádala, kde skončí
+     "viewport" podle zrovna schované/vysunuté lišty prohlížeče. */
   .mobile-sheet{
     display:flex; flex-direction:column;
-    position:fixed; left:0; right:0; bottom:0; z-index:450;
+    position:absolute; left:0; right:0; bottom:0; z-index:450;
     background:var(--white); border-radius:16px 16px 0 0;
     box-shadow:0 -6px 24px rgba(0,0,0,.18);
-    max-height:70vh; height:56px;
+    max-height:75%; height:56px;
     transition:height .25s ease;
     overflow:hidden;
   }
-  .mobile-sheet.expanded{ height:70vh; }
-  .mobile-sheet.expanded.map-panel{ height:42vh; }
+  .mobile-sheet.expanded{ height:75%; }
+  /* Mapa: appka tu ve vysunutém stavu ukazuje jen pár řádků filtrů
+     (Kdo/Co), ne dlouhý scrollovatelný seznam jako jinde -- appka proto
+     nechá výšku "auto" s max. stropem, ať appka nedrží zbytečně
+     prázdnou plochu jen proto, že appka jinde počítala s dlouhým
+     seznamem výprav/úlovků. */
+  .mobile-sheet.expanded.map-panel{ height:auto; max-height:min(45%, 300px); }
 }
 @media (max-width:860px){
   /* Výpravy v klidu: appka potřebovala schovat mapu, ne hlavičku --
-     na rozdíl od ostatních variant (position:fixed, ukotvené ke spodku
-     obrazovky) je tahle varianta uvnitř .layout jako position:absolute
-     inset:0, ať appka vyplní přesně prostor pod hlavičkou, ne celou
-     výšku okna. */
+     na rozdíl od ostatních variant je tahle varianta uvnitř .layout
+     jako position:absolute inset:0, ať appka vyplní přesně prostor pod
+     hlavičkou, ne celou výšku okna. */
   .mobile-sheet.full-panel{
     position:absolute; inset:0; height:auto; max-height:none;
     border-radius:0; box-shadow:none; z-index:5;
@@ -234,13 +285,13 @@ header h1 .accent{ color:var(--amber); }
     font-family:'Fraunces', serif; font-weight:600; font-size:var(--fs-md);
   }
   .peek-chevron{ color:var(--ink-soft); font-size:var(--fs-sm); }
+  /* Skutečný výřez/home indikátor appka řeší už spodní navigační lišta
+     (stejné zdůvodnění jako u .layout.no-map .sidebar výše) -- appka tu
+     proto appce stačí jen malý pevný odstup pro pohodlí, ne env() navíc. */
   .mobile-sheet-body{ overflow-y:auto; padding:0 0 16px; flex:1; }
-  .mobile-sheet.full-panel .mobile-sheet-body{ padding-top:8px; padding-bottom:90px; }
+  .mobile-sheet.full-panel .mobile-sheet-body{ padding-top:8px; }
   .mobile-sheet .detail-strip{ display:block; padding:12px 18px; }
   .mobile-sheet .det-block{ margin-bottom:18px; }
-}
-@media (max-width:860px) and (display-mode: standalone){
-  .mobile-sheet.full-panel .mobile-sheet-body{ padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
 }
 
 .sidebar{ background:var(--white); border-right:1px solid var(--paper-line); overflow-y:auto; max-height:calc(100vh - 92px); }
@@ -465,8 +516,36 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
   border:1px solid var(--paper-line); border-radius:8px; padding:8px 10px;
 }
 .ticket-close{ position:absolute; top:14px; right:16px; background:transparent; border:none; color:#CFE3E0; font-size:18px; cursor:pointer; }
+.ticket-mobile-backbar{ display:none; }
 .perforation{ height:0; border-top:2px dashed var(--paper-line); }
 .ticket-body{ padding:18px 20px 20px; }
+/* Úlovkový lístek na mobilu appka appce ukáže jako plnou obrazovku (stejný
+   dojem jako detail výpravy), ne jako vystředěné vyskakovací okno s malým
+   ✕ v rohu -- appka přidá nad kartu prostý pruh "← Zpět" po celé šířce,
+   jako normální appková obrazovka. Appka na desktopu appce nechá beze
+   změny (tam vystředěný "tiket" s ✕ v rohu funguje dobře). */
+@media (max-width:860px){
+  .catch-ticket-modal{
+    position:absolute; inset:0; bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
+    background:var(--paper); padding:0; align-items:stretch; justify-content:stretch;
+    z-index:900;
+  }
+  .catch-ticket-modal .ticket{
+    width:100%; max-width:none; height:100%; border-radius:0; box-shadow:none;
+    max-height:none; display:flex; flex-direction:column; overflow-y:hidden;
+  }
+  .catch-ticket-modal .ticket-mobile-backbar{
+    display:flex; flex:none; background:var(--water-deep);
+    padding:12px 16px; position:sticky; top:0; z-index:2;
+  }
+  .catch-ticket-modal .ticket-mobile-backbar button{
+    display:flex; align-items:center; gap:6px; background:transparent; border:none;
+    color:var(--white); font-family:'IBM Plex Mono', monospace; font-size:var(--fs-md);
+    font-weight:600; cursor:pointer; padding:4px 0;
+  }
+  .catch-ticket-modal .ticket-close{ display:none; }
+  .catch-ticket-modal .ticket-body{ flex:1; overflow-y:auto; }
+}
 .ticket-illustration{ display:flex; justify-content:center; margin:6px 0 14px; }
 .ticket-stats{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
 .stat{ background:var(--paper); border:1px solid var(--paper-line); border-radius:8px; padding:9px 12px; }
@@ -487,7 +566,18 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
 }
 .side-panel .ticket{ box-shadow:0 20px 50px rgba(18,59,82,.35); max-height:none; overflow-y:visible; }
 @media (max-width:860px){
-  .side-panel{ top:auto; bottom:0; left:0; right:0; max-height:70vh; }
+  /* Stejný princip jako u .mobile-sheet výše: position:absolute vůči
+     .app (appka appce dala position:relative v mobilní části výše),
+     ne position:fixed vůči oknu prohlížeče -- appka se tak spolehlivě
+     zastaví přesně u spodku SKUTEČNĚ viditelné plochy (.app má
+     height:100dvh). Odsazení zdola appka počítá tak, aby panel skončil
+     přesně nad novou spodní navigační lištou (.head-secondary-row) --
+     ta uz appka sama nese svou vlastní safe-area rezervu, appka ji tu
+     proto nepočítá podruhé. */
+  .side-panel{
+    position:absolute; top:auto; bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
+    left:0; right:0; max-height:70%;
+  }
 }
 
 /* ---------- type picker / placement hints (floating over map) ---------- */
