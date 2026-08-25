@@ -1591,3 +1591,42 @@ se sdílenou Leaflet mapou napříč záložkami. Otestovat důkladně:
   jinou/starší zapamatovanou.
 - Nová výprava (typová nabídka i umístění bodu) -- pozadí musí být
   čisté a na pozici naposledy použité na Mapě.
+
+ZMĚNA (verze 128) -- oprava čtyř chyb nahlášených po testu verze 127:
+
+1. Kořen problému: appka měla ještě jedno STARÉ místo v kódu (dole ve
+   sdíleném efektu, sekce "agregovaný pohled"), co potichu přeostřovalo
+   tu samou sdílenou mapu na úlovky podle filtrů Výprav -- úplně mimo
+   nový systém zapamatované pozice z verze 127. Tohle přeostřování
+   appka dělala i když je mapa v tomhle stavu (Domů/Úlovky/Nástrahy/
+   Výpravy v klidu) vždycky schovaná, takže to nemělo sloužit k
+   ničemu -- jen kazilo pozici pro pozdější použití (Mapa, umísťování
+   bodů). Odstraněno.
+
+2. Zapamatovaná pozice mapy se teď zapisuje EXPLICITNĚ (synchronně, v
+   kódu), ne jen skrz Leaflet event "moveend" -- ten může u animovaného
+   přiblížení dorazit později, než appka stihne odejít na jinou
+   záložku, a appka si tak zapamatovala starší pozici, ne tu poslední.
+   Zápis appka teď dělá na dvou místech: (a) v switchPanel, těsně před
+   odchodem ze záložky Mapa appka přečte aktuální polohu přímo, (b) po
+   každém vlastním přeostření uvnitř mapového efektu (reset, první
+   návštěva).
+
+3. Oprava mírně posunuté/oddálené mapy hned po refreshi stránky --
+   appka totiž počítala výchozí přiblížení dřív, než měl kontejner
+   mapy konečnou velikost (layout/fonty se ještě mohly doskládat).
+   Přidána oprava, co přiblížení o 150ms později zopakuje znovu, už
+   se správnou velikostí kontejneru.
+
+4. Zrušení zakládání nové výpravy a návrat na Mapa: appka místo
+   zapamatované/výchozí pozice ukazovala "přiblížení mezi úlovky, kde
+   nic není" -- přesně bod 1 výše, po zrušení výpravy appka aktivní
+   panel appky zůstal na Výpravách, kde se spustilo to staré
+   přeostřování. Vyřešeno stejnou opravou jako bod 1.
+
+NEOVĚŘENO ŽIVĚ, otestovat po nasazení: přiblížit na Mapě, přepnout
+pryč a zpátky (pozice musí sedět přesně), druhý klik na Mapa a pak
+přepnout pryč a zpátky (musí zůstat na výchozí, ne se vrátit na
+starou přiblíženou), tvrdý refresh stránky (mapa musí sednout na
+místo hned, ne až po druhém kliku), a zrušení nové výpravy s
+návratem na Mapa.

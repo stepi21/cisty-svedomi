@@ -1186,18 +1186,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       marker.addTo(aggregateClusterLayer.current)
     })
 
-    // Appka mapu nepřeostří, dokud uživatel čeká na klik (viz isDrawingNow
-    // výše) -- jinak by appka při zápisu nové výpravy (GPS/ruční bod na
-    // břehu, pozice prutů...) opakovaně smazala uživateli jeho vlastní
-    // přiblížení pokaždé, když appka jen začne čekat na další klik.
-    if (!isDrawingNow) {
-      if (matches.length > 0) {
-        const bounds = L.latLngBounds(matches.map(({ c, s }) => [c.lat ?? s.lat, c.lng ?? s.lng]))
-        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 })
-      } else {
-        map.setView([49.8, 15.5], 8)
-      }
-    }
+    // Tahle sdílená mapa je v tomhle stavu (Domů/Úlovky/Nástrahy/Výpravy
+    // v klidu) vždycky schovaná -- appka ji tu dřív přesto přeostřovala na
+    // úlovky podle filtru Výprav, což potichu kazilo pozici pro záložku
+    // Mapa i pro placement flows, když se appka objevila zpátky. Appka
+    // tady teď nechává mapu tak, jak je -- jen dokreslí značky výše.
   }, [activeSession, activeCategory, activeUserFilter, viewMode, sessions, locationsCatalog, activePanel, placementTarget, areaDraft, riverLineDraft, rodPointsDraft, riverConfirm, areaDrawChoice, editingAreasLocation, editingAreasSession, savingLocationFor, pickingType, locationPickerStep, draftSession])
 
   // --- záložka 🗺 Mapa: přepínatelné vrstvy (moje/party výpravy, moje/party
@@ -1339,12 +1332,21 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       })
     }
 
+    function rememberCurrentView() {
+      const c = map.getCenter()
+      rememberedMapViewRef.current = { lat: c.lat, lng: c.lng, zoom: map.getZoom() }
+    }
+
     if (mapForceResetRef.current) {
       // Výslovný požadavek (druhý klik na Mapa) -- appka spočítá čerstvé
       // přiblížení podle právě nastaveného (výchozího) filtru, bez ohledu
-      // na cokoli zapamatované.
+      // na cokoli zapamatované, a hned appka i zapíše výsledek jako novou
+      // zapamatovanou pozici (appka nečeká na "moveend", ten by u
+      // animovaného přiblížení mohl dorazit později, než appka stihne
+      // odejít jinam).
       if (bounds.length > 0) map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
       else map.setView([49.8, 15.5], 8)
+      rememberCurrentView()
     } else if (rememberedMapViewRef.current) {
       // appka aktivně vrátí mapu na naposledy zapamatovanou pozici --
       // sdílená Leaflet mapa mezitím mohla být použitá i jinde (např.
@@ -1355,10 +1357,25 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       map.setView([v.lat, v.lng], v.zoom)
     } else if (bounds.length > 0) {
       // Úplně první návštěva záložky Mapa v týhle appce -- appka nemá co
-      // vracet, spočítá tedy výchozí přiblížení.
+      // vracet, spočítá tedy výchozí přiblížení a rovnou ho i zapamatuje.
       map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
+      rememberCurrentView()
+      // Krátce po startu appky (refresh stránky) nemusí být kontejner
+      // mapy ještě v konečné velikosti (fonty/layout se ještě mohly
+      // doskládat) -- invalidateSize() na začátku efektu to nemusí
+      // stihnout zachytit. Appka proto o chvíli později přiblížení
+      // zopakuje, ať appka nezůstane mírně posunutá/oddálená.
+      const boundsForRecheck = L.latLngBounds(bounds)
+      setTimeout(() => {
+        if (!mapInstance.current) return
+        mapInstance.current.invalidateSize()
+        mapInstance.current.fitBounds(boundsForRecheck, { padding: [40, 40], maxZoom: 15 })
+        const c = mapInstance.current.getCenter()
+        rememberedMapViewRef.current = { lat: c.lat, lng: c.lng, zoom: mapInstance.current.getZoom() }
+      }, 150)
     } else {
       map.setView([49.8, 15.5], 8)
+      rememberCurrentView()
     }
     mapForceResetRef.current = false
   }, [activePanel, mapLayers, sessions, locationsCatalog, userId, members, mapFocusSessionId, mapFocusPoint, mapResetNonce])
@@ -2404,6 +2421,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     // odejde -- ať se po návratu jedním kliknutím vrátí přesně tam.
     if (activePanel === 'home' && panel !== 'home' && sidebarRef.current) {
       homeScrollRef.current = sidebarRef.current.scrollTop
+    }
+    // Odchod ze záložky Mapa appka zachytí synchronně tady -- nespoléhá jen
+    // na Leaflet event "moveend" (ten může u animovaného přiblížení dorazit
+    // se zpožděním, a rychlé přepnutí záložky by ho tak mohlo předběhnout).
+    if (activePanel === 'map' && panel !== 'map' && mapInstance.current) {
+      const c = mapInstance.current.getCenter()
+      rememberedMapViewRef.current = { lat: c.lat, lng: c.lng, zoom: mapInstance.current.getZoom() }
     }
     if (panel === 'home') {
       pendingHomeScrollModeRef.current = isRepeat ? 'top' : 'restore'
