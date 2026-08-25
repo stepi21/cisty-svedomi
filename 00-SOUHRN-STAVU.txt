@@ -1671,3 +1671,29 @@ s druhým klikem:
 
 NEOVĚŘENO ŽIVĚ, otestovat po nasazení hlavně: tvrdý refresh a rovnou
 první klik na Mapa, a rychlé dvojklik-na-Mapa-a-hned-přepnout-jinam.
+
+OPRAVA REGRESE (verze 131) -- verze 130 udělala věci HORŠÍ (refresh
+pořád špatně, dvojklik se přestal pamatovat úplně).
+
+Skutečná příčina: dvojitý requestAnimationFrame z verze 130 neměl
+žádné zrušení (cleanup) -- při každém dalším spuštění mapového efektu
+(a to se děje často: změna filtru, přepnutí panelu, nová data) appka
+naplánovala DALŠÍ opožděnou opravu, ale tu předchozí appka nezrušila.
+Ty se pak mohly hromadit a spouštět v libovolném pořadí -- klidně i
+POTOM, co appka dávno odešla ze záložky Mapa, se stará opožděná
+oprava spustila a přepsala appce mezitím správně nastavenou pozici
+zpátky na něco starého.
+
+Oprava: appka teď udržuje jen JEDEN běžící řetězec kontrol (přes
+proměnnou cancelled), který se vždycky zruší, jakmile se efekt spustí
+znovu nebo appka odejde jinam. Appka navíc místo slepého "zkus to
+znovu za chvíli" opakovaně kontroluje skutečnou velikost kontejneru
+mapy (přes map.getSize()), dokud není rozumná -- ne fixní počet
+snímků, co nemusí vždy stačit. Zároveň appka zrušila samostatnou
+synchronní zkratku pro dvojklik z verze 130 (ta se s touhle opravou
+začala prát) -- reset appka teď zase řeší jen přes mapový efekt výše,
+ten je ale sám o sobě teď mnohem spolehlivější.
+
+NEOVĚŘENO ŽIVĚ, otestovat po nasazení: tvrdý refresh, druhý klik na
+Mapa (i s rychlým přepnutím jinam hned potom), a obecně proklikávání
+mezi Mapou a ostatními záložkami několikrát za sebou rychle po sobě.

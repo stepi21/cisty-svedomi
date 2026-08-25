@@ -1384,18 +1384,26 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     // Krátce po startu appky (refresh stránky) nemusí být kontejner mapy
     // hned v konečné velikosti (fonty/layout se ještě mohly doskládat) --
     // invalidateSize() výše na začátku efektu to nemusí stihnout zachytit.
-    // Dvojitý requestAnimationFrame počká, až prohlížeč doopravdy dokončí
-    // rozvržení stránky (spolehlivější než odhadované zpoždění přes
-    // setTimeout), a appka pak stejné rozhodnutí zopakuje se správnou
-    // velikostí kontejneru. Když bylo přiblížení už napoprvé správně,
-    // druhý běh jen potvrdí to samé -- appka appce tím nic nepokazí.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (!mapInstance.current) return
+    // Appka proto přes requestAnimationFrame počká, až kontejner doopravdy
+    // dostane rozumnou velikost, a pak přiblížení zopakuje. cancelled
+    // appka nastaví na true, kdykoli se tenhle efekt spustí znovu (nebo
+    // appka odejde jinam) -- jinak by se čekání z jednoho běhu mohlo
+    // spustit až o kus později, kdy uživatel dávno dělá něco jiného, a
+    // přepsat appce mezitím správně nastavenou pozici.
+    let cancelled = false
+    function waitForValidSizeThenApply(attempt) {
+      if (cancelled || !mapInstance.current) return
+      const size = mapInstance.current.getSize()
+      if (size.x > 50 && size.y > 50) {
         mapInstance.current.invalidateSize()
         applyMapPosition()
-      })
-    })
+        return
+      }
+      if (attempt > 40) return // po ~40 pokusech appka čekání vzdá, ať se nezacyklí navždy
+      requestAnimationFrame(() => waitForValidSizeThenApply(attempt + 1))
+    }
+    requestAnimationFrame(() => waitForValidSizeThenApply(0))
+    return () => { cancelled = true }
   }, [activePanel, mapLayers, sessions, locationsCatalog, userId, members, mapFocusSessionId, mapFocusPoint, mapResetNonce])
 
   async function backfillBaitPhoto(baitName, photoUrl) {
@@ -2464,26 +2472,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         setCatchesSortMode('species')
         if (sidebarRef.current) sidebarRef.current.scrollTop = 0
       }
-      else if (panel === 'map') {
-        setMapWho('both'); setMapWhat('catches')
-        mapForceResetRef.current = true
-        setMapResetNonce((n) => n + 1)
-        // Reset appka provede rovnou tady, synchronně -- nespoléhá jen na
-        // to, že se stihne spustit mapový efekt dřív, než uživatel
-        // rychlým dalším kliknutím přepne jinam. Efekt níže reset stejně
-        // ještě jednou zopakuje (kvůli překreslení značek), ale pozice a
-        // zapamatovaná hodnota jsou správně nastavené už teď.
-        if (mapInstance.current) {
-          const map = mapInstance.current
-          const bounds = []
-          sessions.forEach((s) => (s.catches || []).forEach((c) => bounds.push([c.lat ?? s.lat, c.lng ?? s.lng])))
-          map.invalidateSize()
-          if (bounds.length > 0) map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 })
-          else map.setView([49.8, 15.5], 8)
-          const c = map.getCenter()
-          rememberedMapViewRef.current = { lat: c.lat, lng: c.lng, zoom: map.getZoom() }
-        }
-      }
+      else if (panel === 'map') { setMapWho('both'); setMapWhat('catches'); mapForceResetRef.current = true; setMapResetNonce((n) => n + 1) }
       else if (panel === null) {
         setViewMode('aggregate'); setActiveCategory('all'); setActiveUserFilter('all')
         if (sidebarRef.current) sidebarRef.current.scrollTop = 0
