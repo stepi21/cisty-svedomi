@@ -1546,3 +1546,48 @@ připomínek:
 NEOVĚŘENO ŽIVĚ, otestovat po nasazení: chování mapy při přepínání
 filtrů a mezi záložkami (bod 1), sloučená "Místa" u přívlače (bod 4),
 a čistou/nepřesunutou mapu při zakládání nové výpravy (bod 6).
+
+ZMĚNA (verze 127) -- kompletní přepracování paměti pozice mapy po
+další diskuzi, plus dvě opravy chybějících bodů:
+
+1. Mapa má teď jedno centrální místo pravdy pro svou pozici
+   (rememberedMapViewRef) -- aktualizuje se přes Leaflet event
+   "moveend", ale JEN dokud je uživatel opravdu na záložce Mapa.
+   Nahrazuje starší řešení z verze 126 (mapHasFitRef, "prostě
+   nepřeostřuj"), které si nedokázalo poradit s tím, že appka mezitím
+   tu samou sdílenou mapu použije i jinde (Výpravy).
+
+2. Oprava: druhý klik na už aktivní záložku Mapa nezabíral, pokud
+   filtr Kdo/Co byl už na výchozí hodnotě (React přeskočil render,
+   protože se nic nezměnilo). Přidána pomocná hodnota mapResetNonce,
+   stejný trik jako u Domů.
+
+3. Zakládání nové výpravy: appka mapu vrátí na naposledy použitou
+   pozici záložky Mapa (ne tam, kde sdílená mapa náhodou zůstala od
+   prohlížení jiné výpravy) -- beze změn od typové nabídky až po
+   otevřený formulář, žádné staré výpravy/úlovky na pozadí.
+
+4. Oprava miniaturní mapky (SessionMiniMap) u bodových typů (kapr,
+   muška, plavaná): chyběl bod "kde stojíš" (appka ho nastavuje přes
+   GPS u živé výpravy, nebo ručním umístěním u zpětné) -- je to jiná
+   souřadnice než jednotlivé pruty, appka ji kreslila jen na velké
+   mapě, na miniatuře ne. Doplněno, teď to sedí na obou mapách.
+
+5. Místa u přívlače appka rozlišuje číslem přímo v tečce (1, 2, 3...)
+   místo přidávání dalších barev -- na miniatuře i na velké mapě ve
+   fokusovaném režimu, ať sedí s pořadím v seznamu "Místa" pod mapou.
+
+6. Fotky v Úlovcích ("Podle druhu") appka teď načítá líně
+   (loading="lazy") -- možná příčina drobného zpoždění při návratu
+   na Úlovky druhým kliknutím zprostředka delšího seznamu fotek.
+
+DŮLEŽITÉ: tahle verze opravdu velkou měrou mění, jak appka zachází
+se sdílenou Leaflet mapou napříč záložkami. Otestovat důkladně:
+- Mapa: přiblížit, přepnout jinam a zpátky (jedním kliknutím) --
+  pozice musí zůstat stejná. Druhý klik na Mapa musí přiblížení
+  i filtr vrátit na výchozí.
+- Výpravy: "Zobrazit na mapě" u nějaké výpravy, pak přepnout na
+  Mapa přímo -- musí appka ukázat tu samou fokusovanou pozici, ne
+  jinou/starší zapamatovanou.
+- Nová výprava (typová nabídka i umístění bodu) -- pozadí musí být
+  čisté a na pozici naposledy použité na Mapě.
