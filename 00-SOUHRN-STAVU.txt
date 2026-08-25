@@ -1749,3 +1749,25 @@ se soustředily jen na časování (setTimeout, requestAnimationFrame) --
 NEOVĚŘENO ŽIVĚ, otestovat prosím znovu důkladně: přiblížit na Mapě,
 prohlédnout si pár výprav, vrátit se na Mapu (musí zůstat na stejném
 místě), a znovu i tvrdý refresh.
+
+DOLADĚNÍ (verze 134) -- verze 133 opravila hlavní příčinu (funguje
+dobře z Domů/Úlovků), ale konkrétně přechod ze záložky Výpravy na
+Mapu pořád ukazoval jiné místo, ne to zapamatované.
+
+Pravděpodobná příčina: Výpravy mají jiné rozložení sloupců (postranní
+seznam + detail výpravy) než Domů/Úlovky (jen jeden sloupec) --
+přechod na Mapu (zase jiné dvousloupcové rozložení) z Výprav tak
+appce mohl na okamžik dát nesprávnou velikost kontejneru mapy, než
+appka stihla přepočítat správné přiblížení.
+
+Oprava: appka o jeden snímek později (přes requestAnimationFrame)
+zkontroluje velikost kontejneru znovu a přiblížení zopakuje, pokud
+bylo napoprvé spočítané špatně. Na rozdíl od dřívějšího pokusu (verze
+130-131) appka tentokrát tuhle kontrolu pořádně ruší (cleanup), když
+se mezitím appka přepne jinam -- žádné hromadění opožděných oprav,
+co si navzájem přepisují výsledek.
+
+NEOVĚŘENO ŽIVĚ, otestovat prosím hlavně: přechod ze záložky Výpravy
+(z detailu konkrétní výpravy) přímo na Mapu -- musí appka ukázat
+zapamatovanou pozici, ne pozici té výpravy. A znovu i tvrdý refresh
+a rychlé opakované klikání mezi Mapou a ostatními záložkami.
