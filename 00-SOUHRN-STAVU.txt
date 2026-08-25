@@ -1720,3 +1720,32 @@ pády, ale ne časování rozvržení stránky) je risk dalších pokusů o
 opravu vyšší než jejich přínos -- doporučuju tenhle jeden konkrétní
 detail buď zatím nechat být (řeší se druhým kliknutím), nebo ho
 otestovat/opravit až s reálným přístupem do prohlížeče.
+
+SKUTEČNÝ KOŘEN PROBLÉMU NALEZEN (verze 133) -- i verze 132 (návrat na
+129) byla podle testu pořád stejně špatná, včetně dvojkliku, který
+předtím fungoval. To ukázalo, že skutečná příčina je jinde, mimo
+všechny dosavadní pokusy o opravu.
+
+Skutečná příčina: sekce, co u detailu výpravy centruje mapu na
+"activeSession.lat/lng" (v efektu pro Výpravy), kontrolovala jen
+"viewMode === 'detail' && activeSession" -- vůbec ne, jestli je
+appka opravdu na panelu Výpravy. Jenže viewMode a activeSession
+zůstávají nastavené i po přepnutí na úplně jinou záložku (třeba
+Mapu) -- nic je nevyprazdňuje. Tahle sekce tak klidně přesouvala
+sdílenou mapu na pozici naposledy prohlížené výpravy i v době, kdy
+uživatel byl na záložce Mapa, kdykoli se zrovna přenačetla data (což
+se v appce děje často). To přesně vysvětluje popsané chování --
+appka se po přepnutí vracela na místo z Výprav, ne na zapamatovanou
+pozici Mapy.
+
+Oprava: podmínka teď navíc vyžaduje "activePanel === null" (skutečně
+Výpravy). Na jiných záložkách se tahle sekce centrováním mapy vůbec
+nezabývá.
+
+Tenhle nález je zásadnější a přesnější než předchozí tři pokusy, co
+se soustředily jen na časování (setTimeout, requestAnimationFrame) --
+šlo o chybějící podmínku, ne o rychlost.
+
+NEOVĚŘENO ŽIVĚ, otestovat prosím znovu důkladně: přiblížit na Mapě,
+prohlédnout si pár výprav, vrátit se na Mapu (musí zůstat na stejném
+místě), a znovu i tvrdý refresh.

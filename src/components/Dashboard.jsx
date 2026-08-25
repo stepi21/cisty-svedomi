@@ -1103,8 +1103,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       // Appka mapu nepřeostří, dokud uživatel čeká na klik (přidávání
       // prutu, přesun úlovku...) -- stejný důvod jako u agregovaného
       // pohledu výše, jinak by appka smazala uživateli jeho přiblížení
-      // pokaždé, když appka jen začne čekat na další klik.
-      if (!isDrawingNow) {
+      // pokaždé, když appka jen začne čekat na další klik. Appka navíc
+      // tohle přeostření dělá JEN na panelu Výpravy (activePanel === null)
+      // -- viewMode i activeSession totiž zůstávají nastavené i po
+      // přepnutí na jinou záložku (třeba Mapu), a bez týhle podmínky by
+      // appka klidně přesouvala sdílenou mapu podle staré výpravy i tam,
+      // kde už to nemá co dělat.
+      if (!isDrawingNow && activePanel === null) {
         if (suppressSessionFitRef.current) {
           // Spotřebuje se přesně tady -- appka právě dokončila přesun bodu
           // nebo přidání dalšího místa, uživatel si mapu sám přiblížil na
