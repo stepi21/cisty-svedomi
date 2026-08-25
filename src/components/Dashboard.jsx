@@ -351,7 +351,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // textově zůstává 'home' (druhý klik samotný by React jinak přeskočil).
   useEffect(() => {
     if (activePanel !== 'home' || !sidebarRef.current) return
-    sidebarRef.current.scrollTop = pendingHomeScrollModeRef.current === 'top' ? 0 : (homeScrollRef.current || 0)
+    const top = pendingHomeScrollModeRef.current === 'top'
+    sidebarRef.current.scrollTop = top ? 0 : (homeScrollRef.current || 0)
+    if (top) window.scrollTo(0, 0)
   }, [activePanel, homeNavNonce])
 
   useEffect(() => { loadSessions(); loadMembers(); loadBaitCatalog(); loadLocationsCatalog() }, [groupId])
@@ -2493,12 +2495,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       if (panel === 'catches') {
         setCatchesSortMode('species')
         if (sidebarRef.current) sidebarRef.current.scrollTop = 0
+        window.scrollTo(0, 0)
       }
       else if (panel === 'map') { setMapWho('both'); setMapWhat('catches'); mapForceResetRef.current = true; setMapResetNonce((n) => n + 1) }
       else if (panel === null) {
         setViewMode('aggregate'); setActiveCategory('all'); setActiveUserFilter('all')
         if (sidebarRef.current) sidebarRef.current.scrollTop = 0
         if (mobileSheetBodyRef.current) mobileSheetBodyRef.current.scrollTop = 0
+        window.scrollTo(0, 0)
       }
     }
   }
@@ -3325,7 +3329,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 >
                   <div className="feed-card-photo">
                     {c.photo_url
-                      ? <img src={c.photo_url} alt={c.species} />
+                      ? <img src={c.photo_url} alt={c.species} loading="lazy" decoding="async" />
                       : <div className="feed-card-photo-fallback" dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />}
                   </div>
                   <div className="feed-card-body">
@@ -3884,7 +3888,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               {showNotifications && (() => {
                 const items = computeNotifications()
                 return (
-                  <div className="type-picker" style={{ position: 'absolute', top: '100%', right: 0, left: 'auto', transform: 'none', marginTop: 6, minWidth: 260, maxWidth: 320, zIndex: 500 }}>
+                  <div className="type-picker" style={{ position: 'absolute', top: '100%', right: 0, left: 'auto', transform: 'none', marginTop: 6, minWidth: 260, maxWidth: 320, zIndex: 950 }}>
                     <div className="type-picker-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                       <span>Novinky</span>
                       <button type="button" onClick={closeNotifications} style={{ background: 'transparent', border: 'none', color: 'var(--white)', cursor: 'pointer', display: 'flex', padding: 0 }}><IconClose size={14} /></button>
@@ -3938,7 +3942,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 <IconMenu size={19} color="var(--water-deep)" />
               </button>
               {showMoreMenu && (
-                <div className="type-picker" style={{ position: 'absolute', top: '100%', right: 0, left: 'auto', transform: 'none', marginTop: 6, minWidth: 190, zIndex: 500 }}>
+                <div className="type-picker" style={{ position: 'absolute', top: '100%', right: 0, left: 'auto', transform: 'none', marginTop: 6, minWidth: 190, zIndex: 950 }}>
                   <div className="type-picker-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                     <span>{myProfile?.display_name}</span>
                     <button type="button" onClick={() => setShowMoreMenu(false)} style={{ background: 'transparent', border: 'none', color: 'var(--white)', cursor: 'pointer', display: 'flex', padding: 0 }}><IconClose size={14} /></button>
