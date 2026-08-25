@@ -1960,3 +1960,24 @@ Upřímně -- tohle je už čtvrtý pokus o doladění mobilních okrajů bez
 možnosti to sám vyzkoušet na živém zařízení, takže berte prosím
 každou další drobnost, na kterou narazíte, jako užitečnou zpětnou
 vazbu, ne jako důvod k obavám.
+
+OPRAVA REGRESE (verze 144): verze 143 udělala vysouvací lištu na
+Mapě (a Výpravách v klidu) v appce na ploše vyšší.
+To ale skutečný problém vůbec nevyřešilo -- jen posunulo bílou
+plochu lišty výš (zasahovala víc do mapy), zatímco béžová mezera
+úplně dole zůstala stejně velká. Čistě horší stav, žádné zlepšení.
+
+Uživatel zjistil, že ten samý béžový pruh dole je i na Domů,
+Výpravách a Úlovcích. Tam si ho ale nikdo nevšiml, protože pod ním
+je stejná béžová barva jako appka běžně používá.
+Na Mapě a Výpravách je ale ten pruh viditelný, protože nad ním
+končí bílá barva, ne béžová -- ten kontrast je nápadný.
+
+Oprava: vrácena jen výška lišty (mobile-sheet) zpátky na původní
+hodnotu (56px / 70vh / 42vh, beze změny podle standalone appky).
+Ostatní dvě opravy z verze 142/143 zůstávají (Domů/Úlovky a 90px
+pro Chrome), uživatel je označil za fungující.
+
+Ten béžový pruh na Mapě/Výpravách zatím zůstává nevyřešený -- podle
+uživatele je to nižší priorita a nevadí, když to tak zůstane, spíš
+než další neověřené hádání s CSS pro mobilní Safari.
