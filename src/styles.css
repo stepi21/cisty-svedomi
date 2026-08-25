@@ -164,21 +164,20 @@ header h1 .accent{ color:var(--amber); }
    <html>) nemá kolem sebe žádnou lištu prohlížeče -- appka tam proto ze
    4 tabů udělá samostatnou spodní navigační lištu (jako běžné mobilní
    appky), místo aby appka nechala tab-row jako druhý řádek v hlavičce.
-   position:absolute vůči .app (appka appce dala position:relative výše,
-   výšku appka měří přes JS -- viz --app-vh v Dashboard.jsx). Appka to
-   zkusila i jako position:fixed, živý test ale ukázal, že to bylo míň
-   spolehlivé (lišta vyšla výš a mezera dole zůstala). Safe-area appka
-   nepočítá přímo z "env()" uvnitř "calc()" -- appka místo toho použije
-   hodnotu naměřenou v JS a uloženou do proměnné "--safe-bottom" (viz
-   Dashboard.jsx), "env()" appka nechá jen jako záložní hodnotu. */
+   Appka tu záměrně NEDÁVÁ explicitní výšku počítanou přes "calc()" --
+   živé testy (appka to zkusila s "position:fixed" i "position:absolute",
+   s "env()" i s appka appce naměřenou proměnnou) ukázaly, že s explicitní
+   výškou lišta appce nesahala až úplně dolů. Appka proto zkouší
+   nejjednodušší, nejvíc standardní zápis: bez explicitní výšky na
+   vnějším prvku, appka nechá výšku dopočítat automaticky (výška vnitřní
+   appky appky + padding podle env()) -- tohle je zdokumentovaný vzor pro
+   spodní lišty v appkách na ploše iOS. */
 @media (max-width:860px){
   html.standalone-app .head-secondary-row{
-    position:absolute; left:0; right:0; bottom:0; z-index:460;
+    position:fixed; left:0; right:0; bottom:0; z-index:460;
     margin-top:0; gap:0;
     background:var(--water-deep);
-    height:calc(var(--bottom-nav-h) + var(--safe-bottom, env(safe-area-inset-bottom)));
-    padding-bottom:var(--safe-bottom, env(safe-area-inset-bottom));
-    box-sizing:border-box;
+    padding-bottom:env(safe-area-inset-bottom);
     box-shadow:0 -2px 10px rgba(0,0,0,.15);
   }
   html.standalone-app .head-actions-primary{ width:100%; height:var(--bottom-nav-h); gap:0; border-radius:0; overflow:visible; }
@@ -253,13 +252,21 @@ header h1 .accent{ color:var(--amber); }
 /* Spodní navigační lišta existuje jen v appce nainstalované na plochu
    (viz .head-secondary-row výše) -- appka proto jen tam appka zkrátí
    .layout přesně o její výšku (+ safe-area rezerva), ať appka mapa,
-   vysouvací sheet i seznamy uvnitř .layout nikdy nezajedou pod lištu.
-   V běžné záložce prohlížeče appka nechává .layout na celou zbývající
-   výšku appky, protože appka tam žádnou spodní lištu nemá. */
+   vysouvací sheet i seznamy uvnitř .layout nikdy nezajedou pod lištu. */
 @media (max-width:860px){
   html.standalone-app .layout{
     margin-bottom:calc(var(--bottom-nav-h) + var(--safe-bottom, env(safe-area-inset-bottom)));
   }
+}
+/* V běžné záložce prohlížeče appka žádnou spodní lištu nemá, ale appka
+   živým testem zjistila, že appka naměřená výška appky (--app-vh) v
+   iPhone Chromu pořád spolehlivě nevyloučí jeho vlastní spodní lištu
+   (mapa/seznamy appce zůstávaly zčásti schované pod ní). Appka proto v
+   běžné záložce prohlížeče navíc nechá pevnou bezpečnostní rezervu --
+   stejný princip, jaký appka používala před touhle úpravou (viz historie
+   verzí 142-144 v souhrnu appky). */
+@media (max-width:860px){
+  html:not(.standalone-app) .layout{ margin-bottom:90px; }
 }
 
 /* ---------- mobile bottom sheet (map stays dominant underneath) ---------- */
@@ -565,11 +572,14 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
 }
 /* Odspoda appka nechává místo pro spodní navigační lištu jen v appce
    nainstalované na plochu -- v běžné záložce prohlížeče appka žádnou
-   spodní lištu nemá, takže tam appka lístek necháva sahat až úplně dolů. */
+   spodní lištu nemá, ale appka tam přesto nechá pevnou bezpečnostní
+   rezervu (stejný důvod jako u .layout výše -- appka appce naměřená
+   výška appky spolehlivě nevyloučí lištu Chromu). */
 @media (max-width:860px){
   html.standalone-app .catch-ticket-modal{
     bottom:calc(var(--bottom-nav-h) + var(--safe-bottom, env(safe-area-inset-bottom)));
   }
+  html:not(.standalone-app) .catch-ticket-modal{ bottom:90px; }
 }
 .ticket-illustration{ display:flex; justify-content:center; margin:6px 0 14px; }
 .ticket-stats{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
@@ -598,13 +608,15 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
     position:absolute; top:auto; bottom:0; left:0; right:0; max-height:70%;
   }
 }
-/* Panel appka appce zastaví nad spodní navigační lištou jen v appce
+/* Panel appka zastaví nad spodní navigační lištou jen v appce
    nainstalované na plochu -- v běžné záložce prohlížeče appka žádnou
-   spodní lištu nemá, takže tam appka panel necháva sahat až úplně dolů. */
+   spodní lištu nemá, ale appka tam přesto nechá pevnou bezpečnostní
+   rezervu (stejný důvod jako u .layout výše). */
 @media (max-width:860px){
   html.standalone-app .side-panel{
     bottom:calc(var(--bottom-nav-h) + var(--safe-bottom, env(safe-area-inset-bottom)));
   }
+  html:not(.standalone-app) .side-panel{ bottom:90px; }
 }
 
 /* ---------- type picker / placement hints (floating over map) ---------- */
