@@ -166,11 +166,23 @@ header h1 .accent{ color:var(--amber); }
      čtvercové ikony vyjde nápadně nižší/menší. Podle výšky appka dá všem
      ikonám stejnou vizuální váhu v řádku, šířka se u appky dopočítá sama
      podle vlastního poměru stran každé ikony. */
-  .head-actions-primary .new-btn svg{ width:auto; height:22px; }
+  .head-actions-primary .new-btn svg{ width:auto; height:25px; }
   /* appka rybí ikonu (Úlovky, poslední tab) drží o něco nižší -- při stejné
      výšce jako appčiny čtvercové ikony vyjde appce nápadně širší kvůli
      plochému poměru stran a opticky appce dominuje. */
-  .head-actions-primary .new-btn:last-child svg{ height:18px; }
+  .head-actions-primary .new-btn:last-child svg{ height:20px; }
+}
+/* Appka na ploše (display-mode: standalone) nemá kolem sebe žádnou lištu
+   prohlížeče, co by měnila viditelnou výšku -- position:fixed je tu proto
+   spolehlivý, dobře zdokumentovaný způsob, jak sáhnout přesně k fyzické
+   hraně displeje (spolu s "viewport-fit=cover" v index.html). Appka appce
+   naměřená výška (--app-vh / 100dvh) totiž nemusí přesně sahat až do
+   bezpečné zóny dole (appka appce si tím vysvětlila drobnou mezeru pod
+   lištou, co se objevila při testu appky na ploše) -- position:fixed
+   tenhle rozdíl appce obejde, protože appce sahá k reálné hraně obrazovky
+   bez ohledu na to, jak appka appce spočítala výšku ".app". */
+@media (max-width:860px) and (display-mode: standalone){
+  .head-secondary-row{ position:fixed; }
 }
 .invite-banner{
   margin-top:10px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.25);
@@ -211,15 +223,19 @@ header h1 .accent{ color:var(--amber); }
 }
 /* Appka na mobilu appce dřív držela výšku přes "position:fixed; inset:0"
    a k tomu ručně dohádané pixelové odsazení dole (různé pro Safari/Chrome/
-   appku na ploše) -- to appce fungovalo nespolehlivě, protože "100vh"/fixed
-   pozicování se v mobilních prohlížečích počítá jinak podle toho, jestli je
-   zrovna vidět lišta prohlížeče (schovává se/objevuje při scrollu). "100dvh"
-   ("dynamic viewport height") je jednotka appce udělaná přesně na tohle --
-   appka se automaticky přizpůsobí SKUTEČNĚ viditelné ploše, appka tak už
-   nemusí hádat pixely zvlášť pro každý prohlížeč/appku na ploše. */
+   appku na ploše) -- to appce fungovalo nespolehlivě. Appka to nejdřív
+   zkusila přes jednotku "100dvh" ("dynamic viewport height", má appce dát
+   SKUTEČNĚ viditelnou plochu automaticky), ale appka appce živým testem
+   zjistila, že aspoň v jednom prohlížeči appce dvh počítá špatně (vyjde
+   vyšší, než co appka appce fakticky vidí). Appka appce proto místo dvh
+   používá výšku naměřenou přímo appkou přes "window.visualViewport" (viz
+   Dashboard.jsx), uloženou do CSS proměnné --app-vh -- appka appce má tak
+   jistotu, co je opravdu vidět, ne co appce SPOČÍTÁ prohlížeč z jednotky,
+   která se appce mezi prohlížeči různě chová. "100dvh" appka appce nechá
+   jako záložní hodnotu jen pro okamžik před prvním proběhnutím JS appky. */
 @media (max-width:860px){
   html, body, #root{ height:100%; overflow:hidden; }
-  .app{ height:100dvh; position:relative; overflow:hidden; }
+  .app{ height:var(--app-vh, 100dvh); position:relative; overflow:hidden; }
   .layout{
     grid-template-columns:1fr; position:relative; overflow:hidden;
     /* appka appce zkrátí .layout přesně o výšku nové spodní navigační

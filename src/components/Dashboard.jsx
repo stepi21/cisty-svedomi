@@ -272,6 +272,35 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return () => { window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline) }
   }, [])
 
+  // Appka nevěří jednotce "100dvh" naslepo -- na iPhonu v Chromu appka
+  // zjistila, že appka jednotku dvh počítá špatně (vyjde vyšší, než co je
+  // fakticky vidět), takže appce zůstala spodní lišta schovaná pod vlastní
+  // lištou prohlížeče. Appka proto místo toho čte "window.visualViewport",
+  // což je spolehlivější zdroj skutečně viditelné výšky, a uloží ji do CSS
+  // proměnné --app-vh, kterou appka dál používá pro výšku ".app".
+  useEffect(() => {
+    function measure() {
+      const vv = window.visualViewport
+      const h = vv ? vv.height : window.innerHeight
+      document.documentElement.style.setProperty('--app-vh', `${Math.round(h)}px`)
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    window.addEventListener('orientationchange', measure)
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', measure)
+      window.visualViewport.addEventListener('scroll', measure)
+    }
+    return () => {
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('orientationchange', measure)
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', measure)
+        window.visualViewport.removeEventListener('scroll', measure)
+      }
+    }
+  }, [])
+
   function showToast(message) {
     setToast(message)
     setTimeout(() => setToast(null), 2200)
