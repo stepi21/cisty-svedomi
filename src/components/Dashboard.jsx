@@ -274,7 +274,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   // Appka nevěří jednotce "100dvh" naslepo -- na iPhonu v Chromu appka
   // zjistila, že appka jednotku dvh počítá špatně (vyjde vyšší, než co je
-  // fakticky vidět), takže appce zůstala spodní lišta schovaná pod vlastní
+  // fakticky vidět), takže appce zůstal obsah dole schovaný pod vlastní
   // lištou prohlížeče. Appka proto místo toho čte "window.visualViewport",
   // což je spolehlivější zdroj skutečně viditelné výšky, a uloží ji do CSS
   // proměnné --app-vh, kterou appka dál používá pro výšku ".app".
@@ -300,6 +300,39 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       }
     }
   }, [])
+
+  // Spodní navigační lištu appka ukazuje jen appce nainstalované na plochu
+  // (žádná lišta prohlížeče kolem) -- appka živým testem zjistila, že v
+  // běžné záložce prohlížeče ta lišta funguje nespolehlivě (zůstávala
+  // schovaná pod lištou Chromu), appka proto v prohlížeči navigaci nechá
+  // nahoře v hlavičce (tak, jak appka fungovala předtím). Appku appka
+  // pozná přes "window.navigator.standalone" (specifický iOS příznak,
+  // spolehlivější než jen CSS "display-mode: standalone") a uloží to jako
+  // třídu na <html>, ať appka může v CSS rozlišit obě situace jednoduchým
+  // selektorem, ne jen media-query.
+  useEffect(() => {
+    const isStandalone = window.navigator.standalone === true
+      || window.matchMedia('(display-mode: standalone)').matches
+    document.documentElement.classList.toggle('standalone-app', isStandalone)
+  }, [])
+
+  // "env(safe-area-inset-bottom)" appka appce nekombinuje spolehlivě uvnitř
+  // "calc()" appky nainstalované na plochu -- appka to živým testem
+  // zjistila (navy plocha nesahala až úplně dolů). Appka proto tuhle
+  // hodnotu naměří sama přes "sondu" (prázdný prvek s paddingem podle
+  // env()), přečte ji přes getComputedStyle a uloží jako pixelovou
+  // hodnotu do CSS proměnné --safe-bottom -- appka ji dál používá místo
+  // env() přímo.
+  useEffect(() => {
+    const probe = document.createElement('div')
+    probe.style.cssText = 'position:fixed;bottom:0;left:0;width:0;height:0;padding-bottom:env(safe-area-inset-bottom);pointer-events:none;visibility:hidden;'
+    document.body.appendChild(probe)
+    const px = parseFloat(getComputedStyle(probe).paddingBottom) || 0
+    document.body.removeChild(probe)
+    document.documentElement.style.setProperty('--safe-bottom', `${px}px`)
+  }, [])
+
+
 
   function showToast(message) {
     setToast(message)

@@ -102,16 +102,19 @@ header h1 .accent{ color:var(--amber); }
 @media (max-width:860px){
   header{ padding:14px 16px; padding-top:calc(14px + env(safe-area-inset-top)); }
   .head-row{ gap:6px; }
-  /* appka appce dřív musela mít tuhle mezeru stlačenou na 9px, protože se
-     na stejný řádek musely vejít i 4 taby pod tím (druhá řada hlavičky).
-     Ty teď appka přesunula do samostatné spodní lišty (viz níže), appka
-     tak má víc jistoty a mezeru mezi názvem appky a tlačítkem Chytat
-     appka mohla trochu uvolnit. */
-  .head-logo-group{ gap:13px; }
+  .head-logo-group{ gap:9px; }
   .head-icons-group{ gap:5px; }
   header h1{ font-size:20px; }
   .new-btn.live-toggle{ padding:4px 10px; }
   .new-btn.hamburger-btn{ padding:7px 10px; }
+}
+/* Appka v appce nainstalované na plochu appce má v hlavičce jen jeden
+   řádek (taby jsou dole, viz .head-secondary-row) -- appka tam proto má
+   víc jistoty a mezeru mezi názvem appky a tlačítkem Chytat mohla trochu
+   uvolnit. V běžné záložce prohlížeče appka nechává mezeru užší, protože
+   tam appka pod ní pořád potřebuje i druhý řádek s taby. */
+@media (max-width:860px){
+  html.standalone-app .head-logo-group{ gap:13px; }
 }
 .notif-bell-btn{ position:relative; }
 .notif-badge{
@@ -136,53 +139,55 @@ header h1 .accent{ color:var(--amber); }
 .whoami{ font-family:'IBM Plex Mono', monospace; font-size:var(--fs-sm); color:#B9CFCB; align-self:center; }
 .head-actions .new-btn, .head-actions-primary .new-btn, .head-actions-secondary .new-btn{ color:#E7EFEC; border-color:rgba(255,255,255,.3); }
 .head-actions-primary .new-btn{ display:inline-flex; align-items:center; gap:6px; }
-/* appka na mobilu udělá ze 4 tabů samostatnou spodní navigační lištu
-   (jako běžné mobilní appky), ne druhou řadu v hlavičce nahoře -- appka
-   toho dosáhne čistě přes CSS, beze změny JSX/pořadí prvků: <header>
-   nemá appce nastavené "position", takže position:absolute appce
-   "uteče" mimo hlavičku rovnou k .app (appka appce dala position:relative
-   výše) -- takhle appka appce zajistí, že se lišta dostane přesně ke
-   spodku SKUTEČNĚ viditelné plochy (.app{height:100dvh}), ne k okraji
-   "layout viewportu", který appku v mobilních prohlížečích historicky
-   zrazoval (viz komentáře u .app a .mobile-sheet výše). */
+/* appka na mobilu udělá ze 4 tabů plnošířkový segmentovaný přepínač (stejný
+   díl = 25 % šířky) místo pilulek s proměnlivou šířkou -- appka tím zaručí,
+   že se to vejde na jakoukoli šířku displeje, ne jen "obvykle to sedí".
+   Appka tu navíc schová popisky (jen 4 ikony appka pozná rychle i bez textu)
+   a ikony zvětší, protože appce zbylo místo. Tohle appka nechává jako
+   výchozí chování v běžné záložce prohlížeče (Chrome/Safari) -- appka
+   živým testem zjistila, že samostatná spodní lišta appce tam funguje
+   nespolehlivě (schovávala se appce pod vlastní lištou prohlížeče), appka
+   proto v prohlížeči nechává taby nahoře, jako appka fungovala předtím. */
 @media (max-width:860px){
-  .head-secondary-row{
+  .head-secondary-row{ gap:0; margin-top:10px; }
+  .head-actions-primary{ width:100%; gap:0; border-radius:20px; overflow:hidden; }
+  .head-actions-primary .new-btn{
+    flex:1; justify-content:center; border-radius:0; border:none;
+    padding:11px 4px;
+  }
+  .head-actions-primary .nav-label{ display:none; }
+  .head-actions-primary .new-btn svg{ width:auto; height:22px; }
+  .head-actions-primary .new-btn:last-child svg{ height:18px; }
+}
+/* Appka nainstalovaná na plochu (appka to pozná v JS přes
+   "window.navigator.standalone" a uloží jako třídu "standalone-app" na
+   <html>) nemá kolem sebe žádnou lištu prohlížeče -- appka tam proto ze
+   4 tabů udělá samostatnou spodní navigační lištu (jako běžné mobilní
+   appky), místo aby appka nechala tab-row jako druhý řádek v hlavičce.
+   position:absolute vůči .app (appka appce dala position:relative výše,
+   výšku appka měří přes JS -- viz --app-vh v Dashboard.jsx). Appka to
+   zkusila i jako position:fixed, živý test ale ukázal, že to bylo míň
+   spolehlivé (lišta vyšla výš a mezera dole zůstala). Safe-area appka
+   nepočítá přímo z "env()" uvnitř "calc()" -- appka místo toho použije
+   hodnotu naměřenou v JS a uloženou do proměnné "--safe-bottom" (viz
+   Dashboard.jsx), "env()" appka nechá jen jako záložní hodnotu. */
+@media (max-width:860px){
+  html.standalone-app .head-secondary-row{
     position:absolute; left:0; right:0; bottom:0; z-index:460;
     margin-top:0; gap:0;
     background:var(--water-deep);
-    height:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
-    padding-bottom:env(safe-area-inset-bottom);
+    height:calc(var(--bottom-nav-h) + var(--safe-bottom, env(safe-area-inset-bottom)));
+    padding-bottom:var(--safe-bottom, env(safe-area-inset-bottom));
     box-sizing:border-box;
     box-shadow:0 -2px 10px rgba(0,0,0,.15);
   }
-  .head-actions-primary{ width:100%; height:var(--bottom-nav-h); gap:0; }
-  .head-actions-primary .new-btn{
+  html.standalone-app .head-actions-primary{ width:100%; height:var(--bottom-nav-h); gap:0; border-radius:0; overflow:visible; }
+  html.standalone-app .head-actions-primary .new-btn{
     flex:1; justify-content:center; border-radius:0; border:none;
     padding:0;
   }
-  .head-actions-primary .nav-label{ display:none; }
-  /* appka sjednocuje ikony podle VÝŠKY, ne podle šířky -- rybí ikona (úlovky)
-     má plochý poměr stran (64:34), takže při zarovnání na stejnou šířku jako
-     čtvercové ikony vyjde nápadně nižší/menší. Podle výšky appka dá všem
-     ikonám stejnou vizuální váhu v řádku, šířka se u appky dopočítá sama
-     podle vlastního poměru stran každé ikony. */
-  .head-actions-primary .new-btn svg{ width:auto; height:25px; }
-  /* appka rybí ikonu (Úlovky, poslední tab) drží o něco nižší -- při stejné
-     výšce jako appčiny čtvercové ikony vyjde appce nápadně širší kvůli
-     plochému poměru stran a opticky appce dominuje. */
-  .head-actions-primary .new-btn:last-child svg{ height:20px; }
-}
-/* Appka na ploše (display-mode: standalone) nemá kolem sebe žádnou lištu
-   prohlížeče, co by měnila viditelnou výšku -- position:fixed je tu proto
-   spolehlivý, dobře zdokumentovaný způsob, jak sáhnout přesně k fyzické
-   hraně displeje (spolu s "viewport-fit=cover" v index.html). Appka appce
-   naměřená výška (--app-vh / 100dvh) totiž nemusí přesně sahat až do
-   bezpečné zóny dole (appka appce si tím vysvětlila drobnou mezeru pod
-   lištou, co se objevila při testu appky na ploše) -- position:fixed
-   tenhle rozdíl appce obejde, protože appce sahá k reálné hraně obrazovky
-   bez ohledu na to, jak appka appce spočítala výšku ".app". */
-@media (max-width:860px) and (display-mode: standalone){
-  .head-secondary-row{ position:fixed; }
+  html.standalone-app .head-actions-primary .new-btn svg{ width:auto; height:25px; }
+  html.standalone-app .head-actions-primary .new-btn:last-child svg{ height:20px; }
 }
 .invite-banner{
   margin-top:10px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.25);
@@ -202,11 +207,10 @@ header h1 .accent{ color:var(--amber); }
 }
 @keyframes toast-in{ from{ opacity:0; transform:translate(-50%,10px); } to{ opacity:1; transform:translate(-50%,0); } }
 @media (max-width:860px){
-  /* Appka appce nechá toast vyskočit nad novou spodní navigační lištu,
-     ne pod/do ní -- bez týhle úpravy by appce zůstal jen 24px od
-     skutečného spodku obrazovky, což by appku appce zavedlo přímo do
-     zóny lišty. */
-  .save-toast{ bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 16px); }
+  /* Appka nechá toast vyskočit nad spodní navigační lištu, ne pod/do ní
+     -- ta ale existuje jen v appce nainstalované na plochu (viz výše),
+     appka proto tohle odsazení navíc dává jen tam. */
+  html.standalone-app .save-toast{ bottom:calc(var(--bottom-nav-h) + var(--safe-bottom, env(safe-area-inset-bottom)) + 16px); }
 }
 
 .layout{ display:grid; grid-template-columns:300px 1fr; flex:1; min-height:0; }
@@ -236,28 +240,25 @@ header h1 .accent{ color:var(--amber); }
 @media (max-width:860px){
   html, body, #root{ height:100%; overflow:hidden; }
   .app{ height:var(--app-vh, 100dvh); position:relative; overflow:hidden; }
-  .layout{
-    grid-template-columns:1fr; position:relative; overflow:hidden;
-    /* appka appce zkrátí .layout přesně o výšku nové spodní navigační
-       lišty (+ její vlastní safe-area rezerva) -- mapa, vysouvací sheet
-       i seznamy uvnitř .layout appce tak nikdy nezajedou pod lištu, appka
-       to nemusí řešit zvlášť u každého z nich. */
-    margin-bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
-  }
+  .layout{ grid-template-columns:1fr; position:relative; overflow:hidden; }
   .sidebar{ display:none; }
   .desktop-detail-wrap{ display:none; }
   main{ position:absolute; inset:0; }
-  /* "Domů" (bez mapy): appka na mobilu obvykle sidebar schovává a obsah
-     ukazuje přes vysouvací mobile-sheet nad mapou -- tady žádná mapa
-     není, takže sidebar appka rovnou ukáže na celou obrazovku místo
-     schovávání a čekání na sheet, co by neměl co překrývat. Skutečný
-     výřez/home indikátor appka řeší už spodní navigační lišta (viz
-     .head-secondary-row výše), appka tu proto appce stačí jen malý
-     pevný odstup pro pohodlí při scrollování, ne další env() navíc. */
   .layout.no-map .sidebar{
     display:block; position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
     max-height:none; z-index:5; background:var(--paper);
     padding-bottom:16px;
+  }
+}
+/* Spodní navigační lišta existuje jen v appce nainstalované na plochu
+   (viz .head-secondary-row výše) -- appka proto jen tam appka zkrátí
+   .layout přesně o její výšku (+ safe-area rezerva), ať appka mapa,
+   vysouvací sheet i seznamy uvnitř .layout nikdy nezajedou pod lištu.
+   V běžné záložce prohlížeče appka nechává .layout na celou zbývající
+   výšku appky, protože appka tam žádnou spodní lištu nemá. */
+@media (max-width:860px){
+  html.standalone-app .layout{
+    margin-bottom:calc(var(--bottom-nav-h) + var(--safe-bottom, env(safe-area-inset-bottom)));
   }
 }
 
@@ -542,7 +543,7 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
    změny (tam vystředěný "tiket" s ✕ v rohu funguje dobře). */
 @media (max-width:860px){
   .catch-ticket-modal{
-    position:absolute; inset:0; bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
+    position:absolute; inset:0;
     background:var(--paper); padding:0; align-items:stretch; justify-content:stretch;
     z-index:900;
   }
@@ -561,6 +562,14 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
   }
   .catch-ticket-modal .ticket-close{ display:none; }
   .catch-ticket-modal .ticket-body{ flex:1; overflow-y:auto; }
+}
+/* Odspoda appka nechává místo pro spodní navigační lištu jen v appce
+   nainstalované na plochu -- v běžné záložce prohlížeče appka žádnou
+   spodní lištu nemá, takže tam appka lístek necháva sahat až úplně dolů. */
+@media (max-width:860px){
+  html.standalone-app .catch-ticket-modal{
+    bottom:calc(var(--bottom-nav-h) + var(--safe-bottom, env(safe-area-inset-bottom)));
+  }
 }
 .ticket-illustration{ display:flex; justify-content:center; margin:6px 0 14px; }
 .ticket-stats{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
@@ -584,15 +593,17 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
 @media (max-width:860px){
   /* Stejný princip jako u .mobile-sheet výše: position:absolute vůči
      .app (appka appce dala position:relative v mobilní části výše),
-     ne position:fixed vůči oknu prohlížeče -- appka se tak spolehlivě
-     zastaví přesně u spodku SKUTEČNĚ viditelné plochy (.app má
-     height:100dvh). Odsazení zdola appka počítá tak, aby panel skončil
-     přesně nad novou spodní navigační lištou (.head-secondary-row) --
-     ta uz appka sama nese svou vlastní safe-area rezervu, appka ji tu
-     proto nepočítá podruhé. */
+     ne position:fixed vůči oknu prohlížeče. */
   .side-panel{
-    position:absolute; top:auto; bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
-    left:0; right:0; max-height:70%;
+    position:absolute; top:auto; bottom:0; left:0; right:0; max-height:70%;
+  }
+}
+/* Panel appka appce zastaví nad spodní navigační lištou jen v appce
+   nainstalované na plochu -- v běžné záložce prohlížeče appka žádnou
+   spodní lištu nemá, takže tam appka panel necháva sahat až úplně dolů. */
+@media (max-width:860px){
+  html.standalone-app .side-panel{
+    bottom:calc(var(--bottom-nav-h) + var(--safe-bottom, env(safe-area-inset-bottom)));
   }
 }
 
