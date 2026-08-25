@@ -224,20 +224,35 @@ header h1 .accent{ color:var(--amber); }
 @media (min-width:861px){
   .layout.no-map-keep-detail .desktop-detail-wrap{ display:block; flex:1; overflow-y:auto; }
 }
-/* Appka na mobilu už appku nezamyká na přesnou výšku obrazovky -- appka
-   se chová jako normální stránka (žádné "overflow:hidden", žádné
-   "position:fixed/absolute" pro celý layout). Na mobilu appka jen schová
-   sloupcový sidebar a nechá jeden sloupec, zbytek appce řeší běžný tok
-   dokumentu. */
+/* Appka na mobilu appku nezamyká na přesnou výšku obrazovky -- chová se
+   jako normální stránka. Na mobilu appka jen schová sloupcový sidebar a
+   přepne .layout z grid na flex-column, ať appka umí snadno říct, KTERÝ
+   konkrétní blok (mapa, lišta, sidebar) má zabrat pevnou/volnou výšku. */
 @media (max-width:860px){
-  .layout{ grid-template-columns:1fr; }
+  .layout{
+    display:flex; flex-direction:column;
+    grid-template-columns:1fr;
+    /* Ve výchozím stavu se .layout NEROZTAHUJE na celou výšku obrazovky
+       -- to appka dělala dřív a vznikala tak prázdná plocha, po které
+       šlo scrollovat do prázdna. */
+    flex:0 1 auto;
+  }
   .sidebar{ display:none; }
   .desktop-detail-wrap{ display:none; }
+  main{ flex:none; }
+  .mobile-sheet{ flex:none; }
   /* Výprava v klidu: na desktopu appka mapu nahradí detailem uvnitř
      "main" (.desktop-detail-wrap), na mobilu ale detail appka zobrazuje
      jinde (v mobile-sheet pod tím) -- appka tu proto celé "main" schová,
      ať nezůstane nad tím prázdná plocha navíc. */
   .layout.no-map-keep-detail main{ display:none; }
+  /* U Domů/Úlovků/Nástrah není žádná mapa ani mobile-sheet (appka ho v
+     těchto panelech vůbec nevykresluje) -- jediný viditelný obsah je
+     ".sidebar", appka ho proto musí zase zviditelnit. Appka mu zároveň
+     zruší desktopový strop výšky s vlastním scrollem (ten patří jen
+     sloupci vedle mapy) -- na mobilu appka chce, ať dlouhý seznam
+     scrolluje celá stránka, ne vnořený box. */
+  .layout.no-map .sidebar{ display:block; max-height:none; overflow-y:visible; }
 }
 
 /* Hlavička zůstává vidět i po odscrollování -- appka jí dá
@@ -245,6 +260,20 @@ header h1 .accent{ color:var(--amber); }
    nemusí nic ručně počítat. */
 @media (max-width:860px){
   header{ position:sticky; top:0; z-index:100; }
+}
+
+/* Appka na ploše potřebuje ".layout" roztáhnout na celou zbývající výšku
+   -- jinak by spodní navigační lišta (position:sticky) nedosáhla úplně
+   dolů (sticky se jen "přilepí" ke dnu, nepřitáhne si k sobě prázdný
+   prostor navíc). Appka ale zároveň nechá poslední viditelný blok
+   (mobile-sheet nebo sidebar) roztáhnout se spolu s ním -- jeho vlastní
+   bílé pozadí tak vyplní ten prostor, místo aby zůstal viditelný jako
+   béžová mezera appky pod ním. */
+@media (max-width:860px){
+  html.standalone-app .layout{ flex:1; }
+  html.standalone-app .mobile-sheet{ flex:1; display:flex; flex-direction:column; }
+  html.standalone-app .mobile-sheet-body{ flex:1; }
+  html.standalone-app .layout.no-map .sidebar{ flex:1; }
 }
 
 /* ---------- mobile bottom sheet (obsah appky pod mapou, součást
@@ -258,7 +287,7 @@ header h1 .accent{ color:var(--amber); }
   }
   .mobile-peek-bar{
     display:flex; align-items:center; justify-content:space-between;
-    padding:16px 18px; cursor:pointer;
+    padding:16px 18px; cursor:pointer; flex:none;
     font-family:'Fraunces', serif; font-weight:600; font-size:var(--fs-md);
   }
   .peek-chevron{ color:var(--ink-soft); font-size:var(--fs-sm); }
