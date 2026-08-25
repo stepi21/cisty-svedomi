@@ -235,64 +235,83 @@ header h1 .accent{ color:var(--amber); }
 }
 /* Appka na mobilu appku nezamyká na přesnou výšku obrazovky -- chová se
    jako normální stránka. Na mobilu appka jen schová sloupcový sidebar a
-   přepne .layout z grid na flex-column, ať appka umí snadno říct, KTERÝ
-   konkrétní blok (mapa, lišta, sidebar) má zabrat pevnou/volnou výšku. */
+   přepne .layout z grid na flex-column. */
 @media (max-width:860px){
   .layout{
     display:flex; flex-direction:column;
     grid-template-columns:1fr;
-    /* Ve výchozím stavu se .layout NEROZTAHUJE na celou výšku obrazovky
-       -- to appka dělala dřív a vznikala tak prázdná plocha, po které
-       šlo scrollovat do prázdna. */
     flex:0 1 auto;
   }
   .sidebar{ display:none; }
   .desktop-detail-wrap{ display:none; }
-  main{ flex:none; }
-  .mobile-sheet{ flex:none; }
   /* Výprava v klidu: na desktopu appka mapu nahradí detailem uvnitř
      "main" (.desktop-detail-wrap), na mobilu ale detail appka zobrazuje
      jinde (v mobile-sheet pod tím) -- appka tu proto celé "main" schová,
      ať nezůstane nad tím prázdná plocha navíc. */
   .layout.no-map-keep-detail main{ display:none; }
-  /* U Domů/Úlovků/Nástrah není žádná mapa ani mobile-sheet (appka ho v
-     těchto panelech vůbec nevykresluje) -- jediný viditelný obsah je
-     ".sidebar", appka ho proto musí zase zviditelnit. Appka mu zároveň
-     zruší desktopový strop výšky s vlastním scrollem (ten patří jen
-     sloupci vedle mapy) -- na mobilu appka chce, ať dlouhý seznam
-     scrolluje celá stránka, ne vnořený box. */
+  /* U Domů/Úlovků/Nástrah není žádná mapa ani mobile-sheet -- jediný
+     viditelný obsah je ".sidebar", appka ho proto musí zase
+     zviditelnit a zrušit mu desktopový strop výšky s vlastním scrollem. */
   .layout.no-map .sidebar{ display:block; max-height:none; overflow-y:visible; }
 }
 
 /* Hlavička zůstává vidět i po odscrollování -- appka jí dá
-   "position:sticky", což je nativní mechanismus prohlížeče, appka tak
-   nemusí nic ručně počítat. */
+   "position:sticky", což je nativní mechanismus prohlížeče. */
 @media (max-width:860px){
   header{ position:sticky; top:0; z-index:100; }
 }
 
-/* Appka na ploše potřebuje ".layout" roztáhnout na celou zbývající výšku
-   -- jinak by spodní navigační lišta (position:sticky) nedosáhla úplně
-   dolů (sticky se jen "přilepí" ke dnu, nepřitáhne si k sobě prázdný
-   prostor navíc). Appka ale zároveň nechá poslední viditelný blok
-   (mobile-sheet nebo sidebar) roztáhnout se spolu s ním -- jeho vlastní
-   bílé pozadí tak vyplní ten prostor, místo aby zůstal viditelný jako
-   béžová mezera appky pod ním. */
+/* Normální tok stránky sedí jen pro dlouhé seznamy (Domů, Výpravy,
+   Úlovky) -- appka to živým testem ověřila, tam funguje dobře. Pro
+   Mapu (a jakýkoli jiný panel, co ukazuje mapu spolu s lištou) to ale
+   nesedí -- appka lištu vrací zpátky k plovoucímu chování: mapa
+   vyplní celou dostupnou plochu vespod, lišta se přes ni jen zespoda
+   vysune NAHOŘ (roste směrem do mapy, ne dolů po stránce). Appka to
+   pozná podle toho, že .mobile-sheet nemá třídu ".full-panel" (tu
+   appka dává jen tam, kde mapa vůbec není). */
 @media (max-width:860px){
-  html.standalone-app .layout{ flex:1; }
-  html.standalone-app .mobile-sheet{ flex:1; display:flex; flex-direction:column; }
-  html.standalone-app .mobile-sheet-body{ flex:1; }
+  .layout:not(.no-map):not(.no-map-keep-detail){
+    position:relative; min-height:100vh;
+  }
+  .layout:not(.no-map):not(.no-map-keep-detail) main{
+    position:absolute; inset:0; display:block; z-index:1;
+  }
+  .mobile-sheet:not(.full-panel){
+    position:absolute; left:0; right:0; bottom:0; z-index:60;
+    height:56px; max-height:75%;
+    transition:height .25s ease;
+    flex:none;
+  }
+  .mobile-sheet:not(.full-panel).expanded{ height:75%; }
+  /* Mapa má ve vysunutém stavu jen pár řádků filtrů (Kdo/Co), ne dlouhý
+     seznam -- appka proto nechá výšku "auto" s max. stropem, ať appka
+     nedrží zbytečně prázdnou plochu jen proto, že jinde appka počítala
+     s dlouhým seznamem. */
+  .mobile-sheet:not(.full-panel).map-panel.expanded{ height:auto; max-height:min(45%, 320px); }
+}
+
+/* Appka na ploše potřebuje "výpravu v klidu" (mobile-sheet.full-panel,
+   bez mapy) roztáhnout na celou zbývající výšku -- jinak by spodní
+   navigační lišta (position:sticky) nedosáhla úplně dolů. Appka ale
+   zároveň nechá poslední viditelný blok roztáhnout se spolu s ní --
+   jeho vlastní bílé pozadí tak vyplní ten prostor. Mapu appka řeší
+   samostatně (viz blok výše) -- tam sheet plave nad mapou a žádné
+   další roztahování nepotřebuje. */
+@media (max-width:860px){
+  html.standalone-app .layout.no-map-keep-detail{ flex:1; }
+  html.standalone-app .mobile-sheet.full-panel{ flex:1; display:flex; flex-direction:column; }
+  html.standalone-app .mobile-sheet.full-panel .mobile-sheet-body{ flex:1; }
   html.standalone-app .layout.no-map .sidebar{ flex:1; }
 }
 
-/* ---------- mobile bottom sheet (obsah appky pod mapou, součást
-   běžného toku stránky -- ne plovoucí overlay) ---------- */
+/* ---------- mobile bottom sheet ---------- */
 .mobile-sheet{ display:none; }
 @media (max-width:860px){
   .mobile-sheet{
-    display:block;
+    display:flex; flex-direction:column;
     background:var(--white); border-radius:16px 16px 0 0;
-    box-shadow:0 -6px 24px rgba(0,0,0,.08);
+    box-shadow:0 -6px 24px rgba(0,0,0,.18);
+    overflow:hidden;
   }
   .mobile-peek-bar{
     display:flex; align-items:center; justify-content:space-between;
@@ -300,7 +319,7 @@ header h1 .accent{ color:var(--amber); }
     font-family:'Fraunces', serif; font-weight:600; font-size:var(--fs-md);
   }
   .peek-chevron{ color:var(--ink-soft); font-size:var(--fs-sm); }
-  .mobile-sheet-body{ display:none; padding:0 0 16px; }
+  .mobile-sheet-body{ display:none; padding:0 0 16px; overflow-y:auto; flex:1; }
   .mobile-sheet.expanded .mobile-sheet-body{ display:block; }
   /* "Plná" appce (bez mapy nad ní, výpravy v klidu apod.) ukáže obsah
      vždycky -- žádná peek-lišta se tam v JS vůbec nevykresluje. */
@@ -479,12 +498,10 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
 }
 #map{ flex:1; min-height:280px; }
 #map-tab-view{ flex:1; min-height:280px; }
-/* Leaflet potřebuje pevnou výšku kontejneru. Appka dá mapě na mobilu
-   jednoduchou "60vh" místo snahy přesně vyplnit zbylé místo -- zbytek
-   stránky (filtry, seznam výprav...) appka nechá pod mapou, jde
-   na něj popojet prstem stejně jako u běžné stránky. */
+/* Mapa na mobilu vyplní celou plochu "main" -- appka mu dala výše
+   position:absolute;inset:0 uvnitř vysokého .layout, appka jí proto
+   jen nechá 100 % výšky toho rodiče. */
 @media (max-width:860px){
-  main{ position:relative; display:block; height:60vh; }
   #map, #map-tab-view{ height:100%; }
 }
 
