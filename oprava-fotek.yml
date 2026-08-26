@@ -1,0 +1,30 @@
+name: Opravit rozbite odkazy na fotky
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Suchy beh - jen vypise, co by opravilo, nic nezmeni
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Nainstalovat zavislosti
+        run: npm install @supabase/supabase-js
+
+      - name: Opravit rozbite odkazy
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: node opravit-rozbite-odkazy.mjs
