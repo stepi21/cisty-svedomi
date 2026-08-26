@@ -60,11 +60,11 @@ body{
 
 .field-label{ display:block; font-family:'IBM Plex Mono', monospace; font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); margin:12px 0 4px; }
 .text-input{
-  width:100%; padding:9px 11px; border:1px solid var(--paper-line); border-radius:8px;
+  width:100%; min-width:0; padding:9px 11px; border:1px solid var(--paper-line); border-radius:8px;
   background:var(--paper); font-family:inherit; font-size:var(--fs-md); color:var(--ink);
 }
 .text-input:focus{ outline:none; border-color:var(--water-mid); }
-.input-row{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+.input-row{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr); gap:8px; }
 
 .btn-primary{
   margin-top:18px; width:100%; padding:11px; border:none; border-radius:8px;
