@@ -3470,7 +3470,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       const key = (c.species || 'Neuvedeno').trim()
       ;(bySpecies[key] = bySpecies[key] || []).push(c)
     })
-    const speciesNames = Object.keys(bySpecies).sort((a, b) => bySpecies[b].length - bySpecies[a].length)
+    const speciesNames = Object.keys(bySpecies).sort((a, b) => a.localeCompare(b, 'cs'))
 
     const openSpecies = speciesGalleryKey && bySpecies[speciesGalleryKey] ? speciesGalleryKey : null
 
