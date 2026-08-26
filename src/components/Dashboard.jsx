@@ -1083,6 +1083,19 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     // velký efekt jen vyčistil vrstvy výše a dál pro 'map' nic nedělá.
     if (activePanel === 'map') return
 
+    // Appka mapu appce úplně vynechá, pokud je zrovna schovaná přes CSS
+    // (Domů/Úlovky/Nástrahy/Měrné stanice, nebo Výpravy jen v klidu bez
+    // rozpracovaného umísťování/kreslení) -- stejná podmínka appka appce
+    // používá o kus níž u invalidateSize(). Bez tohoto appka appce
+    // zbytečně přepočítávala značku pro KAŽDÝ úlovek v CELÉ historii
+    // appky (souhrnný pohled níž) při každém přepnutí záložky, i když tu
+    // mapu appka appce vůbec nikdo neviděl -- hlavní příčina znatelného
+    // zpomalení při přechodu na Úlovky, appka appce s velikostí fotek
+    // nesouvisí.
+    const mapHiddenNow = activePanel === 'home' || activePanel === 'stations' ||
+      ((activePanel === 'catches' || activePanel === 'baits' || activePanel === null) && !mapNeededForInteraction)
+    if (mapHiddenNow) return
+
     if (activePanel === 'locations') {
       const bounds = []
       // Velké úseky (scope 'reach', chytání z lodi) appka na tuhle souhrnnou
