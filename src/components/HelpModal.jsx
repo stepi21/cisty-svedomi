@@ -1,15 +1,8 @@
-import { IconClose } from '../lib/icons.jsx'
-export default function HelpModal({ onClose }) {
+export default function HelpModal() {
   return (
-    <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="ticket help-ticket">
-        <div className="ticket-top">
-          <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
-          <div className="eyebrow">Návod</div>
-          <h2>Jak appka funguje</h2>
-        </div>
-        <div className="perforation"></div>
-        <div className="ticket-body help-body">
+    <>
+      <div className="sb-head"><span>Jak appka funguje</span></div>
+      <div className="help-body" style={{ padding: '0 18px 20px' }}>
 
           <h3>1. Přihlášení a skupina</h3>
           <p>Zadej e-mail → <strong>Poslat přihlašovací link</strong> → klikni na odkaz v e-mailu (v tom samém prohlížeči, kde jsi ho žádal). Bez hesla. Při prvním přihlášení buď <strong>založíš skupinu</strong>, nebo zadáš <strong>kód pozvánky</strong> od kamaráda (ten vygeneruješ přes „+ pozvat parťáka“ v menu ☰ vpravo nahoře).</p>
@@ -24,7 +17,7 @@ export default function HelpModal({ onClose }) {
           <div className="help-def"><strong>Katalogové místo (revír)</strong> — uložené jméno/revír, appka ho nabídne automaticky, když jsi poblíž místa, kde už jednou appka o tobě/partě ví</div>
 
           <h3>3. Panely v hlavičce</h3>
-          <p>Appka má čtyři hlavní záložky: <strong>Domů</strong> (feed posledních úlovků party), <strong>Mapa</strong> (přepínatelné vrstvy — moje/party výpravy, moje/party úlovky, revíry — s hledáním míst), <strong>Výpravy</strong> a <strong>Úlovky</strong> (plochý seznam s hledáním). Zbytek (Nástrahy, Měrné stanice, Galerie, Rekordy, Statistiky, Export, Návod, Nastavení) najdeš v menu <strong>☰</strong> vpravo nahoře — zavře se kliknutím mimo něj, ne jen opětovným kliknutím na ☰. Zvoneček 🔔 appka ukazuje jen pro věci vyžadující tvoje potvrzení (revír upravený kamarádem, co se týká tvých výprav) — obecné novinky appka nechává na Domů.</p>
+          <p>Appka má čtyři hlavní záložky nahoře: <strong>Domů</strong> (feed posledních úlovků party), <strong>Mapa</strong> (přepínatelné vrstvy — moje/party výpravy, moje/party úlovky — s hledáním míst), <strong>Výpravy</strong> a <strong>Úlovky</strong> (plochý seznam s hledáním). Zvoneček 🔔 appka ukazuje jen pro věci vyžadující tvoje potvrzení (revír upravený kamarádem, co se týká tvých výprav) — obecné novinky appka nechává na Domů. Zbytek appka schová do menu <strong>☰</strong> vpravo nahoře: <strong>Nástrahy</strong>, <strong>Měrné stanice</strong>, <strong>Rekordy</strong>, <strong>Statistiky</strong>, <strong>Export dat</strong>, <strong>Návod</strong> a <strong>Nastavení</strong> — všechny se otevřou jako plnohodnotná samostatná obrazovka (stejně jako Domů/Mapa/Výpravy/Úlovky), ne jako malé vyskakovací okno.</p>
 
           <h3>4. Výprava — bod (kapr, muška, plavaná, jiné)</h3>
           <ol>
@@ -95,8 +88,7 @@ export default function HelpModal({ onClose }) {
           <p className="help-note" style={{ marginTop: 16 }}>
             Klidně zapisuj i starší výpravy zpětně — appka dohledá historické počasí i vodní stav podle data, jen u starších/lokálních jevů jde spíš o odhad pro oblast/měsíc než přesné měření z místa a dne.
           </p>
-        </div>
       </div>
-    </div>
+    </>
   )
 }
