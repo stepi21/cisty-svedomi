@@ -64,7 +64,13 @@ body{
   background:var(--paper); font-family:inherit; font-size:var(--fs-md); color:var(--ink);
 }
 .text-input:focus{ outline:none; border-color:var(--water-mid); }
-.input-row{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr); gap:8px; }
+.input-row{ display:flex; gap:8px; align-items:flex-end; }
+.input-row > div{ flex:1; min-width:0; }
+/* Time a date pole appka nenutí do 100% šířky (appka appce to mobilní
+   Safari stejně nerespektuje) -- appka je nechá vykreslit v jejich
+   vlastní bezpečné velikosti, ať appka nemůže dojít k přetečení. */
+.input-row > div.input-row-auto{ flex:0 0 auto; }
+.text-input[type="time"]{ width:auto; min-width:118px; }
 
 .btn-primary{
   margin-top:18px; width:100%; padding:11px; border:none; border-radius:8px;
