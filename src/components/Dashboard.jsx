@@ -5066,12 +5066,12 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
             )}
             <label className="field-label">Datum</label>
             <input className="text-input" type="date" required value={draft.date} onChange={(e) => set('date', e.target.value)} />
-            <div className="input-row" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 10 }}>
-              <div>
+            <div className="input-row" style={{ marginTop: 10 }}>
+              <div className="input-row-auto">
                 <label className="field-label">Od</label>
                 <input className="text-input" type="time" value={draft.timeFrom} onChange={(e) => set('timeFrom', e.target.value)} />
               </div>
-              <div>
+              <div className="input-row-auto">
                 <label className="field-label">Do</label>
                 <input className="text-input" type="time" value={draft.timeTo} onChange={(e) => set('timeTo', e.target.value)} />
               </div>
@@ -5489,12 +5489,12 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
             )}
             <label className="field-label">Datum</label>
             <input className="text-input" type="date" required value={draft.date} onChange={(e) => set('date', e.target.value)} />
-            <div className="input-row" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 10 }}>
-              <div>
+            <div className="input-row" style={{ marginTop: 10 }}>
+              <div className="input-row-auto">
                 <label className="field-label">Od</label>
                 <input className="text-input" type="time" value={draft.timeFrom} onChange={(e) => set('timeFrom', e.target.value)} />
               </div>
-              <div>
+              <div className="input-row-auto">
                 <label className="field-label">Do</label>
                 <input className="text-input" type="time" value={draft.timeTo} onChange={(e) => set('timeTo', e.target.value)} />
               </div>
@@ -5695,7 +5695,7 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
               <option value="dravec">Dravec</option>
               <option value="bila">Bílá ryba</option>
             </select>
-            <div className="input-row" style={{ gridTemplateColumns: '1fr 1fr' }}>
+            <div className="input-row">
               <div>
                 <label className="field-label">Délka (cm)</label>
                 <input className="text-input" type="number" value={draft.length} onChange={(e) => set('length', e.target.value)} />
@@ -5704,9 +5704,11 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
                 <label className="field-label">Váha (kg)</label>
                 <input className="text-input" type="number" step="0.1" value={draft.weight} onChange={(e) => set('weight', e.target.value)} />
               </div>
+              <div className="input-row-auto">
+                <label className="field-label">Čas</label>
+                <input className="text-input" type="time" value={draft.time} onChange={(e) => set('time', e.target.value)} />
+              </div>
             </div>
-            <label className="field-label" style={{ marginTop: 10 }}>Čas</label>
-            <input className="text-input" type="time" value={draft.time} onChange={(e) => set('time', e.target.value)} />
             <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy} style={{ marginBottom: 8 }}>
               {weatherBusy ? 'Zjišťuji…' : <><IconRefresh size={13} /> Dopočítat podmínky pro tento čas</>}
             </button>
