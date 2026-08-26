@@ -12,6 +12,7 @@ import { fetchWeather, moonPhaseName } from '../lib/weather.js'
 import { fetchWaterConditions, fetchLiveConditions, findNearestStations, WATER_PRECISION_LABEL, SPA_LEVEL_INFO } from '../lib/hydrology.js'
 import { uploadPhoto } from '../lib/storage.js'
 import { buildRiverAreasFromLine } from '../lib/riverShape.js'
+import { useLockBodyScroll } from '../lib/useLockBodyScroll.js'
 
 const iconCarp = `<svg viewBox="0 0 24 24" fill="none"><path d="M3 12c0-4 5-7 10-7s8 3 8 7-3 7-8 7-10-3-10-7Z" stroke="#2C6E71" stroke-width="1.6"/><circle cx="16" cy="10.5" r="1" fill="#2C6E71"/></svg>`
 const iconSpin = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 20 L18 6" stroke="#6B7A4F" stroke-width="1.8"/><circle cx="4" cy="20" r="2" stroke="#6B7A4F" stroke-width="1.6"/><path d="M18 6 l3 -1 -1 3" stroke="#6B7A4F" stroke-width="1.6"/></svg>`
@@ -4983,6 +4984,7 @@ function StatsModal({ sessions, members, userColor }) {
 }
 
 function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onRelocate, onManageAreas, locationsCatalog = [] }) {
+  useLockBodyScroll()
   const [busy, setBusy] = useState(false)
   const [weatherBusy, setWeatherBusy] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
@@ -5296,6 +5298,7 @@ function RodEditRow({ rod, color, baitPhotoMap = {}, baitListId = 'known-baits-a
 }
 
 function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, onAddBait, onStartAddArea, locationsCatalog = [], onSaveLocation, onZoomToPoint }) {
+  useLockBodyScroll()
   const [busy, setBusy] = useState(false)
   const [weatherBusy, setWeatherBusy] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
