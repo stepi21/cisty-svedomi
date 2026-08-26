@@ -252,7 +252,8 @@ header h1 .accent{ color:var(--amber); }
   /* U Domů/Úlovků/Nástrah není žádná mapa ani mobile-sheet -- jediný
      viditelný obsah je ".sidebar", appka ho proto musí zase
      zviditelnit a zrušit mu desktopový strop výšky s vlastním scrollem. */
-  .layout.no-map .sidebar{ display:block; max-height:none; overflow-y:visible; }
+  html:not(.standalone-app) .layout.no-map .sidebar{ display:block; max-height:none; overflow-y:visible; min-height:100vh; min-height:100dvh; }
+  html.standalone-app .layout.no-map .sidebar{ display:block; max-height:none; overflow-y:visible; }
 }
 
 /* Hlavička zůstává vidět i po odscrollování -- appka jí dá
@@ -352,7 +353,7 @@ header h1 .accent{ color:var(--amber); }
    + galerie jednoho druhu (detail, celé fotky bez ořezu) ---------- */
 .species-count{ font-family:'IBM Plex Mono', monospace; font-size:var(--fs-sm); color:var(--ink-soft); }
 
-.species-shelf{ display:flex; gap:12px; overflow-x:auto; padding:0 18px 18px; }
+.species-shelf{ display:grid; grid-template-columns:repeat(auto-fill, 104px); justify-content:start; gap:12px; padding:0 18px 18px; }
 .species-shelf-card{ flex:none; width:104px; cursor:pointer; }
 .species-shelf-thumb{
   width:104px; height:104px; border-radius:10px; overflow:hidden; background:var(--paper-line);
@@ -390,14 +391,15 @@ header h1 .accent{ color:var(--amber); }
 .polaroid-caption .c-sub{ display:block; font-family:'IBM Plex Mono', monospace; font-size:var(--fs-xs); color:var(--ink-soft); margin-top:2px; }
 
 /* Úlovky teď zabírají celou šířku obrazovky (bez mapy vedle) -- appka na
-   desktopu má víc místa, takže polička appce rovnou zalomí do víc řádků
-   místo scrollování, a galerie druhu se appce ukáže jako mřížka místo
-   appce sloupce pod sebou. Appka appce na desktopu appce taky appce vypne
-   to drobné pootočení karet (.polaroid-card) -- ve víc sloupcích vedle
-   sebe appce by to appce působilo appce jen jako nepořádek, appce ne
-   appce jako appce záměrný appce detail appce appka. */
+   desktopu má víc místa, polička trofejí (fixní velikost karet, viz
+   .species-shelf výše) tak appka jednoduše zobrazí víc sloupců vedle
+   sebe, beze změny velikosti jednotlivé kartičky. Galerie druhu appce
+   appka appce ukáže jako mřížka místo appce sloupce pod sebou, appka
+   appce zároveň vypne to drobné pootočení karet appce (.polaroid-card)
+   -- ve víc sloupcích vedle sebe by to appce působilo appce jen jako
+   nepořádek, ne jako záměrný detail. */
 @media (min-width:861px){
-  .species-shelf{ flex-wrap:wrap; overflow-x:visible; max-width:900px; margin:0 auto; padding:0 18px 18px; }
+  .species-shelf{ max-width:900px; margin:0 auto; padding:0 18px 18px; }
   .polaroid-grid{
     display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));
     max-width:900px; margin:0 auto; padding:0 18px 20px;
