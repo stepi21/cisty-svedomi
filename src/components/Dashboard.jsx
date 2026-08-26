@@ -4730,7 +4730,7 @@ function SessionMiniMap({ session, userColor, onOpen }) {
     <div
       onClick={onOpen}
       title="Zobrazit na mapě"
-      style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--paper-line)', cursor: 'pointer' }}
+      style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--paper-line)', cursor: 'pointer', isolation: 'isolate' }}
     >
       <div ref={mapEl} style={{ width: '100%', height: 130, pointerEvents: 'none' }} />
     </div>
