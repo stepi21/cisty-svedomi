@@ -168,10 +168,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const pendingGpsShorePointRef = useRef(null) // GPS bod na břehu -- použije se jako draftSession.point MÍSTO pozice prvního prutu
   const [locallyHandledLocationIds, setLocallyHandledLocationIds] = useState(new Set()) // "vyřešeno" jen pro tuhle jednu otevřenou session appky, ať notifikace nezůstane viset jako "nevyřízená" hned po kliknutí na Potvrdit
   const notificationsRef = useRef(null)
-  const [showSettings, setShowSettings] = useState(false)
-  const [showStats, setShowStats] = useState(false)
-  const [showHelp, setShowHelp] = useState(false)
-  const [showRecords, setShowRecords] = useState(false)
   const [showBaits, setShowBaits] = useState(false)
   const [showLocations, setShowLocations] = useState(false)
   const [baitsInitialKey, setBaitsInitialKey] = useState(null)
@@ -238,7 +234,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [editingSession, setEditingSession] = useState(null)     // rozepsaná editace výpravy (datum, počasí...)
   const [editingAreasSession, setEditingAreasSession] = useState(null) // {id, areas:[]} — správa oblastí u uložené výpravy
   const [editingAreasLocation, setEditingAreasLocation] = useState(null) // {id, areas:[]} — správa oblastí u místa v katalogu
-  const [activePanel, setActivePanel] = useState('home') // null | 'home' | 'map' | 'stations' | 'locations' | 'baits' | 'catches' — jen jeden panel může být aktivní najednou; appka se vždycky po otevření ukáže na Domů, ne se vrací tam, kde uživatel skončil naposled
+  const [activePanel, setActivePanel] = useState('home') // null | 'home' | 'map' | 'stations' | 'locations' | 'baits' | 'catches' | 'records' | 'stats' | 'help' | 'settings' — jen jeden panel může být aktivní najednou; appka se vždycky po otevření ukáže na Domů, ne se vrací tam, kde uživatel skončil naposled
   const [baitsStartAdding, setBaitsStartAdding] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false) // "☰ Více" — méně časté akce schované z hlavičky
   const moreMenuRef = useRef(null)
@@ -1093,6 +1089,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     // zpomalení při přechodu na Úlovky, appka appce s velikostí fotek
     // nesouvisí.
     const mapHiddenNow = activePanel === 'home' || activePanel === 'stations' ||
+      activePanel === 'records' || activePanel === 'stats' || activePanel === 'help' || activePanel === 'settings' ||
       ((activePanel === 'catches' || activePanel === 'baits' || activePanel === null) && !mapNeededForInteraction)
     if (mapHiddenNow) return
 
@@ -3028,6 +3025,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   useEffect(() => {
     if (!mapInstance.current) return
     const mapHidden = activePanel === 'home' || activePanel === 'stations' || activePanel === 'map' ||
+      activePanel === 'records' || activePanel === 'stats' || activePanel === 'help' || activePanel === 'settings' ||
       ((activePanel === 'catches' || activePanel === 'baits' || activePanel === null) && !mapNeededForInteraction)
     if (mapHidden) return
     const t = setTimeout(() => mapInstance.current?.invalidateSize(), 50)
@@ -3965,11 +3963,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   <div style={{ height: 1, background: 'var(--paper-line)', margin: '6px 0' }} />
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); switchPanel('baits') }}><IconNastraha size={15} color="var(--water-deep)" /> Nástrahy</button>
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); switchPanel('stations') }}><IconDroplet size={15} color="var(--water-deep)" /> Měrné stanice</button>
-                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowRecords(true) }}><IconTrophy size={15} color="var(--amber)" /> Rekordy</button>
-                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowStats(true) }}><IconChart size={15} color="var(--water-deep)" /> Statistiky</button>
+                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); switchPanel('records') }}><IconTrophy size={15} color="var(--amber)" /> Rekordy</button>
+                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); switchPanel('stats') }}><IconChart size={15} color="var(--water-deep)" /> Statistiky</button>
                   <button className="type-btn" onClick={() => { setShowMoreMenu(false); exportData() }}><IconDownload size={15} color="var(--water-deep)" /> Export dat</button>
-                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowHelp(true) }}><IconHelp size={15} color="var(--water-deep)" /> Návod</button>
-                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); setShowSettings(true) }}><IconSettings size={15} color="var(--water-deep)" /> Nastavení</button>
+                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); switchPanel('help') }}><IconHelp size={15} color="var(--water-deep)" /> Návod</button>
+                  <button className="type-btn" onClick={() => { setShowMoreMenu(false); switchPanel('settings') }}><IconSettings size={15} color="var(--water-deep)" /> Nastavení</button>
               </div>
             )}
           </div>
@@ -3992,7 +3990,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       </header>
 
       <div className={`layout ${
-        (activePanel === 'home' || activePanel === 'stations' || activePanel === 'catches' || activePanel === 'baits') && !mapNeededForInteraction ? 'no-map'
+        (activePanel === 'home' || activePanel === 'stations' || activePanel === 'catches' || activePanel === 'baits' ||
+          activePanel === 'records' || activePanel === 'stats' || activePanel === 'help' || activePanel === 'settings') && !mapNeededForInteraction ? 'no-map'
         : activePanel === null && !mapNeededForInteraction ? 'no-map-keep-detail'
         : ''
       }`}>
@@ -4003,6 +4002,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             : activePanel === 'locations' ? renderLocationsList()
             : activePanel === 'baits' ? renderBaitsList()
             : activePanel === 'catches' ? renderCatchesList()
+            : activePanel === 'records' ? <RecordsModal sessions={sessions} userName={userName} userColor={userColor} onOpenCatch={(c) => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c) }} />
+            : activePanel === 'stats' ? <StatsModal sessions={sessions} members={members} userColor={userColor} />
+            : activePanel === 'help' ? <HelpModal />
+            : activePanel === 'settings' ? <SettingsModal userId={userId} profile={myProfile} onSaved={(updated) => { setMyProfile(updated); loadMembers() }} />
             : renderSessionList()}
         </aside>
 
@@ -4405,7 +4408,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           </div>
         </main>
 
-        {activePanel !== 'home' && activePanel !== 'stations' && activePanel !== 'catches' && activePanel !== 'baits' && (
+        {activePanel !== 'home' && activePanel !== 'stations' && activePanel !== 'catches' && activePanel !== 'baits' &&
+          activePanel !== 'records' && activePanel !== 'stats' && activePanel !== 'help' && activePanel !== 'settings' && (
           <div ref={mobileSheetRef} className={`mobile-sheet ${mobileSheetOpen ? 'expanded' : ''} ${activePanel === 'map' ? 'map-panel' : ''} ${mobileFullPanel ? 'full-panel' : ''}`}>
             {!mobileFullPanel && (
               <div className="mobile-peek-bar" onClick={() => setMobileSheetOpen((v) => !v)}>
@@ -4475,18 +4479,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         />
       )}
 
-      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-
       {savingLocationFor && (
         <SaveLocationForm
           source={savingLocationFor}
           onCancel={() => { setSavingLocationFor(null); resetRiverSnapMemory() }}
           onSave={saveLocationToCatalog}
         />
-      )}
-
-      {showRecords && (
-        <RecordsModal sessions={sessions} userName={userName} userColor={userColor} onClose={() => setShowRecords(false)} onOpenCatch={(c) => { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c); setShowRecords(false) }} />
       )}
 
       {showBaits && (
@@ -4531,10 +4529,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         />
       )}
 
-      {showStats && (
-        <StatsModal sessions={sessions} members={members} userColor={userColor} onClose={() => setShowStats(false)} />
-      )}
-
       {editingSession && (
         <SessionEditModal
           draft={editingSession}
@@ -4545,15 +4539,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onRelocate={handleRelocateSession}
           onManageAreas={() => startManageAreas(sessions.find((s) => s.id === editingSession.id))}
           locationsCatalog={locationsCatalog}
-        />
-      )}
-
-      {showSettings && (
-        <SettingsModal
-          userId={userId}
-          profile={myProfile}
-          onClose={() => setShowSettings(false)}
-          onSaved={(updated) => { setMyProfile(updated); setShowSettings(false); loadMembers() }}
         />
       )}
 
@@ -4750,7 +4735,7 @@ function SessionMiniMap({ session, userColor, onOpen }) {
   )
 }
 
-function RecordsModal({ sessions, userName, userColor, onClose, onOpenCatch }) {
+function RecordsModal({ sessions, userName, userColor, onOpenCatch }) {
   const bySpecies = {}
   sessions.forEach((s) => {
     ;(s.catches || []).forEach((c) => {
@@ -4769,16 +4754,10 @@ function RecordsModal({ sessions, userName, userColor, onClose, onOpenCatch }) {
   const records = Object.values(bySpecies).sort((a, b) => Number(b.catchData.length_cm) - Number(a.catchData.length_cm))
 
   return (
-    <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="ticket" style={{ maxWidth: 480 }}>
-        <div className="ticket-top">
-          <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
-          <div className="eyebrow">Rekordy</div>
-          <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconTrophy size={20} /> Rekordy party</h2>
-        </div>
-        <div className="perforation"></div>
-        <div className="ticket-body">
-          {records.length === 0 && (
+    <>
+      <div className="sb-head"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconTrophy size={14} color="var(--amber)" /> Rekordy party</span></div>
+      <div style={{ padding: '0 18px 14px' }}>
+        {records.length === 0 && (
             <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Zatím žádný úlovek s uvedenou délkou.</p>
           )}
           {records.map((r) => {
@@ -4798,13 +4777,12 @@ function RecordsModal({ sessions, userName, userColor, onClose, onOpenCatch }) {
               </div>
             )
           })}
-        </div>
       </div>
-    </div>
+    </>
   )
 }
 
-function StatsModal({ sessions, members, userColor, onClose }) {
+function StatsModal({ sessions, members, userColor }) {
   const byUser = {}
   sessions.forEach((s) => {
     const uid = s.user_id
@@ -4881,16 +4859,10 @@ function StatsModal({ sessions, members, userColor, onClose }) {
   const spaRows = spaOrder.filter((k) => bySpaLevel[k]).map((k) => [k, bySpaLevel[k]])
 
   return (
-    <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="ticket" style={{ maxWidth: 480 }}>
-        <div className="ticket-top">
-          <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
-          <div className="eyebrow">Přehled</div>
-          <h2>Statistiky party</h2>
-        </div>
-        <div className="perforation"></div>
-        <div className="ticket-body">
-          {members.map((m) => {
+    <>
+      <div className="sb-head"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconChart size={14} color="var(--water-deep)" /> Statistiky party</span></div>
+      <div style={{ padding: '0 18px 14px' }}>
+        {members.map((m) => {
             const u = byUser[m.id] || { visits: 0, species: {} }
             return (
               <div className="stats-row" key={m.id}>
@@ -4986,9 +4958,8 @@ function StatsModal({ sessions, members, userColor, onClose }) {
               <p className="help-note" style={{ marginTop: 10 }}>Počítáno jen z toho, co máte zapsané — čím víc výprav, tím spolehlivější vzorec.</p>
             </div>
           )}
-        </div>
       </div>
-    </div>
+    </>
   )
 }
 
@@ -5138,7 +5109,7 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
   )
 }
 
-function SettingsModal({ userId, profile, onClose, onSaved }) {
+function SettingsModal({ userId, profile, onSaved }) {
   const [name, setName] = useState(profile?.display_name || '')
   const [color, setColor] = useState(profile?.color || USER_PALETTE[0])
   const [busy, setBusy] = useState(false)
@@ -5177,15 +5148,9 @@ function SettingsModal({ userId, profile, onClose, onSaved }) {
   }
 
   return (
-    <div className="modal-bg show" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="ticket" style={{ maxWidth: 360 }}>
-        <div className="ticket-top">
-          <button className="ticket-close" onClick={onClose}><IconClose size={16} /></button>
-          <div className="eyebrow">Nastavení</div>
-          <h2>Tvůj profil</h2>
-        </div>
-        <div className="perforation"></div>
-        <div className="ticket-body">
+    <>
+      <div className="sb-head"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconSettings size={14} color="var(--water-deep)" /> Tvůj profil</span></div>
+      <div style={{ padding: '0 18px 14px' }}>
           <form onSubmit={handleSave}>
             <label className="field-label">Jméno, pod kterým budeš uveden</label>
             <input className="text-input" required value={name} onChange={(e) => setName(e.target.value)} />
@@ -5214,9 +5179,8 @@ function SettingsModal({ userId, profile, onClose, onSaved }) {
               <button className="new-btn" type="submit" disabled={pwBusy} style={{ marginTop: 10 }}>{pwBusy ? 'Ukládám…' : 'Nastavit heslo'}</button>
             </form>
           </div>
-        </div>
       </div>
-    </div>
+    </>
   )
 }
 
