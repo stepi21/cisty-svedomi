@@ -587,7 +587,7 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
 .ticket-close{ position:absolute; top:14px; right:16px; background:transparent; border:none; color:#CFE3E0; font-size:18px; cursor:pointer; }
 .ticket-mobile-backbar{ display:none; }
 .perforation{ height:0; border-top:2px dashed var(--paper-line); }
-.ticket-body{ padding:18px 20px 20px; }
+.ticket-body{ padding:18px 20px 20px; overflow-x:hidden; }
 /* Úlovkový lístek na mobilu appka appce ukáže jako plnou obrazovku (stejný
    dojem jako detail výpravy), ne jako vystředěné vyskakovací okno s malým
    ✕ v rohu -- appka přidá nad kartu prostý pruh "← Zpět" po celé šířce,
