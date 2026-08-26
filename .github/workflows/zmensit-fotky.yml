@@ -1,16 +1,13 @@
-name: Zmenšit existující fotky ve Storage
+name: Zmensit existujici fotky ve Storage
 
 on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Suchý běh (jen appka spočítá úsporu, nic nezmění)'
+        description: Suchy beh - jen spocita usporu, nic nezmeni
         required: true
-        default: 'true'
-        type: choice
-        options:
-          - 'true'
-          - 'false'
+        default: true
+        type: boolean
 
 jobs:
   resize:
@@ -22,10 +19,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Nainstalovat závislosti
+      - name: Nainstalovat zavislosti
         run: npm install @supabase/supabase-js sharp
 
-      - name: Spustit zmenšení fotek
+      - name: Spustit zmenseni fotek
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
