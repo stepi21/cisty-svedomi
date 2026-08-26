@@ -259,6 +259,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [searchQuery, setSearchQuery] = useState('') // hledání ve výpravách (název, revír, druh, nástraha)
   const [catchesCategory, setCatchesCategory] = useState('all') // filtr dravec/bílá ryba v panelu Úlovky
   const [catchesSortMode, setCatchesSortMode] = useState('species') // 'species' | 'date' | 'user' -- appka defaultně řadí podle druhu, tam appka ukazuje rekord
+  const [speciesGalleryKey, setSpeciesGalleryKey] = useState(null) // otevřený druh v "poličce trofejí" -- null = appka ukazuje poličku, jinak celou galerii daného druhu
 
   useEffect(() => {
     function goOnline() { setIsOnline(true) }
@@ -2504,6 +2505,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (isRepeat) {
       if (panel === 'catches') {
         setCatchesSortMode('species')
+        setSpeciesGalleryKey(null)
         if (sidebarRef.current) sidebarRef.current.scrollTop = 0
         window.scrollTo(0, 0)
       }
@@ -3387,7 +3389,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         </div>
         <div className="filter-row">
           {[['species', 'Podle druhu'], ['date', 'Podle data'], ['user', 'Podle rybáře']].map(([val, label]) => (
-            <button key={val} className={`filter-chip ${catchesSortMode === val ? 'active' : ''}`} onClick={() => setCatchesSortMode(val)}>{label}</button>
+            <button key={val} className={`filter-chip ${catchesSortMode === val ? 'active' : ''}`} onClick={() => { setCatchesSortMode(val); setSpeciesGalleryKey(null) }}>{label}</button>
           ))}
         </div>
       </>
@@ -3455,8 +3457,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       )
     }
 
-    // ---------- Podle druhu (výchozí): appka ukáže hero kartu s rekordem
-    // na druh + pruh miniatur ostatních úlovků toho druhu ----------
+    // ---------- Podle druhu (výchozí): appka ukáže "poličku trofejí" --
+    // malé čtvercové kartičky (jasně jen náhled, appka se nesnaží ukázat
+    // celou fotku) -- klik na druh otevře jeho vlastní galerii, kde má
+    // každá fotka konečně dost místa ukázat se celá, bez ořezu (viz
+    // .polaroid-card níže). Předchozí řešení (jedna "hero" fotka na
+    // pevnou nízkou výšku přes celou šířku) nutilo jednu fotku dělat dva
+    // úkoly najednou (rychlý přehled i pořádné prohlížení) -- žádný
+    // poměr stran to nemohl splnit dobře.
     const bySpecies = {}
     filtered.forEach((c) => {
       const key = (c.species || 'Neuvedeno').trim()
@@ -3464,46 +3472,57 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     })
     const speciesNames = Object.keys(bySpecies).sort((a, b) => bySpecies[b].length - bySpecies[a].length)
 
+    const openSpecies = speciesGalleryKey && bySpecies[speciesGalleryKey] ? speciesGalleryKey : null
+
+    if (openSpecies) {
+      const list = [...bySpecies[openSpecies]].sort((a, b) => (Number(b.length_cm) || 0) - (Number(a.length_cm) || 0))
+      return (
+        <>
+          {header}
+          <div className="species-gallery-head">
+            <button className="new-btn" onClick={() => setSpeciesGalleryKey(null)}>← Zpět na druhy</button>
+            <span className="species-gallery-title">{openSpecies} <span className="species-count">{list.length}×</span></span>
+          </div>
+          <div className="polaroid-grid">
+            {list.map((c, i) => (
+              <div key={c.id} className="polaroid-card" onClick={() => openCatch(c)}>
+                <div className="polaroid-photo" style={{ background: c.photo_url ? undefined : CATEGORY_COLOR[c.category] }}>
+                  {c.photo_url
+                    ? <img src={c.photo_url} alt={c.species} loading="lazy" />
+                    : <div style={{ width: 60 }} dangerouslySetInnerHTML={{ __html: fishSVG('#fff') }} />}
+                </div>
+                <div className="polaroid-caption">
+                  <span className="polaroid-length">{i === 0 && <IconTrophy size={12} color="var(--amber)" />} {c.length_cm ?? '—'} cm</span>
+                  <span className="c-sub">{userName(c.sessionRef.user_id)} · {c.caught_at ? c.caught_at.slice(0, 10) : c.sessionRef.session_date}{c.revir ? ` · ${c.revir}` : ''}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )
+    }
+
     return (
       <>
         {header}
-        {speciesNames.map((species) => {
-          const list = [...bySpecies[species]].sort((a, b) => (Number(b.length_cm) || 0) - (Number(a.length_cm) || 0))
-          const record = list[0]
-          const rest = list.slice(1)
-          const catColor = CATEGORY_COLOR[record.category] || 'var(--paper-line)'
-          return (
-            <div key={species} className="species-group">
-              <div className="species-group-head">
-                <span className="species-name">{species}</span>
-                <span className="species-count">{list.length}×</span>
-              </div>
-              <div
-                className="species-hero"
-                style={{ background: record.photo_url ? undefined : catColor }}
-                onClick={() => openCatch(record)}
-              >
-                {record.photo_url && <img src={record.photo_url} alt={species} loading="lazy" />}
-                <span className="species-hero-badge"><IconTrophy size={12} color="var(--amber)" /> {record.length_cm ?? '—'} cm · {userName(record.sessionRef.user_id)}</span>
-              </div>
-              {rest.length > 0 && (
-                <div className="species-strip">
-                  {rest.map((c) => (
-                    <div
-                      key={c.id}
-                      className="species-thumb"
-                      style={{ background: c.photo_url ? undefined : CATEGORY_COLOR[c.category] }}
-                      onClick={() => openCatch(c)}
-                      title={`${c.length_cm ?? '—'} cm`}
-                    >
-                      {c.photo_url && <img src={c.photo_url} alt={c.species} loading="lazy" />}
-                    </div>
-                  ))}
+        <div className="species-shelf">
+          {speciesNames.map((species) => {
+            const list = bySpecies[species]
+            const record = [...list].sort((a, b) => (Number(b.length_cm) || 0) - (Number(a.length_cm) || 0))[0]
+            const catColor = CATEGORY_COLOR[record.category] || 'var(--paper-line)'
+            return (
+              <div key={species} className="species-shelf-card" onClick={() => setSpeciesGalleryKey(species)}>
+                <div className="species-shelf-thumb" style={{ background: record.photo_url ? undefined : catColor }}>
+                  {record.photo_url
+                    ? <img src={record.photo_url} alt={species} loading="lazy" />
+                    : <div style={{ width: 34 }} dangerouslySetInnerHTML={{ __html: fishSVG('#fff') }} />}
                 </div>
-              )}
-            </div>
-          )
-        })}
+                <div className="species-shelf-name">{species}</div>
+                <div className="species-shelf-sub">PR {record.length_cm ?? '—'} cm · {list.length}×</div>
+              </div>
+            )
+          })}
+        </div>
       </>
     )
   }
