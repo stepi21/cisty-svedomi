@@ -266,7 +266,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                 <option value="dravec">Dravec</option>
                 <option value="bila">Bílá ryba</option>
               </select>
-              <div className="input-row" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              <div className="input-row">
                 <div>
                   <label className="field-label">Délka (cm)</label>
                   <input className="text-input" type="number" value={form.length_cm} onChange={(e) => setForm({ ...form, length_cm: e.target.value })} />
@@ -275,9 +275,11 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                   <label className="field-label">Váha (kg)</label>
                   <input className="text-input" type="number" step="0.1" value={form.weight_kg} onChange={(e) => setForm({ ...form, weight_kg: e.target.value })} />
                 </div>
+                <div className="input-row-auto">
+                  <label className="field-label">Čas</label>
+                  <input className="text-input" type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
+                </div>
               </div>
-              <label className="field-label" style={{ marginTop: 10 }}>Čas</label>
-              <input className="text-input" type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
               <label className="field-label">Nástraha</label>
               <BaitPicker
                 value={form.bait}
