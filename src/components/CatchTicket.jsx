@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient'
 import { uploadPhoto } from '../lib/storage.js'
 import { moonPhaseName, fetchWeather } from '../lib/weather.js'
 import { fetchWaterConditions, findNearestStations, WATER_PRECISION_LABEL, SPA_LEVEL_INFO } from '../lib/hydrology.js'
+import { useLockBodyScroll } from '../lib/useLockBodyScroll.js'
 import BaitPicker from './BaitPicker.jsx'
 import { IconClose, IconArrowLeft, IconEdit, IconTrash, IconCamera, IconRevir, IconCalendar, IconThermometer, IconGauge, IconWind, IconMoonPhase, IconDroplet, IconRefresh, IconPressureTrend } from '../lib/icons.jsx'
 
@@ -23,6 +24,7 @@ function toLocalTimeInput(isoString) {
 }
 
 export default function CatchTicket({ catchData: c, session, catcherName, canEdit = false, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, locationsCatalog = [], onAddBait, onBackfillBaitPhoto, onSetCatchLocation, onRelocate, onFocusLocation, onOpenSession, onClose, onUpdated, onDeleted, onShowToast }) {
+  useLockBodyScroll()
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [pickingRevir, setPickingRevir] = useState(false)
