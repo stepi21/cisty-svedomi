@@ -348,34 +348,63 @@ header h1 .accent{ color:var(--amber); }
 }
 .record-row:hover{ background:#F7F4EA; }
 
-/* ---------- Úlovky, řazení "Podle druhu" — hero karta s rekordem + pruh miniatur ---------- */
-.species-group{ padding:0 18px 18px; }
-.species-group-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
-.species-name{ font-family:'Fraunces', serif; font-weight:600; font-size:var(--fs-lg); color:var(--ink); }
+/* ---------- Úlovky, řazení "Podle druhu" — polička trofejí (přehled)
+   + galerie jednoho druhu (detail, celé fotky bez ořezu) ---------- */
 .species-count{ font-family:'IBM Plex Mono', monospace; font-size:var(--fs-sm); color:var(--ink-soft); }
-.species-hero{
-  position:relative; height:120px; border-radius:10px; margin-bottom:6px; cursor:pointer;
-  display:flex; align-items:flex-end; padding:10px; overflow:hidden;
+
+.species-shelf{ display:flex; gap:12px; overflow-x:auto; padding:0 18px 18px; }
+.species-shelf-card{ flex:none; width:104px; cursor:pointer; }
+.species-shelf-thumb{
+  width:104px; height:104px; border-radius:10px; overflow:hidden; background:var(--paper-line);
 }
-.species-hero img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
-.species-hero-badge{
-  position:relative; z-index:1; display:inline-flex; align-items:center; gap:5px;
-  font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:var(--fs-sm2);
-  background:rgba(18,59,82,.75); color:#fff; padding:4px 10px; border-radius:20px;
+.species-shelf-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+.species-shelf-name{
+  font-family:'Fraunces', serif; font-weight:600; font-size:var(--fs-md2); color:var(--ink);
+  margin-top:6px; line-height:1.25;
 }
-.species-strip{ display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; }
-.species-thumb{
-  width:52px; height:52px; flex:none; border-radius:8px; cursor:pointer; overflow:hidden;
-  background:var(--paper-line);
+.species-shelf-sub{ font-family:'IBM Plex Mono', monospace; font-size:var(--fs-2xs); color:var(--ink-soft); margin-top:2px; }
+
+.species-gallery-head{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:0 18px 12px; flex-wrap:wrap;
 }
-.species-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
-/* Úlovky teď zabírají celou šířku obrazovky (bez mapy vedle) -- na
-   desktopu by se hero fotka bez stropu roztáhla přes celou tu šířku.
-   Mobil má tenhle strop schválně vypnutý (média dotaz od 861px), tam je
-   plná šířka v pořádku. */
+.species-gallery-title{ font-family:'Fraunces', serif; font-weight:600; font-size:var(--fs-lg); color:var(--ink); display:flex; align-items:baseline; gap:8px; }
+
+.polaroid-grid{ display:flex; flex-direction:column; gap:16px; padding:0 18px 20px; }
+.polaroid-card{
+  background:var(--white); border:1px solid var(--paper-line); border-radius:12px;
+  padding:8px 8px 10px; cursor:pointer; box-shadow:0 2px 6px rgba(22,57,61,.06);
+}
+.polaroid-card:nth-child(odd){ transform:rotate(-0.6deg); }
+.polaroid-card:nth-child(even){ transform:rotate(0.6deg); }
+.polaroid-photo{
+  aspect-ratio:4/3; border-radius:5px; overflow:hidden; background:var(--paper);
+  display:flex; align-items:center; justify-content:center;
+}
+.polaroid-photo img{ width:100%; height:100%; object-fit:contain; display:block; }
+.polaroid-caption{ margin-top:8px; padding:0 4px; }
+.polaroid-length{
+  font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:var(--fs-md); color:var(--water-deep);
+  display:inline-flex; align-items:center; gap:4px;
+}
+.polaroid-caption .c-sub{ display:block; font-family:'IBM Plex Mono', monospace; font-size:var(--fs-xs); color:var(--ink-soft); margin-top:2px; }
+
+/* Úlovky teď zabírají celou šířku obrazovky (bez mapy vedle) -- appka na
+   desktopu má víc místa, takže polička appce rovnou zalomí do víc řádků
+   místo scrollování, a galerie druhu se appce ukáže jako mřížka místo
+   appce sloupce pod sebou. Appka appce na desktopu appce taky appce vypne
+   to drobné pootočení karet (.polaroid-card) -- ve víc sloupcích vedle
+   sebe appce by to appce působilo appce jen jako nepořádek, appce ne
+   appce jako appce záměrný appce detail appce appka. */
 @media (min-width:861px){
-  .species-group{ max-width:640px; margin-left:auto; margin-right:auto; }
+  .species-shelf{ flex-wrap:wrap; overflow-x:visible; max-width:900px; margin:0 auto; padding:0 18px 18px; }
+  .polaroid-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));
+    max-width:900px; margin:0 auto; padding:0 18px 20px;
+  }
+  .polaroid-card{ transform:none !important; }
 }
+
 
 /* ---------- feed na Domů — fotka jako dominanta karty ---------- */
 .home-feed{
