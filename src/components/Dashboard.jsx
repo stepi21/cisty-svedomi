@@ -809,6 +809,19 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (!draftLayer.current) return
     draftLayer.current.clearLayers()
     if (!rodPointsDraft) return
+    // Appka tady dřív kreslila jen pruty/místa, jak je uživatel postupně
+    // klikal -- samotný bod "kde stojím" (appka ho zjistí přes GPS nebo
+    // ho appka dá kliknout ručně, viz pendingGpsShorePointRef výše) se
+    // nikdy nevykresloval, i když je od začátku sběru pozic prutů/míst
+    // už appce známý. Uživatel tak neviděl svou pozici vůči tomu, kam
+    // kliká pro prut 1/2 -- appka ho teď doplní jako bílou tečku s
+    // vlastní barvou obrysu.
+    const shorePoint = pendingGpsShorePointRef.current
+    if (shorePoint) {
+      L.circleMarker([shorePoint.lat, shorePoint.lng], {
+        radius: 8, color: userColor(userId), weight: 2, fillColor: '#fff', fillOpacity: 0.9,
+      }).bindPopup('Tvoje pozice').addTo(draftLayer.current)
+    }
     const label = LURE_TYPES.includes(pendingTypeRef.current) ? 'Místo' : 'Prut'
     rodPointsDraft.forEach((p, i) => {
       const color = rodColors[i % rodColors.length]
