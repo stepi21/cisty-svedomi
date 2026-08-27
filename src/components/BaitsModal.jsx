@@ -253,9 +253,13 @@ function AddBaitForm({ groupId, userId, onCancel, onSaved }) {
     setBusy(true)
     setError(null)
     let photo_url = null
-    if (photoFile) photo_url = await uploadPhoto(photoFile, `baits/catalog`)
+    let photo_thumb_url = null
+    if (photoFile) {
+      const uploaded = await uploadPhoto(photoFile, `baits/catalog`)
+      if (uploaded) { photo_url = uploaded.url; photo_thumb_url = uploaded.thumbUrl }
+    }
     const { error } = await supabase.from('baits').insert({
-      group_id: groupId, created_by: userId, name, category, photo_url,
+      group_id: groupId, created_by: userId, name, category, photo_url, photo_thumb_url,
     })
     setBusy(false)
     if (error) { setError(error.message); return }
@@ -306,22 +310,23 @@ function EditBaitForm({ bait, groupId, userId, onRenamePropagate, onBackfillBait
     setBusy(true)
     setError(null)
     let photo_url = bait.photo_url
+    let photo_thumb_url = bait.photo_thumb_url
     if (photoFile) {
-      const url = await uploadPhoto(photoFile, `baits/catalog`)
-      if (url) photo_url = url
+      const uploaded = await uploadPhoto(photoFile, `baits/catalog`)
+      if (uploaded) { photo_url = uploaded.url; photo_thumb_url = uploaded.thumbUrl }
     }
     const renamed = name.trim().toLowerCase() !== bait.label.trim().toLowerCase()
     let error
     if (bait.catalogEntry) {
-      ;({ error } = await supabase.from('baits').update({ name, category, photo_url }).eq('id', bait.catalogEntry.id))
+      ;({ error } = await supabase.from('baits').update({ name, category, photo_url, photo_thumb_url }).eq('id', bait.catalogEntry.id))
     } else {
-      ;({ error } = await supabase.from('baits').insert({ group_id: groupId, created_by: userId, name, category, photo_url }))
+      ;({ error } = await supabase.from('baits').insert({ group_id: groupId, created_by: userId, name, category, photo_url, photo_thumb_url }))
     }
     if (!error && renamed) {
       await onRenamePropagate?.(bait.label, name)
     }
     if (!error && photo_url) {
-      const result = await onBackfillBaitPhoto?.(name, photo_url)
+      const result = await onBackfillBaitPhoto?.(name, photo_url, photo_thumb_url)
       if (result && result.blocked > 0) {
         setError(`Foto se propsalo u ${result.updated} tvých záznamů. U ${result.blocked} se to nepodařilo — nejspíš patří jinému členovi party, ne tobě.`)
       }
