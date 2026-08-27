@@ -82,6 +82,18 @@ function normalizeSearchText(s) {
   return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 }
 
+// Odvodí jméno řeky ze jména revíru/výpravy -- oficiální jména revírů
+// konvenčně začínají jménem řeky ("Labe 18", "Jizera - Kárany"), appka
+// vezme první slovo před případnou pomlčkou. Použije se jako nápověda
+// pro findNearestStations, ať appka u míst blízko dvou různých řek
+// (soutoky, souběžné toky) neskočí na nejbližší stanici bez ohledu na
+// to, na které řece leží.
+function extractRiverName(name) {
+  if (!name) return null
+  const beforeDash = name.split(/[-–]/)[0].trim()
+  return beforeDash.split(/\s+/)[0] || null
+}
+
 function resolveHydroStation(linkedLocationIds, locationsCatalog) {
   if (!linkedLocationIds || linkedLocationIds.length !== 1) return null
   const loc = locationsCatalog.find((l) => l.id === linkedLocationIds[0])
@@ -1074,6 +1086,27 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     // nekreslí ani nepřeostřuje.
     const isCreatingNewSession = pickingType || !!locationPickerStep || !!rodPointsDraft || !!draftSession ||
       placementTarget === 'session-point' || placementTarget === 'shore-point-click'
+
+    // Appka dřív při umísťování/přesouvání konkrétního prutu (tlačítko
+    // "pozice na mapě" u už rozpracované draftSession) nekreslila na
+    // mapu nic -- uživatel neviděl svůj GPS bod ani ostatní už umístěné
+    // pruty, dokud výpravu neuložil, což ztěžovalo odhad, kam nahodit
+    // další prut. Appka teď v týhle jedné situaci (draftSession existuje
+    // a appka čeká na klik pro konkrétní prut) markery nakreslí.
+    const armedForRodOfDraft = !!draftSession && placementTarget &&
+      /^(rod|edit-rod)-\d+$/.test(placementTarget)
+    if (armedForRodOfDraft && draftSession.point) {
+      L.circleMarker([draftSession.point.lat, draftSession.point.lng], {
+        radius: 8, color: userColor(userId), weight: 2, fillColor: '#fff', fillOpacity: 0.9,
+      }).bindPopup('Tvoje pozice').addTo(markersLayer.current)
+      ;(draftSession.rods || []).forEach((r, i) => {
+        const color = rodColors[i % rodColors.length]
+        L.circleMarker([r.lat, r.lng], {
+          radius: 8, color, weight: 2, fillColor: color, fillOpacity: 0.5,
+        }).bindPopup(r.name || `Prut ${i + 1}`).addTo(markersLayer.current)
+      })
+    }
+
     if (isCreatingNewSession) return
 
     // Záložka Mapa má vlastní, samostatný useEffect (přepínatelné vrstvy
@@ -4582,10 +4615,20 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             const c = ticketCatch
             const s = sessionForCatch(c)
             setTicketCatch(null)
-            if (!s) { switchPanel('map'); return }
-            setActiveId(s.id)
-            setViewMode('detail')
-            jumpToMapView(s, { lat: c.lat, lng: c.lng, zoom: 16 })
+            // Appka schválně nepřepíná záložku ve stejném tiku, co zavírá
+            // úlovkový lístek -- zavření spouští odemčení scrollu
+            // (useLockBodyScroll) a appka v appce nainstalované na ploše
+            // má spodní lištu jako position:sticky. Obě věci najednou
+            // krátce nechávaly nekonzistentní layout (kousek pozadí pod
+            // lištou), co zmizelo až po dalším přepnutí záložky. Appka dá
+            // prohlížeči jeden snímek navíc, ať scroll/lišta doběhne dřív,
+            // než appka mapu vůbec otevře.
+            requestAnimationFrame(() => {
+              if (!s) { switchPanel('map'); return }
+              setActiveId(s.id)
+              setViewMode('detail')
+              jumpToMapView(s, { lat: c.lat, lng: c.lng, zoom: 16 })
+            })
           }}
           onOpenSession={() => {
             const s = sessionForCatch(ticketCatch)
@@ -4988,8 +5031,47 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
   const [busy, setBusy] = useState(false)
   const [weatherBusy, setWeatherBusy] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
+  const [stationPickerOpen, setStationPickerOpen] = useState(false)
+  const [stationOptions, setStationOptions] = useState([])
+  const [stationPickerBusy, setStationPickerBusy] = useState(false)
 
   function set(field, value) { setDraft((d) => ({ ...d, [field]: value })) }
+
+  // Ruční oprava stanice ČHMÚ -- appka jinak vybírá stanici jen podle
+  // vzdušné vzdálenosti (i s nápovědou podle řeky se občas netrefí,
+  // např. u soutoků), takže appka musí dát možnost výběr přebít ručně.
+  async function openStationPicker() {
+    setStationPickerOpen(true)
+    setStationPickerBusy(true)
+    try {
+      const list = await findNearestStations(draft.lat, draft.lng, 6, extractRiverName(draft.revir || draft.title))
+      setStationOptions(list)
+    } catch {
+      setStationOptions([])
+    }
+    setStationPickerBusy(false)
+  }
+
+  async function pickStation(s) {
+    setStationPickerOpen(false)
+    setWeatherBusy(true)
+    try {
+      const water = await fetchWaterConditions(s.objID, draft.date, draft.timeFrom)
+      setDraft((d) => ({
+        ...d,
+        waterStations: [{
+          station_id: s.objID, station_name: s.name,
+          level_cm: water?.level_cm ?? null, flow_m3s: water?.flow_m3s ?? null, temp_c: water?.temp_c ?? null,
+          spa_level: water?.spa_level ?? null, precision: water?.precision ?? null,
+        }],
+        waterLevel: water?.level_cm ?? null, waterFlow: water?.flow_m3s ?? null, waterTemp: water?.temp_c ?? null,
+        waterStationName: s.name, waterPrecision: water?.precision ?? null, waterSpaLevel: water?.spa_level ?? null,
+      }))
+    } catch {
+      setWeatherError('Nepodařilo se natáhnout data pro vybranou stanici.')
+    }
+    setWeatherBusy(false)
+  }
 
   async function handleFetchWeather() {
     setWeatherBusy(true); setWeatherError(null)
@@ -5002,7 +5084,7 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
     // vodní stav — nezávisle na počasí, tiché selhání (žádná chyba nezobrazená uživateli)
     try {
       const stations = resolveHydroStations(draft.linkedLocationIds, locationsCatalog)
-      const targets = stations.length > 0 ? stations : await findNearestStations(draft.lat, draft.lng, 1)
+      const targets = stations.length > 0 ? stations : await findNearestStations(draft.lat, draft.lng, 1, extractRiverName(draft.revir || draft.title))
       const results = (await Promise.all(targets.map(async (station) => {
         const water = await fetchWaterConditions(station.objID, draft.date, draft.timeFrom)
         return water ? { station_id: station.objID, station_name: station.name, level_cm: water.level_cm, flow_m3s: water.flow_m3s, temp_c: water.temp_c, spa_level: water.spa_level, precision: water.precision } : null
@@ -5100,6 +5182,21 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
                 {draft.waterTemp != null ? ` · ${draft.waterTemp} °C` : ''} ({draft.waterStationName}{draft.waterPrecision ? `, ${WATER_PRECISION_LABEL[draft.waterPrecision]}` : ''})
                 {draft.waterSpaLevel != null && SPA_LEVEL_INFO[draft.waterSpaLevel] ? ` · ${SPA_LEVEL_INFO[draft.waterSpaLevel].icon} ${SPA_LEVEL_INFO[draft.waterSpaLevel].label}` : ''}
               </p>
+            )}
+            {(draft.waterStations?.length > 0 || draft.waterStationName) && !stationPickerOpen && (
+              <button type="button" className="new-btn" style={{ marginTop: 4 }} onClick={openStationPicker}>Změnit stanici</button>
+            )}
+            {stationPickerOpen && (
+              <div style={{ marginTop: 6 }}>
+                {stationPickerBusy && <p className="hint-text">Hledám nejbližší stanice…</p>}
+                {!stationPickerBusy && stationOptions.length === 0 && <p className="hint-text">ČHMÚ nevrátilo žádné stanice.</p>}
+                {!stationPickerBusy && stationOptions.map((s) => (
+                  <div key={s.objID} className="bait-picker-item" onClick={() => pickStation(s)}>
+                    {s.name}{s.stream ? ` (${s.stream})` : ''}
+                  </div>
+                ))}
+                <button type="button" className="new-btn" style={{ marginTop: 4 }} onClick={() => setStationPickerOpen(false)}>Zrušit</button>
+              </div>
             )}
 
             <div className="input-row" style={{ marginTop: 10 }}>
@@ -5397,7 +5494,7 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
     }
     try {
       const stations = resolveHydroStations(draft.linkedLocationIds, locationsCatalog)
-      const targets = stations.length > 0 ? stations : await findNearestStations(draft.point.lat, draft.point.lng, 1)
+      const targets = stations.length > 0 ? stations : await findNearestStations(draft.point.lat, draft.point.lng, 1, extractRiverName(draft.revir || draft.title))
       const results = (await Promise.all(targets.map(async (station) => {
         const water = await fetchWaterConditions(station.objID, draft.date, draft.timeFrom)
         return water ? { station_id: station.objID, station_name: station.name, level_cm: water.level_cm, flow_m3s: water.flow_m3s, temp_c: water.temp_c, spa_level: water.spa_level, precision: water.precision } : null
@@ -5652,7 +5749,7 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
     try {
       const linkedIds = (session.session_locations || []).map((sl) => sl.location_id)
       const linkedStation = resolveHydroStation(linkedIds, locationsCatalog)
-      const station = linkedStation || (await findNearestStations(draft.point.lat, draft.point.lng, 1))[0]
+      const station = linkedStation || (await findNearestStations(draft.point.lat, draft.point.lng, 1, extractRiverName(draft.revir || session.revir || session.title)))[0]
       if (station) {
         const water = await fetchWaterConditions(station.objID, session.session_date, draft.time)
         if (water) {
