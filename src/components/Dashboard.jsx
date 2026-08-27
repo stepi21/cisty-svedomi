@@ -1491,7 +1491,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return () => { cancelled = true; cancelAnimationFrame(rafId) }
   }, [activePanel, mapLayers, sessions, locationsCatalog, userId, members, mapFocusSessionId, mapFocusPoint, mapResetNonce])
 
-  async function backfillBaitPhoto(baitName, photoUrl) {
+  async function backfillBaitPhoto(baitName, photoUrl, photoThumbUrl) {
     const key = (baitName || '').trim().toLowerCase()
     if (!key || !photoUrl) return { updated: 0, blocked: 0 }
     let updated = 0, blocked = 0
@@ -1502,7 +1502,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         const newBaits = baits.map((b) => {
           if (b.name && b.name.trim().toLowerCase() === key && !b.photo_url) {
             changed = true
-            return { ...b, photo_url: photoUrl }
+            return { ...b, photo_url: photoUrl, photo_thumb_url: photoThumbUrl || photoUrl }
           }
           return b
         })
@@ -1514,7 +1514,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       }
       for (const c of (s.catches || [])) {
         if (c.bait && c.bait.trim().toLowerCase() === key && !c.bait_photo_url) {
-          const { data, error } = await supabase.from('catches').update({ bait_photo_url: photoUrl }).eq('id', c.id).select()
+          const { data, error } = await supabase.from('catches').update({ bait_photo_url: photoUrl, bait_photo_thumb_url: photoThumbUrl || photoUrl }).eq('id', c.id).select()
           if (!error && data && data.length > 0) updated++
           else blocked++
         }
@@ -2363,11 +2363,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         for (const b of (r.baits || [])) {
           if (!b.name && !b.photoFile && !b.photo_url) continue
           let photo_url = b.photo_url || null
+          let photo_thumb_url = b.photo_thumb_url || null
           if (b.photoFile) {
-            photo_url = await uploadPhoto(b.photoFile, `baits/${session.id}`)
-            if (photo_url) backfillBaitPhoto(b.name, photo_url)
+            const uploaded = await uploadPhoto(b.photoFile, `baits/${session.id}`)
+            if (uploaded) {
+              photo_url = uploaded.url
+              photo_thumb_url = uploaded.thumbUrl
+              backfillBaitPhoto(b.name, photo_url, photo_thumb_url)
+            }
           }
-          baitsPayload.push({ name: b.name, photo_url })
+          baitsPayload.push({ name: b.name, photo_url, photo_thumb_url })
         }
         await supabase.from('rods').insert({
           session_id: session.id, group_id: groupId, name: r.name,
@@ -2398,13 +2403,20 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         ? new Date(`${session.session_date}T${c.time}:00`).toISOString()
         : null
       let photo_url = null
+      let photo_thumb_url = null
       if (c.photoFile) {
-        photo_url = await uploadPhoto(c.photoFile, `catches/${session.id}`)
+        const uploaded = await uploadPhoto(c.photoFile, `catches/${session.id}`)
+        if (uploaded) { photo_url = uploaded.url; photo_thumb_url = uploaded.thumbUrl }
       }
       let bait_photo_url = c.bait_photo_url || null
+      let bait_photo_thumb_url = c.bait_photo_thumb_url || null
       if (c.baitPhotoFile) {
-        bait_photo_url = await uploadPhoto(c.baitPhotoFile, `catches/${session.id}`)
-        if (bait_photo_url) backfillBaitPhoto(c.bait, bait_photo_url)
+        const uploaded = await uploadPhoto(c.baitPhotoFile, `catches/${session.id}`)
+        if (uploaded) {
+          bait_photo_url = uploaded.url
+          bait_photo_thumb_url = uploaded.thumbUrl
+          backfillBaitPhoto(c.bait, bait_photo_url, bait_photo_thumb_url)
+        }
       }
       // jednoznačný případ (výprava má navázané jen jedno katalogové místo) -> rovnou přiřadit i novému úlovku
       const linkedIds = (session.session_locations || []).map((sl) => sl.location_id)
@@ -2417,7 +2429,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       const { error } = await supabase.from('catches').insert({
         session_id: session.id, group_id: groupId, rod_id: c.rodId || null,
         species: c.species, category: c.category, length_cm: c.length || null, weight_kg: c.weight || null,
-        bait: c.bait, caught_at: caughtAt, lat: c.point.lat, lng: c.point.lng, photo_url, bait_photo_url,
+        bait: c.bait, caught_at: caughtAt, lat: c.point.lat, lng: c.point.lng,
+        photo_url, photo_thumb_url, bait_photo_url, bait_photo_thumb_url,
         location_id, revir,
         weather_temp_c: c.weather_temp_c ?? null, weather_pressure_hpa: c.weather_pressure_hpa ?? null, weather_pressure_trend: c.weather_pressure_trend ?? null,
         weather_wind: c.weather_wind || null, weather_desc: c.weather_desc || null,
@@ -3368,7 +3381,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               <div className="record-head">
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                   {b.photo_url
-                    ? <img src={b.photo_url} alt="" className="bait-thumb" style={{ marginLeft: 0, flex: 'none' }} />
+                    ? <img src={b.photo_thumb_url || b.photo_url} alt="" className="bait-thumb" style={{ marginLeft: 0, flex: 'none' }} />
                     : <span style={{ flex: 'none', display: 'flex' }}><IconNastraha size={18} color={b.category === 'dravec' ? 'var(--water-deep)' : 'var(--amber-deep)'} /></span>}
                   <strong style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.label}</strong>
                 </span>
@@ -3425,7 +3438,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 >
                   <div className="feed-card-photo">
                     {c.photo_url
-                      ? <img src={c.photo_url} alt={c.species} loading="lazy" decoding="async" />
+                      ? <img src={c.photo_thumb_url || c.photo_url} alt={c.species} loading="lazy" decoding="async" />
                       : <div className="feed-card-photo-fallback" dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />}
                   </div>
                   <div className="feed-card-body">
@@ -3597,7 +3610,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               <div key={species} className="species-shelf-card" onClick={() => setSpeciesGalleryKey(species)}>
                 <div className="species-shelf-thumb" style={{ background: record.photo_url ? undefined : catColor }}>
                   {record.photo_url
-                    ? <img src={record.photo_url} alt={species} loading="lazy" />
+                    ? <img src={record.photo_thumb_url || record.photo_url} alt={species} loading="lazy" />
                     : <div style={{ width: 34 }} dangerouslySetInnerHTML={{ __html: fishSVG('#fff') }} />}
                 </div>
                 <div className="species-shelf-name">{species}</div>
@@ -3873,7 +3886,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                         {(r.baits && r.baits.length > 0 ? r.baits : (r.bait ? [{ name: r.bait, photo_url: r.bait_photo_url }] : [])).map((b, bi) => (
                           <span className="bait-chip" key={bi}>
                             {b.name}
-                            {b.photo_url && <img src={b.photo_url} alt="nástraha" className="bait-thumb" />}
+                            {b.photo_url && <img src={b.photo_thumb_url || b.photo_url} alt="nástraha" className="bait-thumb" />}
                           </span>
                         ))}
                         {(!r.baits || r.baits.length === 0) && !r.bait && <span className="rod-bait">—</span>}
@@ -5394,14 +5407,16 @@ function RodEditRow({ rod, color, baitPhotoMap = {}, baitListId = 'known-baits-a
     for (const b of baits) {
       if (!b.name && !b.photo_url && !b.photoFile) continue
       let photo_url = b.photo_url
+      let photo_thumb_url = b.photo_thumb_url
       if (b.photoFile) {
-        const url = await uploadPhoto(b.photoFile, `baits/${rod.session_id}`)
-        if (url) {
-          photo_url = url
-          onBackfillBaitPhoto?.(b.name, url)
+        const uploaded = await uploadPhoto(b.photoFile, `baits/${rod.session_id}`)
+        if (uploaded) {
+          photo_url = uploaded.url
+          photo_thumb_url = uploaded.thumbUrl
+          onBackfillBaitPhoto?.(b.name, photo_url, photo_thumb_url)
         }
       }
-      baitsPayload.push({ name: b.name, photo_url })
+      baitsPayload.push({ name: b.name, photo_url, photo_thumb_url })
     }
     const { error } = await supabase.from('rods').update({
       name, baits: baitsPayload,
