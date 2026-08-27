@@ -55,7 +55,7 @@ export default function BaitPicker({ value, category, catalog, onChange, onAddBa
                     )}
                     {options.map((b) => (
                       <div key={b.id} className="bait-picker-item" onClick={() => pick(b.name)}>
-                        {b.photo_url && <img src={b.photo_url} alt="" className="bait-thumb" />}
+                        {b.photo_url && <img src={b.photo_thumb_url || b.photo_url} alt="" className="bait-thumb" />}
                         <span>{b.name}</span>
                       </div>
                     ))}
