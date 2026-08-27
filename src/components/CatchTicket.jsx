@@ -119,16 +119,19 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
     setBusy(true)
     try {
       let photo_url = c.photo_url
+      let photo_thumb_url = c.photo_thumb_url
       if (form.photoFile) {
-        const url = await uploadPhoto(form.photoFile, `catches/${c.session_id}`)
-        if (url) photo_url = url
+        const uploaded = await uploadPhoto(form.photoFile, `catches/${c.session_id}`)
+        if (uploaded) { photo_url = uploaded.url; photo_thumb_url = uploaded.thumbUrl }
       }
       let bait_photo_url = form.bait_photo_url || null
+      let bait_photo_thumb_url = form.bait_photo_thumb_url || null
       if (form.baitPhotoFile) {
-        const url = await uploadPhoto(form.baitPhotoFile, `catches/${c.session_id}`)
-        if (url) {
-          bait_photo_url = url
-          onBackfillBaitPhoto?.(form.bait, url)
+        const uploaded = await uploadPhoto(form.baitPhotoFile, `catches/${c.session_id}`)
+        if (uploaded) {
+          bait_photo_url = uploaded.url
+          bait_photo_thumb_url = uploaded.thumbUrl
+          onBackfillBaitPhoto?.(form.bait, bait_photo_url, bait_photo_thumb_url)
         }
       }
       const sessionDate = session?.session_date || (c.caught_at ? c.caught_at.slice(0, 10) : null)
@@ -138,7 +141,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
       const { error } = await supabase.from('catches').update({
         species: form.species, category: form.category, revir: form.revir || null,
         length_cm: form.length_cm || null, weight_kg: form.weight_kg || null,
-        bait: form.bait, photo_url, bait_photo_url, caught_at,
+        bait: form.bait, photo_url, photo_thumb_url, bait_photo_url, bait_photo_thumb_url, caught_at,
         weather_temp_c: form.weather_temp_c, weather_pressure_hpa: form.weather_pressure_hpa, weather_pressure_trend: form.weather_pressure_trend,
         weather_wind: form.weather_wind, weather_desc: form.weather_desc,
         water_level_cm: form.water_level_cm, water_flow_m3s: form.water_flow_m3s, water_temp_c: form.water_temp_c,
