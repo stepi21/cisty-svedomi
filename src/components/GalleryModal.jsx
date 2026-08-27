@@ -7,18 +7,18 @@ export default function GalleryModal({ sessions, onClose, onOpenCatch, onOpenBai
     ;(s.catches || []).forEach((c) => {
       if (c.photo_url && !seen.has(c.photo_url)) {
         seen.add(c.photo_url)
-        photos.push({ url: c.photo_url, label: c.species, type: 'catch', catchRef: c, date: s.session_date })
+        photos.push({ url: c.photo_url, thumbUrl: c.photo_thumb_url, label: c.species, type: 'catch', catchRef: c, date: s.session_date })
       }
       if (c.bait_photo_url && !seen.has(c.bait_photo_url)) {
         seen.add(c.bait_photo_url)
-        photos.push({ url: c.bait_photo_url, label: c.bait, type: 'bait', catchRef: c, date: s.session_date })
+        photos.push({ url: c.bait_photo_url, thumbUrl: c.bait_photo_thumb_url, label: c.bait, type: 'bait', catchRef: c, date: s.session_date })
       }
     })
     ;(s.rods || []).forEach((r) => {
       ;(r.baits || []).forEach((b) => {
         if (b.photo_url && !seen.has(b.photo_url)) {
           seen.add(b.photo_url)
-          photos.push({ url: b.photo_url, label: b.name, type: 'bait', catchRef: null, date: s.session_date })
+          photos.push({ url: b.photo_url, thumbUrl: b.photo_thumb_url, label: b.name, type: 'bait', catchRef: null, date: s.session_date })
         }
       })
     })
@@ -47,7 +47,7 @@ export default function GalleryModal({ sessions, onClose, onOpenCatch, onOpenBai
                   onClick={() => p.type === 'catch' ? (p.catchRef && onOpenCatch(p.catchRef)) : onOpenBait(p.label)}
                   title={p.label}
                 >
-                  <img src={p.url} alt={p.label} />
+                  <img src={p.thumbUrl || p.url} alt={p.label} />
                   <span className={`gallery-tag ${p.type}`}>
                     {p.type === 'catch' ? <IconUlovek size={13} color="var(--water-deep)" /> : <IconNastraha size={13} color="var(--amber-deep)" />}
                   </span>
