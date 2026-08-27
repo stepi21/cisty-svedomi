@@ -488,6 +488,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       .select('*, rods(*), catches(*), session_locations(location_id)')
       .eq('group_id', groupId)
       .order('session_date', { ascending: false })
+      .order('created_at', { ascending: false })
     if (!error) {
       setSessions(data)
       if (data.length && !activeIdRef.current) setActiveId(data[0].id)
