@@ -932,7 +932,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     })
     locationsCatalog.forEach((l) => {
       if (l.lat == null || l.lng == null || l.scope === 'reach') return
-      named.push({ title: l.name, revir: l.revir || '', lat: l.lat, lng: l.lng })
+      named.push({ title: l.name, revir: l.revir || '', lat: l.lat, lng: l.lng, id: l.id })
     })
     const withDist = named
       .map((n) => (n.distance === 0 ? n : { ...n, distance: roughDistanceMeters(point, n) }))
@@ -1010,7 +1010,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       return
     }
     pendingGpsShorePointRef.current = point
-    pendingPointModeCatalogRef.current = { title: match.title, revir: match.revir, locationIds: [] }
+    pendingPointModeCatalogRef.current = { title: match.title, revir: match.revir, locationIds: match.id ? [match.id] : [] }
     setRodPointsDraft([])
     setPlacementTarget('session-point')
   }
@@ -1634,6 +1634,42 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const { error } = await supabase.from('locations').update(fields).eq('id', id)
     if (error) { alert(error.message); return }
     await loadLocationsCatalog()
+  }
+
+  // Ruční oprava stanice ČHМÚ ve výpravě appka dřív pamatovala jen pro
+  // tenhle jeden výpočet -- příště appka u stejného bodu zase spustila
+  // automatický výběr od nuly. Tahle funkce opravu uloží do katalogu
+  // míst (stejný mechanismus jako LocationsModal), aby appka příště
+  // stanici nabídla už opravenou:
+  // 1) existuje-li JEDNO navázané místo, appka opraví jen to.
+  // 2) jinak appka zkusí najít blízký (do 150 m) záznam v katalogu.
+  // 3) jinak appka vytvoří nový, minimální bodový záznam.
+  // Appka vrátí id toho místa, ať appka aktuální výpravu/úlovek může
+  // hned propojit -- díky tomu se oprava projeví i příště.
+  async function persistStationChoice(point, label, revir, linkedLocationIds, station) {
+    if (linkedLocationIds && linkedLocationIds.length === 1) {
+      await updateLocationsCatalogEntry(linkedLocationIds[0], {
+        hydro_station_id: station.objID, hydro_station_name: station.name, hydro_stream_name: station.stream,
+      })
+      return linkedLocationIds[0]
+    }
+    const nearby = locationsCatalog.find((l) =>
+      l.lat != null && l.lng != null && l.scope !== 'reach' && roughDistanceMeters(point, l) <= 150
+    )
+    if (nearby) {
+      await updateLocationsCatalogEntry(nearby.id, {
+        hydro_station_id: station.objID, hydro_station_name: station.name, hydro_stream_name: station.stream,
+      })
+      return nearby.id
+    }
+    const { data, error } = await supabase.from('locations').insert({
+      group_id: groupId, created_by: userId, name: label || revir || 'Bod', revir: revir || null,
+      lat: point.lat, lng: point.lng, scope: 'spot',
+      hydro_station_id: station.objID, hydro_station_name: station.name, hydro_stream_name: station.stream,
+    }).select().single()
+    if (error) { console.warn('Nepodařilo se uložit stanici do katalogu:', error); return null }
+    await loadLocationsCatalog()
+    return data.id
   }
 
   async function deleteLocationFromCatalog(id) {
@@ -4524,6 +4560,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onStartAddArea={startAddAreaPoint}
           locationsCatalog={locationsCatalog}
           onSaveLocation={startSaveLocation}
+          onPersistStation={persistStationChoice}
           onZoomToPoint={(lat, lng) => mapInstance.current?.setView([lat, lng], 15)}
         />
       )}
@@ -4605,6 +4642,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           onRelocate={handleRelocateSession}
           onManageAreas={() => startManageAreas(sessions.find((s) => s.id === editingSession.id))}
           locationsCatalog={locationsCatalog}
+          onPersistStation={persistStationChoice}
         />
       )}
 
@@ -5039,7 +5077,7 @@ function StatsModal({ sessions, members, userColor }) {
   )
 }
 
-function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onRelocate, onManageAreas, locationsCatalog = [] }) {
+function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onRelocate, onManageAreas, locationsCatalog = [], onPersistStation }) {
   useLockBodyScroll()
   const [busy, setBusy] = useState(false)
   const [weatherBusy, setWeatherBusy] = useState(false)
@@ -5080,6 +5118,18 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
         waterLevel: water?.level_cm ?? null, waterFlow: water?.flow_m3s ?? null, waterTemp: water?.temp_c ?? null,
         waterStationName: s.name, waterPrecision: water?.precision ?? null, waterSpaLevel: water?.spa_level ?? null,
       }))
+      // Appka opravu zapamatuje pro příště (uloží ji do katalogu míst) a
+      // pokud šlo o nový/jiný záznam než dosud navázaný, appka propojí
+      // tuhle (už uloženou) výpravu s ním, ať se to hned projeví i tady.
+      if (onPersistStation) {
+        const locId = await onPersistStation(
+          { lat: draft.lat, lng: draft.lng }, draft.title, draft.revir, draft.linkedLocationIds, s
+        )
+        if (locId && !(draft.linkedLocationIds || []).includes(locId)) {
+          await supabase.from('session_locations').insert({ session_id: draft.id, location_id: locId })
+          setDraft((d) => ({ ...d, linkedLocationIds: [...(d.linkedLocationIds || []), locId] }))
+        }
+      }
     } catch {
       setWeatherError('Nepodařilo se natáhnout data pro vybranou stanici.')
     }
@@ -5407,12 +5457,15 @@ function RodEditRow({ rod, color, baitPhotoMap = {}, baitListId = 'known-baits-a
   )
 }
 
-function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, onAddBait, onStartAddArea, locationsCatalog = [], onSaveLocation, onZoomToPoint }) {
+function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhotoMap = {}, baitListId = 'known-baits-all', baitCatalog = [], baitCategory = null, onAddBait, onStartAddArea, locationsCatalog = [], onSaveLocation, onPersistStation, onZoomToPoint }) {
   useLockBodyScroll()
   const [busy, setBusy] = useState(false)
   const [weatherBusy, setWeatherBusy] = useState(false)
   const [weatherError, setWeatherError] = useState(null)
   const [showManualWeather, setShowManualWeather] = useState(false)
+  const [stationPickerOpen, setStationPickerOpen] = useState(false)
+  const [stationOptions, setStationOptions] = useState([])
+  const [stationPickerBusy, setStationPickerBusy] = useState(false)
 
   function set(field, value) { setDraft((d) => ({ ...d, [field]: value })) }
   function setRod(i, field, value) {
@@ -5531,6 +5584,52 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft.date])
 
+  // Ruční oprava stanice ČHMÚ -- appka jinak vybírá stanici jen podle
+  // vzdušné vzdálenosti (i s nápovědou podle řeky se občas netrefí,
+  // např. u soutoků), takže appka musí dát možnost výběr přebít ručně.
+  async function openStationPicker() {
+    setStationPickerOpen(true)
+    setStationPickerBusy(true)
+    try {
+      const list = await findNearestStations(draft.point.lat, draft.point.lng, 6, extractRiverName(draft.revir || draft.title))
+      setStationOptions(list)
+    } catch {
+      setStationOptions([])
+    }
+    setStationPickerBusy(false)
+  }
+
+  async function pickStation(s) {
+    setStationPickerOpen(false)
+    setWeatherBusy(true)
+    try {
+      const water = await fetchWaterConditions(s.objID, draft.date, draft.timeFrom)
+      setDraft((d) => ({
+        ...d,
+        waterStations: [{
+          station_id: s.objID, station_name: s.name,
+          level_cm: water?.level_cm ?? null, flow_m3s: water?.flow_m3s ?? null, temp_c: water?.temp_c ?? null,
+          spa_level: water?.spa_level ?? null, precision: water?.precision ?? null,
+        }],
+        waterLevel: water?.level_cm ?? null, waterFlow: water?.flow_m3s ?? null, waterTemp: water?.temp_c ?? null,
+        waterStationName: s.name, waterPrecision: water?.precision ?? null, waterSpaLevel: water?.spa_level ?? null,
+      }))
+      // Appka opravu zapamatuje pro příště (uloží ji do katalogu míst) --
+      // výprava appce sama ještě neexistuje v appce databázi, appka tak
+      // jen doplní id do linkedLocationIds, appka appce se propojí sama
+      // až appka výpravu doopravdy uloží (viz saveSession).
+      if (onPersistStation) {
+        const locId = await onPersistStation(draft.point, draft.title, draft.revir, draft.linkedLocationIds, s)
+        if (locId) {
+          setDraft((d) => ({ ...d, linkedLocationIds: [...new Set([...(d.linkedLocationIds || []), locId])] }))
+        }
+      }
+    } catch {
+      setWeatherError('Nepodařilo se natáhnout data pro vybranou stanici.')
+    }
+    setWeatherBusy(false)
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     setBusy(true)
@@ -5635,6 +5734,21 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
                 {draft.waterTemp != null ? ` · ${draft.waterTemp} °C` : ''} ({draft.waterStationName}{draft.waterPrecision ? `, ${WATER_PRECISION_LABEL[draft.waterPrecision]}` : ''})
                 {draft.waterSpaLevel != null && SPA_LEVEL_INFO[draft.waterSpaLevel] ? ` · ${SPA_LEVEL_INFO[draft.waterSpaLevel].icon} ${SPA_LEVEL_INFO[draft.waterSpaLevel].label}` : ''}
               </p>
+            )}
+            {(draft.waterStations?.length > 0 || draft.waterStationName) && !stationPickerOpen && (
+              <button type="button" className="new-btn" style={{ marginTop: 4 }} onClick={openStationPicker}>Změnit stanici</button>
+            )}
+            {stationPickerOpen && (
+              <div style={{ marginTop: 6 }}>
+                {stationPickerBusy && <p className="hint-text">Hledám nejbližší stanice…</p>}
+                {!stationPickerBusy && stationOptions.length === 0 && <p className="hint-text">ČHМÚ nevrátilo žádné stanice.</p>}
+                {!stationPickerBusy && stationOptions.map((s) => (
+                  <div key={s.objID} className="bait-picker-item" onClick={() => pickStation(s)}>
+                    {s.name}{s.stream ? ` (${s.stream})` : ''}
+                  </div>
+                ))}
+                <button type="button" className="new-btn" style={{ marginTop: 4 }} onClick={() => setStationPickerOpen(false)}>Zrušit</button>
+              </div>
             )}
             {draft.date && <p className="hint-text" style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}><IconMoonPhase phase={moonPhaseName(draft.date)} size={13} /> {moonPhaseName(draft.date)}</p>}
 
