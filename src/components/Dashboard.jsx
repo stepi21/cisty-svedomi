@@ -3419,7 +3419,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const sorted = all.sort((a, b) =>
       (b.caught_at || b.created_at || b.sessionRef.session_date || '').localeCompare(a.caught_at || a.created_at || b.sessionRef.session_date || '')
     )
-    const HOME_FEED_LIMIT = 20
+    // Appka na Domů dřív rovnou zobrazila 20 úlovků (a appce s nimi 20
+    // fotek) najednou -- i s náhledy je to víc, než se vejde na
+    // obrazovku telefonu bez scrollování, a appka by čekala na
+    // stažení fotek, co uživatel ještě ani neviděl. Appka teď ukáže
+    // jen posledních 8 (pár řádků dlaždic) a na zbytek appka nabídne
+    // tlačítko "Zobrazit všechny úlovky" (appka ho zobrazuje jen
+    // stejně, o kolik víc jich je).
+    const HOME_FEED_LIMIT = 8
     const shown = sorted.slice(0, HOME_FEED_LIMIT)
     return (
       <>
@@ -3584,7 +3591,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               <div key={c.id} className="polaroid-card" onClick={() => openCatch(c)}>
                 <div className="polaroid-photo" style={{ background: c.photo_url ? undefined : CATEGORY_COLOR[c.category] }}>
                   {c.photo_url
-                    ? <img src={c.photo_url} alt={c.species} loading="lazy" />
+                    ? <img src={c.photo_thumb_url || c.photo_url} alt={c.species} loading="lazy" />
                     : <div style={{ width: 60 }} dangerouslySetInnerHTML={{ __html: fishSVG('#fff') }} />}
                 </div>
                 <div className="polaroid-caption">
