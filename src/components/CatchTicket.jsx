@@ -16,6 +16,27 @@ const fishSVG = (color) => `
     <circle cx="46" cy="14" r="2.3" fill="#1a1a1a"/>
   </svg>`
 
+function normalizeSearchText(s) {
+  return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+}
+
+// Najde stanici ČHMÚ podle STEJNÉHO čísla revíru už dřív ručně potvrzeného
+// u jiného místa v katalogu -- appka appku hledá bez ohledu na GPS
+// vzdálenost. Řeší soutoky/souběžné toky, kde appka podle vzdušné
+// vzdálenosti bez tohohle skočí na nejbližší stanici, i když je fyzicky
+// na jiné řece než revír, na kterém se skutečně chytalo.
+function findStationsByRevir(revir, locationsCatalog) {
+  const key = normalizeSearchText(revir)
+  if (!key) return []
+  const seen = new Map()
+  locationsCatalog.forEach((l) => {
+    if (l.hydro_station_id && normalizeSearchText(l.revir) === key && !seen.has(l.hydro_station_id)) {
+      seen.set(l.hydro_station_id, { objID: l.hydro_station_id, name: l.hydro_station_name, stream: l.hydro_stream_name })
+    }
+  })
+  return Array.from(seen.values())
+}
+
 function toLocalTimeInput(isoString) {
   const d = new Date(isoString)
   const hh = String(d.getHours()).padStart(2, '0')
@@ -80,9 +101,10 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
       if (!confirmed && linkedLocations.length === 1 && linkedLocations[0].hydro_station_id) {
         confirmed = linkedLocations[0]
       }
+      const byRevir = !confirmed ? findStationsByRevir(form.revir || c.revir, locationsCatalog) : []
       const station = confirmed
         ? { objID: confirmed.hydro_station_id, name: confirmed.hydro_station_name }
-        : (await findNearestStations(c.lat, c.lng, 1))[0]
+        : byRevir[0] || (await findNearestStations(c.lat, c.lng, 1))[0]
       if (station) {
         const water = await fetchWaterConditions(station.objID, session?.session_date || c.caught_at?.slice(0, 10), form.time)
         if (water) {
