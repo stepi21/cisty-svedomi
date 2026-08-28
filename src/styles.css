@@ -425,6 +425,17 @@ header h1 .accent{ color:var(--amber); }
 
 
 /* ---------- feed na Domů — fotka jako dominanta karty ---------- */
+.leaderboard-card{ margin:0 18px 14px; background:var(--white); border:1px solid var(--paper-line); border-radius:12px; overflow:hidden; }
+.leaderboard-head{ display:flex; align-items:center; gap:6px; padding:12px 14px; border-bottom:1px solid #EFEBDF; font-family:'IBM Plex Mono', monospace; font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:.08em; color:var(--ink-soft); }
+.leaderboard-empty{ padding:14px; font-size:var(--fs-base); color:var(--ink-soft); }
+.leaderboard-rows{ padding:4px 14px 8px; }
+.leaderboard-row{ display:flex; align-items:center; gap:9px; padding:7px 0; border-bottom:1px solid #F5F2E9; }
+.leaderboard-row:last-child{ border-bottom:none; }
+.leaderboard-rank{ width:18px; height:18px; border-radius:50%; background:var(--paper); color:var(--ink-soft); font-family:'IBM Plex Mono', monospace; font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center; flex:none; }
+.leaderboard-rank.first{ background:var(--amber); color:var(--ink); }
+.leaderboard-name{ font-size:var(--fs-md); flex:1; }
+.leaderboard-count{ font-family:'IBM Plex Mono', monospace; font-size:var(--fs-sm); color:var(--ink-soft); }
+
 .home-feed{
   display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));
   gap:16px; padding:18px 24px; max-width:1200px; margin:0 auto; width:100%;
