@@ -3450,6 +3450,59 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return new Date(isoString).toLocaleDateString('cs-CZ')
   }
 
+  // --- Domů: žebříček party za aktuální kalendářní měsíc (1. -- poslední
+  // den v měsíci podle lokálního data appky). Appka záměrně NEdělá
+  // samostatnou obrazovku ani přepínač měsíc/sezóna -- jen pevné okno
+  // "tenhle měsíc" přímo v kartě na Domů (rozhodnuto v konzultaci --
+  // appka historii/celoroční přehled zatím neřeší, jde jen o rychlý
+  // přehled aktivity party). Datum úlovku appka počítá stejným
+  // pravidlem jako feed níž (caught_at, jinak session_date), ať jsou
+  // obě appka karty konzistentní v tom, co počítají jako "kdy".
+  function renderHomeLeaderboard() {
+    const now = new Date()
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    const counts = {}
+    members.forEach((m) => { counts[m.id] = 0 })
+    sessions.forEach((s) => {
+      ;(s.catches || []).forEach((c) => {
+        const dateStr = c.caught_at || s.session_date
+        if (!dateStr) return
+        const d = new Date(dateStr)
+        if (d >= monthStart) {
+          counts[s.user_id] = (counts[s.user_id] || 0) + 1
+        }
+      })
+    })
+    const monthLabel = now.toLocaleDateString('cs-CZ', { month: 'long' })
+    const ranked = members
+      .map((m) => ({ ...m, count: counts[m.id] || 0 }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'cs'))
+    const totalCatches = ranked.reduce((sum, m) => sum + m.count, 0)
+    if (members.length === 0) return null
+    return (
+      <div className="leaderboard-card">
+        <div className="leaderboard-head">
+          <IconTrophy size={16} />
+          <span>Žebříček party · {monthLabel}</span>
+        </div>
+        {totalCatches === 0 ? (
+          <div className="leaderboard-empty">Tenhle měsíc zatím nikdo nic nechytil.</div>
+        ) : (
+          <div className="leaderboard-rows">
+            {ranked.map((m, idx) => (
+              <div className="leaderboard-row" key={m.id}>
+                <span className={`leaderboard-rank ${idx === 0 && m.count > 0 ? 'first' : ''}`}>{idx + 1}</span>
+                <span className="user-dot" style={{ background: userColor(m.id) }} />
+                <span className="leaderboard-name">{m.name}</span>
+                <span className="leaderboard-count">{m.count} {m.count === 1 ? 'úlovek' : m.count >= 2 && m.count <= 4 ? 'úlovky' : 'úlovků'}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   // --- Domů: feed posledních úlovků party, fotka jako dominanta karty ---
   function renderHomeFeed() {
     const all = []
@@ -3471,6 +3524,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     return (
       <>
         <div className="sb-head"></div>
+        {renderHomeLeaderboard()}
         {sorted.length === 0 ? (
           <div style={{ padding: '20px 18px', color: 'var(--ink-soft)', fontSize: 13 }}>
             Zatím žádný úlovek — až někdo z party něco chytí, objeví se tady.
