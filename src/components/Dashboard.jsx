@@ -5,7 +5,7 @@ import { supabase } from '../supabaseClient'
 import CatchTicket from './CatchTicket.jsx'
 import HelpModal from './HelpModal.jsx'
 import BaitsModal, { computeBaitsList } from './BaitsModal.jsx'
-import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconLocate, IconMoonPhase, IconPressureTrend, IconBoat, IconRiverAuto, IconBell, IconHome, IconMap, IconClock } from '../lib/icons.jsx'
+import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconLocate, IconMoonPhase, IconPressureTrend, IconBoat, IconRiverAuto, IconBell, IconHome, IconMap, IconClock, IconApprox } from '../lib/icons.jsx'
 import BaitPicker from './BaitPicker.jsx'
 import LocationsModal from './LocationsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
@@ -6545,9 +6545,9 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
               </div>
             </div>
             {!draft.weight && draft.length && hasWeightEstimate(draft.species) && estimateWeightKg(draft.species, draft.length) != null && (
-              <p className="hint-text" style={{ marginTop: -6, marginBottom: 8 }}>
-                Odhad z délky: ~{estimateWeightKg(draft.species, draft.length)} kg{' '}
-                <button type="button" className="new-btn" style={{ marginLeft: 6 }} onClick={() => set('weight', estimateWeightKg(draft.species, draft.length))}>
+              <p className="hint-text" style={{ marginTop: -6, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <IconApprox size={14} /> Odhad z délky: {estimateWeightKg(draft.species, draft.length)} kg
+                <button type="button" className="new-btn" style={{ marginLeft: 4 }} onClick={() => set('weight', estimateWeightKg(draft.species, draft.length))}>
                   Použít
                 </button>
               </p>
