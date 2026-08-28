@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../supabaseClient'
 import { uploadPhoto } from '../lib/storage.js'
 import { moonPhaseName, fetchWeather } from '../lib/weather.js'
@@ -191,7 +192,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
 
   return (
     <div className="modal-bg show catch-ticket-modal" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      {pickingRevir && (
+      {pickingRevir && createPortal(
         <div className="modal-bg show bait-picker-modal" onClick={(e) => e.target === e.currentTarget && setPickingRevir(false)}>
           <div className="ticket" style={{ maxWidth: 320 }}>
             <div className="ticket-top">
@@ -208,7 +209,8 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
               ))}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       <div className="ticket">
         <div className="ticket-mobile-backbar">
