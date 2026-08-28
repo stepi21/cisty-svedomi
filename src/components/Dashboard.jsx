@@ -3836,6 +3836,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 </div>
                 <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 'var(--fs-sm2)', color: 'var(--ink-soft)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <IconCalendar size={13} /> {activeSession.session_date}{activeSession.time_from ? ` · ${activeSession.time_from}–${activeSession.time_to || '?'}` : ''}
+                  {crossesMidnight(activeSession.time_from, activeSession.time_to) && ` 🌙 (${formatDurationHM(sessionDurationMinutes(activeSession))})`}
                 </div>
                 <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 'var(--fs-xs)', color: 'var(--ink-soft)', marginTop: 2 }}>
                   Zapsal: {userName(activeSession.user_id)}
