@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient'
 import { uploadPhoto } from '../lib/storage.js'
 import { moonPhaseName, fetchWeather } from '../lib/weather.js'
 import { fetchWaterConditions, findNearestStations, WATER_PRECISION_LABEL, SPA_LEVEL_INFO } from '../lib/hydrology.js'
+import { actualDateForTime } from '../lib/sessionTime.js'
 import { useLockBodyScroll } from '../lib/useLockBodyScroll.js'
 import BaitPicker from './BaitPicker.jsx'
 import { IconClose, IconArrowLeft, IconEdit, IconTrash, IconCamera, IconRevir, IconCalendar, IconThermometer, IconGauge, IconWind, IconMoonPhase, IconDroplet, IconRefresh, IconPressureTrend } from '../lib/icons.jsx'
@@ -87,8 +88,14 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
   async function handleFetchWeather() {
     if (!form.time) { setWeatherError('Nejdřív vyplň čas úlovku.'); return }
     setWeatherBusy(true); setWeatherError(null)
+    // Stejné ošetření přechodu přes půlnoc jako appka appce použije u
+    // ukládání (viz handleSave níže) -- appka appce dohledá počasí/vodu
+    // pro skutečný kalendářní den úlovku, ne pro den, kdy výprava jen
+    // začala.
+    const sessionDateFallback = session?.session_date || c.caught_at?.slice(0, 10)
+    const catchDate = actualDateForTime(sessionDateFallback, session?.time_from, form.time)
     try {
-      const w = await fetchWeather(c.lat, c.lng, session?.session_date || c.caught_at?.slice(0, 10), form.time)
+      const w = await fetchWeather(c.lat, c.lng, catchDate, form.time)
       setForm((f) => ({ ...f, weather_temp_c: w.temp, weather_pressure_hpa: w.pressure, weather_pressure_trend: w.pressureTrend, weather_wind: w.wind, weather_desc: w.desc }))
     } catch (e) {
       setWeatherError(e.message)
@@ -107,7 +114,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
         ? { objID: confirmed.hydro_station_id, name: confirmed.hydro_station_name }
         : byRevir[0] || (await findNearestStations(c.lat, c.lng, 1))[0]
       if (station) {
-        const water = await fetchWaterConditions(station.objID, session?.session_date || c.caught_at?.slice(0, 10), form.time)
+        const water = await fetchWaterConditions(station.objID, catchDate, form.time)
         if (water) {
           setForm((f) => ({
             ...f,
@@ -158,8 +165,9 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
         }
       }
       const sessionDate = session?.session_date || (c.caught_at ? c.caught_at.slice(0, 10) : null)
-      const caught_at = form.time && sessionDate
-        ? new Date(`${sessionDate}T${form.time}:00`).toISOString()
+      const catchDate = form.time && sessionDate ? actualDateForTime(sessionDate, session?.time_from, form.time) : sessionDate
+      const caught_at = form.time && catchDate
+        ? new Date(`${catchDate}T${form.time}:00`).toISOString()
         : c.caught_at
       const { error } = await supabase.from('catches').update({
         species: form.species, category: form.category, revir: form.revir || null,
