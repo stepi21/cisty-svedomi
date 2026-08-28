@@ -140,6 +140,15 @@ function findStationsByRevir(revir, locationsCatalog) {
 
 export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [sessions, setSessions] = useState([])
+  // Index aktivity ryb na Domů -- appka porovná DNEŠNÍ podmínky (fáze
+  // měsíce, tlak, trend tlaku, vodní stav u appce nejbližší stanice) s
+  // vlastní historií úlovků party, zvlášť pro dravce a zvlášť pro bílou
+  // rybu (stejné rozdělení appka používá v "Kdy se daří" ve Statistikách).
+  // Appka to fetchuje jen JEDNOU po prvním načtení výprav (todayIndexFetchedRef),
+  // ne při každém loadSessions -- appka nechce zbytečně bušit appčino
+  // počasí/ČHMÚ API při každém uložení úlovku.
+  const [todayIndex, setTodayIndex] = useState({ status: 'loading' })
+  const todayIndexFetchedRef = useRef(false)
   const [activeId, setActiveId] = useState(null)
   const activeIdRef = useRef(null)
   useEffect(() => { activeIdRef.current = activeId }, [activeId])
@@ -515,6 +524,124 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     }
   }, [savingLocationFor, groupId])
 
+  // Appka tady záměrně kopíruje jen minimum logiky z "Kdy se daří" (žádná
+  // hodinová bucketa, appka ji na Domů nepotřebuje) -- jen fáze měsíce,
+  // tlak, trend tlaku a vodní stav, ty čtyři signály appce úplně stačí
+  // na jednoduché "vysoká/střední/nízká".
+  const INDEX_PRESSURE_BUCKETS = [
+    { key: '<1000 hPa', test: (p) => p < 1000 },
+    { key: '1000–1010 hPa', test: (p) => p >= 1000 && p < 1010 },
+    { key: '1010–1020 hPa', test: (p) => p >= 1010 && p < 1020 },
+    { key: '1020+ hPa', test: (p) => p >= 1020 },
+  ]
+  function pressureBucketKey(p) {
+    const found = INDEX_PRESSURE_BUCKETS.find((b) => b.test(p))
+    return found ? found.key : null
+  }
+  function trendKey(trend) {
+    if (trend == null) return null
+    return trend > 0 ? 'roste' : trend < 0 ? 'klesá' : 'stabilní'
+  }
+
+  // Appka spočítá pro danou kategorii (dravec/bila), jak moc dnešní
+  // podmínky historicky "sedí" k úlovkům té kategorie. Appka to dělá jako
+  // poměr "kolikrát to sedělo vůči uniformnímu očekávání" (1 = přesně
+  // průměr, víc než 1 = nad průměrem) a zprůměruje přes všechny signály,
+  // co appka o dnešku zná.
+  function scoreCategoryIndex(category, sessionsData, today) {
+    const byMoon = {}, byPressure = {}, byTrend = {}, bySpa = {}
+    let total = 0
+    sessionsData.forEach((s) => {
+      ;(s.catches || []).forEach((c) => {
+        if (c.category !== category) return
+        total += 1
+        const dateStr = c.caught_at ? c.caught_at.slice(0, 10) : s.session_date
+        const phase = dateStr ? moonPhaseName(dateStr) : null
+        if (phase) byMoon[phase] = (byMoon[phase] || 0) + 1
+        const p = c.weather_pressure_hpa ?? s.weather_pressure_hpa
+        if (p != null && p !== '') {
+          const bk = pressureBucketKey(p)
+          if (bk) byPressure[bk] = (byPressure[bk] || 0) + 1
+        }
+        const trend = c.weather_pressure_trend ?? s.weather_pressure_trend
+        const tk = trendKey(trend)
+        if (tk) byTrend[tk] = (byTrend[tk] || 0) + 1
+        const sessionSpa = s.water_stations?.length > 0 ? s.water_stations[0].spa_level : s.water_spa_level
+        const spa = c.water_spa_level ?? sessionSpa
+        if (spa != null) bySpa[spa] = (bySpa[spa] || 0) + 1
+      })
+    })
+    // appka vyžaduje aspoň 8 úlovků dané kategorie -- pod tím appka radši
+    // ukáže "zatím málo dat", než aby appka počítala falešně sebejistý
+    // výsledek z pár úlovků.
+    if (total < 8) return { status: 'not_enough_data', total }
+
+    function signalScore(byBucket, todayKey) {
+      if (todayKey == null) return null
+      const bucketCount = Object.keys(byBucket).length
+      if (bucketCount === 0) return null
+      const matched = byBucket[todayKey] || 0
+      const sumMatched = Object.values(byBucket).reduce((a, b) => a + b, 0)
+      if (sumMatched === 0) return null
+      const ratio = matched / sumMatched
+      const expected = 1 / bucketCount
+      return ratio / expected
+    }
+
+    const scores = [
+      signalScore(byMoon, today.moonPhase),
+      signalScore(byPressure, today.pressureBucket),
+      signalScore(byTrend, today.trendLabel),
+      signalScore(bySpa, today.spaLevel),
+    ].filter((v) => v != null)
+
+    if (scores.length === 0) return { status: 'not_enough_data', total }
+    const avg = scores.reduce((a, b) => a + b, 0) / scores.length
+    const level = avg >= 1.2 ? 'vysoká' : avg >= 0.8 ? 'střední' : 'nízká'
+    return { status: 'ready', level, total }
+  }
+
+  async function loadTodayIndex(sessionsData) {
+    try {
+      const points = sessionsData.filter((s) => s.lat != null && s.lng != null)
+      const ref = points.length
+        ? { lat: points.reduce((sum, p) => sum + p.lat, 0) / points.length, lng: points.reduce((sum, p) => sum + p.lng, 0) / points.length }
+        : { lat: 49.8, lng: 15.5 }
+      const todayDateStr = new Date().toISOString().slice(0, 10)
+      const moonPhase = moonPhaseName(todayDateStr)
+
+      let pressureBucket = null, trendLabel = null
+      try {
+        const w = await fetchWeather(ref.lat, ref.lng, todayDateStr)
+        pressureBucket = pressureBucketKey(w.pressure)
+        trendLabel = trendKey(w.pressureTrend)
+      } catch {
+        // appka počasí nesehnala (offline appka podobně) -- appka jede
+        // dál jen s fází měsíce.
+      }
+
+      let spaLevel = null
+      try {
+        const stations = await findNearestStations(ref.lat, ref.lng, 1)
+        if (stations[0]) {
+          const cond = await fetchLiveConditions(stations[0].objID)
+          spaLevel = cond?.spa_level ?? null
+        }
+      } catch {
+        // appka ČHMÚ nesehnala -- appka jede dál bez vodního stavu.
+      }
+
+      const today = { moonPhase, pressureBucket, trendLabel, spaLevel }
+      setTodayIndex({
+        status: 'ready',
+        dravec: scoreCategoryIndex('dravec', sessionsData, today),
+        bila: scoreCategoryIndex('bila', sessionsData, today),
+      })
+    } catch {
+      setTodayIndex({ status: 'error' })
+    }
+  }
+
   async function loadSessions() {
     setLoading(true)
     const { data, error } = await supabase
@@ -525,6 +652,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       .order('created_at', { ascending: false })
     if (!error) {
       setSessions(data)
+      if (!todayIndexFetchedRef.current) {
+        todayIndexFetchedRef.current = true
+        loadTodayIndex(data)
+      }
       if (data.length && !activeIdRef.current) setActiveId(data[0].id)
       if (pendingTicketCatchIdRef.current) {
         const targetId = pendingTicketCatchIdRef.current
@@ -3458,6 +3589,39 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // přehled aktivity party). Datum úlovku appka počítá stejným
   // pravidlem jako feed níž (caught_at, jinak session_date), ať jsou
   // obě appka karty konzistentní v tom, co počítají jako "kdy".
+  // --- Domů: "podmínky dnes" -- index aktivity ryb zvlášť pro dravce a
+  // bílou rybu, nahoře v přehledové kartě nad žebříčkem (appka je
+  // schválně nedává na dvě samostatné kartičky vedle sebe, appka je drží
+  // v jedné kartě spolu se žebříčkem, ať appka na Domů nepřidává druhou
+  // celou kartu navíc).
+  function renderTodayIndex() {
+    if (todayIndex.status === 'loading') {
+      return <div className="index-block index-loading">Počítám dnešní podmínky…</div>
+    }
+    if (todayIndex.status === 'error') return null
+    return (
+      <div className="index-block">
+        <div className="leaderboard-head" style={{ borderTop: 'none' }}>
+          <IconTrend size={15} />
+          <span>Podmínky dnes</span>
+        </div>
+        <div className="index-row">
+          {['dravec', 'bila'].map((cat) => {
+            const r = todayIndex[cat]
+            return (
+              <div className={`index-cell category-${cat}`} key={cat}>
+                <div className="index-cell-label">{cat === 'dravec' ? 'dravec' : 'bílá ryba'}</div>
+                <div className="index-cell-value">
+                  {r?.status === 'ready' ? r.level : 'zatím málo dat'}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
   function renderHomeLeaderboard() {
     const now = new Date()
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -3481,7 +3645,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (members.length === 0) return null
     return (
       <div className="leaderboard-card">
-        <div className="leaderboard-head">
+        {renderTodayIndex()}
+        <div className="leaderboard-head" style={todayIndex.status !== 'error' ? { borderTop: '1px solid #EFEBDF' } : undefined}>
           <IconTrophy size={16} />
           <span>Žebříček party · {monthLabel}</span>
         </div>
