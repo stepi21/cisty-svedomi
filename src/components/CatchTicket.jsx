@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient'
 import { uploadPhoto } from '../lib/storage.js'
 import { moonPhaseName, fetchWeather } from '../lib/weather.js'
 import { fetchWaterConditions, findNearestStations, WATER_PRECISION_LABEL, SPA_LEVEL_INFO } from '../lib/hydrology.js'
+import { estimateWeightKg, hasWeightEstimate } from '../lib/weightEstimate.js'
 import { actualDateForTime } from '../lib/sessionTime.js'
 import { useLockBodyScroll } from '../lib/useLockBodyScroll.js'
 import BaitPicker from './BaitPicker.jsx'
@@ -317,6 +318,14 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                   <input className="text-input" type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
                 </div>
               </div>
+              {!form.weight_kg && form.length_cm && hasWeightEstimate(form.species) && estimateWeightKg(form.species, form.length_cm) != null && (
+                <p className="hint-text" style={{ marginTop: -6, marginBottom: 8 }}>
+                  Odhad z délky: ~{estimateWeightKg(form.species, form.length_cm)} kg{' '}
+                  <button type="button" className="new-btn" style={{ marginLeft: 6 }} onClick={() => setForm({ ...form, weight_kg: estimateWeightKg(form.species, form.length_cm) })}>
+                    Použít
+                  </button>
+                </p>
+              )}
               <label className="field-label">Nástraha</label>
               <BaitPicker
                 value={form.bait}
