@@ -116,6 +116,27 @@ function resolveHydroStations(linkedLocationIds, locationsCatalog) {
   return Array.from(seen.values())
 }
 
+// Najde stanici ČHMÚ podle STEJNÉHO čísla revíru, co appka už dřív měla
+// ručně potvrzené u JINÉHO místa v katalogu -- appka appku hledá i bez
+// ohledu na to, jestli je aktuální bod s tímhle katalogovým záznamem
+// vůbec geometricky (GPS) propojený. Řeší situace u soutoků/souběžných
+// toků, kdy appka podle vzdušné vzdálenosti bez tohohle najde nejbližší
+// stanici sice fyzicky nejblíž, ale na jiné řece, než na které revír
+// fakticky leží -- pokud appka tenhle revír se správnou stanicí už
+// jednou měla (ručně potvrzeno přes persistStationChoice), použije ji
+// appka znovu místo nového hádání podle vzdálenosti.
+function findStationsByRevir(revir, locationsCatalog) {
+  const key = normalizeSearchText(revir)
+  if (!key) return []
+  const seen = new Map()
+  locationsCatalog.forEach((l) => {
+    if (l.hydro_station_id && normalizeSearchText(l.revir) === key && !seen.has(l.hydro_station_id)) {
+      seen.set(l.hydro_station_id, { objID: l.hydro_station_id, name: l.hydro_station_name, stream: l.hydro_stream_name })
+    }
+  })
+  return Array.from(seen.values())
+}
+
 export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [sessions, setSessions] = useState([])
   const [activeId, setActiveId] = useState(null)
@@ -2599,14 +2620,19 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setMobileSheetOpen(panel !== 'map')
     setMapFocusSessionId(null)
     setMapFocusPoint(null)
+    // Úlovky appka appce vždycky otevře na výchozím pohledu (polička druhů,
+    // ne rozkliknutý konkrétní druh) -- appka to dřív resetovala jen při
+    // druhém kliku na už aktivní záložku (isRepeat), takže příchod odjinud
+    // (např. tlačítko "Zobrazit všechny úlovky" na Domů) appku appce
+    // nechal na naposledy prohlíženém druhu (třeba "Amuři").
+    if (panel === 'catches') {
+      setCatchesSortMode('species')
+      setSpeciesGalleryKey(null)
+      if (sidebarRef.current) sidebarRef.current.scrollTop = 0
+      window.scrollTo(0, 0)
+    }
     if (isRepeat) {
-      if (panel === 'catches') {
-        setCatchesSortMode('species')
-        setSpeciesGalleryKey(null)
-        if (sidebarRef.current) sidebarRef.current.scrollTop = 0
-        window.scrollTo(0, 0)
-      }
-      else if (panel === 'map') { setMapWho('both'); setMapWhat('catches'); mapForceResetRef.current = true; setMapResetNonce((n) => n + 1) }
+      if (panel === 'map') { setMapWho('both'); setMapWhat('catches'); mapForceResetRef.current = true; setMapResetNonce((n) => n + 1) }
       else if (panel === null) {
         setViewMode('aggregate'); setActiveCategory('all'); setActiveUserFilter('all')
         if (sidebarRef.current) sidebarRef.current.scrollTop = 0
@@ -5168,7 +5194,8 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
     // vodní stav — nezávisle na počasí, tiché selhání (žádná chyba nezobrazená uživateli)
     try {
       const stations = resolveHydroStations(draft.linkedLocationIds, locationsCatalog)
-      const targets = stations.length > 0 ? stations : await findNearestStations(draft.lat, draft.lng, 1, extractRiverName(draft.revir || draft.title))
+      const byRevir = stations.length === 0 ? findStationsByRevir(draft.revir, locationsCatalog) : []
+      const targets = stations.length > 0 ? stations : byRevir.length > 0 ? byRevir : await findNearestStations(draft.lat, draft.lng, 1, extractRiverName(draft.revir || draft.title))
       const results = (await Promise.all(targets.map(async (station) => {
         const water = await fetchWaterConditions(station.objID, draft.date, draft.timeFrom)
         return water ? { station_id: station.objID, station_name: station.name, level_cm: water.level_cm, flow_m3s: water.flow_m3s, temp_c: water.temp_c, spa_level: water.spa_level, precision: water.precision } : null
@@ -5583,7 +5610,8 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
     }
     try {
       const stations = resolveHydroStations(draft.linkedLocationIds, locationsCatalog)
-      const targets = stations.length > 0 ? stations : await findNearestStations(draft.point.lat, draft.point.lng, 1, extractRiverName(draft.revir || draft.title))
+      const byRevir = stations.length === 0 ? findStationsByRevir(draft.revir, locationsCatalog) : []
+      const targets = stations.length > 0 ? stations : byRevir.length > 0 ? byRevir : await findNearestStations(draft.point.lat, draft.point.lng, 1, extractRiverName(draft.revir || draft.title))
       const results = (await Promise.all(targets.map(async (station) => {
         const water = await fetchWaterConditions(station.objID, draft.date, draft.timeFrom)
         return water ? { station_id: station.objID, station_name: station.name, level_cm: water.level_cm, flow_m3s: water.flow_m3s, temp_c: water.temp_c, spa_level: water.spa_level, precision: water.precision } : null
@@ -5899,7 +5927,8 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
     try {
       const linkedIds = (session.session_locations || []).map((sl) => sl.location_id)
       const linkedStation = resolveHydroStation(linkedIds, locationsCatalog)
-      const station = linkedStation || (await findNearestStations(draft.point.lat, draft.point.lng, 1, extractRiverName(draft.revir || session.revir || session.title)))[0]
+      const byRevir = !linkedStation ? findStationsByRevir(draft.revir || session.revir, locationsCatalog) : []
+      const station = linkedStation || byRevir[0] || (await findNearestStations(draft.point.lat, draft.point.lng, 1, extractRiverName(draft.revir || session.revir || session.title)))[0]
       if (station) {
         const water = await fetchWaterConditions(station.objID, session.session_date, draft.time)
         if (water) {
