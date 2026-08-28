@@ -8,7 +8,7 @@ import { estimateWeightKg, hasWeightEstimate } from '../lib/weightEstimate.js'
 import { actualDateForTime } from '../lib/sessionTime.js'
 import { useLockBodyScroll } from '../lib/useLockBodyScroll.js'
 import BaitPicker from './BaitPicker.jsx'
-import { IconClose, IconArrowLeft, IconEdit, IconTrash, IconCamera, IconRevir, IconCalendar, IconThermometer, IconGauge, IconWind, IconMoonPhase, IconDroplet, IconRefresh, IconPressureTrend } from '../lib/icons.jsx'
+import { IconClose, IconArrowLeft, IconEdit, IconTrash, IconCamera, IconRevir, IconCalendar, IconThermometer, IconGauge, IconWind, IconMoonPhase, IconDroplet, IconRefresh, IconPressureTrend, IconApprox } from '../lib/icons.jsx'
 
 const CATEGORY_COLOR = { dravec: '#5C7A85', bila: '#C4A572' }
 
@@ -319,9 +319,9 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                 </div>
               </div>
               {!form.weight_kg && form.length_cm && hasWeightEstimate(form.species) && estimateWeightKg(form.species, form.length_cm) != null && (
-                <p className="hint-text" style={{ marginTop: -6, marginBottom: 8 }}>
-                  Odhad z délky: ~{estimateWeightKg(form.species, form.length_cm)} kg{' '}
-                  <button type="button" className="new-btn" style={{ marginLeft: 6 }} onClick={() => setForm({ ...form, weight_kg: estimateWeightKg(form.species, form.length_cm) })}>
+                <p className="hint-text" style={{ marginTop: -6, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <IconApprox size={14} /> Odhad z délky: {estimateWeightKg(form.species, form.length_cm)} kg
+                  <button type="button" className="new-btn" style={{ marginLeft: 4 }} onClick={() => setForm({ ...form, weight_kg: estimateWeightKg(form.species, form.length_cm) })}>
                     Použít
                   </button>
                 </p>
