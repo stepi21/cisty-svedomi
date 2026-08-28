@@ -345,6 +345,18 @@ export function IconTrend({ size = 20, color = 'currentColor' }) {
   )
 }
 
+// Appka tímhle značí odhadovanou (ne naměřenou) hodnotu -- dvě vlnovky
+// jako "přibližně", stejný tenký linkový rukopis jako appčiny ostatní
+// stavové ikonky (IconTrend, IconRefresh).
+export function IconApprox({ size = 20, color = 'var(--amber-deep)' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <path d="M3 10c1.5-2 3.5-2 5 0s3.5 2 5 0 3.5-2 5 0 3.5 2 5 0" />
+      <path d="M3 16c1.5-2 3.5-2 5 0s3.5 2 5 0 3.5-2 5 0 3.5 2 5 0" />
+    </svg>
+  )
+}
+
 export function IconOffline({ size = 20, color = '#fff' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
