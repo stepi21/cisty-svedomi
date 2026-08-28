@@ -163,6 +163,15 @@ export function IconCalendar({ size = 20, color = 'currentColor' }) {
   )
 }
 
+export function IconClock({ size = 20, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="8" fill={color} />
+      <path d="M12 7.5V12l3.2 2" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </svg>
+  )
+}
+
 export function IconDuplicate({ size = 20, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
