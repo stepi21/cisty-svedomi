@@ -5,11 +5,12 @@ import { supabase } from '../supabaseClient'
 import CatchTicket from './CatchTicket.jsx'
 import HelpModal from './HelpModal.jsx'
 import BaitsModal, { computeBaitsList } from './BaitsModal.jsx'
-import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconLocate, IconMoonPhase, IconPressureTrend, IconBoat, IconRiverAuto, IconBell, IconHome, IconMap } from '../lib/icons.jsx'
+import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconLocate, IconMoonPhase, IconPressureTrend, IconBoat, IconRiverAuto, IconBell, IconHome, IconMap, IconClock } from '../lib/icons.jsx'
 import BaitPicker from './BaitPicker.jsx'
 import LocationsModal from './LocationsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
 import { fetchWaterConditions, fetchLiveConditions, findNearestStations, WATER_PRECISION_LABEL, SPA_LEVEL_INFO } from '../lib/hydrology.js'
+import { crossesMidnight, actualDateForTime, sessionDurationMinutes, formatDurationHM } from '../lib/sessionTime.js'
 import { uploadPhoto } from '../lib/storage.js'
 import { buildRiverAreasFromLine } from '../lib/riverShape.js'
 import { useLockBodyScroll } from '../lib/useLockBodyScroll.js'
@@ -2421,8 +2422,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const c = draftCatch
     const session = activeSession
     try {
-      const caughtAt = c.time && session
-        ? new Date(`${session.session_date}T${c.time}:00`).toISOString()
+      const catchDate = c.time && session ? actualDateForTime(session.session_date, session.time_from, c.time) : session?.session_date
+      const caughtAt = c.time && catchDate
+        ? new Date(`${catchDate}T${c.time}:00`).toISOString()
         : null
       let photo_url = null
       let photo_thumb_url = null
@@ -4966,6 +4968,7 @@ function StatsModal({ sessions, members, userColor }) {
     return Object.values(speciesObj).reduce((a, b) => a + b, 0)
   }
 
+  // --- úspěšnost cíle u dravce (jen přívlač má vyplněné textové pole "Cíl") ---
   const targetStats = {}
   const targetStatsByUser = {}
   sessions.forEach((s) => {
@@ -4987,37 +4990,232 @@ function StatsModal({ sessions, members, userColor }) {
   })
   const targetRows = Object.values(targetStats)
 
-  // --- vzorce: fáze měsíce, tlak (úroveň i trend) a vodní stav (SPA stupeň) vs úlovky ---
-  const byMoonPhase = {}
-  const byPressureBucket = {}
-  const byPressureTrend = {}
-  const bySpaLevel = {}
+  // --- úspěšnost bílé ryby ---
+  // Kapr a plavaná nemají žádné textové pole "cíl" jako přívlač výše --
+  // appka úspěch odvodí přímo z TYPU výpravy: výprava typu "kapr" nebo
+  // "plavana" je úspěšná, pokud má aspoň jeden úlovek s kategorií
+  // "bila" (appka appce ho tam appka appce dá i ručně, kdyby náhodou
+  // chytil na kapří výpravě dravce -- appka to appce nezapočítá jako
+  // úspěch bílé ryby).
+  const WHITE_FISH_TYPES = ['kapr', 'plavana']
+  const whiteFishStats = { attempts: 0, successes: 0 }
+  const whiteFishStatsByUser = {}
+  sessions.forEach((s) => {
+    if (!WHITE_FISH_TYPES.includes(s.type)) return
+    const success = (s.catches || []).some((c) => c.category === 'bila')
+    whiteFishStats.attempts += 1
+    if (success) whiteFishStats.successes += 1
+    const uid = s.user_id
+    if (!whiteFishStatsByUser[uid]) whiteFishStatsByUser[uid] = { attempts: 0, successes: 0 }
+    whiteFishStatsByUser[uid].attempts += 1
+    if (success) whiteFishStatsByUser[uid].successes += 1
+  })
+
+  // --- čas u vody ---
+  // Appka počítá jen z výprav, co mají vyplněné oba časy (appka to
+  // nedělá povinné) -- appka to appce transparentně poznamená pod
+  // celkovým souhrnem.
+  const timeStatsByUser = {}
+  const timeStatsTotal = { minutes: 0, timedSessions: 0, catches: { celkem: 0, dravec: 0, bila: 0 } }
+  sessions.forEach((s) => {
+    const minutes = sessionDurationMinutes(s)
+    if (minutes == null) return
+    const uid = s.user_id
+    if (!timeStatsByUser[uid]) timeStatsByUser[uid] = { minutes: 0, timedSessions: 0, catches: { celkem: 0, dravec: 0, bila: 0 } }
+    const dravecN = (s.catches || []).filter((c) => c.category === 'dravec').length
+    const bilaN = (s.catches || []).filter((c) => c.category === 'bila').length
+    const celkemN = (s.catches || []).length
+    timeStatsByUser[uid].minutes += minutes
+    timeStatsByUser[uid].timedSessions += 1
+    timeStatsByUser[uid].catches.celkem += celkemN
+    timeStatsByUser[uid].catches.dravec += dravecN
+    timeStatsByUser[uid].catches.bila += bilaN
+    timeStatsTotal.minutes += minutes
+    timeStatsTotal.timedSessions += 1
+    timeStatsTotal.catches.celkem += celkemN
+    timeStatsTotal.catches.dravec += dravecN
+    timeStatsTotal.catches.bila += bilaN
+  })
+  function perHour(minutes, catches) {
+    if (!minutes || !catches) return null
+    return (catches / (minutes / 60)).toFixed(1)
+  }
+
+  // --- "Kdy se daří" -- appka appce appku počítá samostatně pro
+  // dravce a pro bílou rybu -- úspěšnost dravce v nějakou denní dobu
+  // neznamená nic pozitivního pro bílou rybu.
   const pressureOrder = ['<1000 hPa', '1000–1010 hPa', '1010–1020 hPa', '1020+ hPa']
   const trendOrder = ['klesá', 'stabilní', 'roste']
   const spaOrder = [-1, 0, 1, 2, 3]
-  sessions.forEach((s) => {
-    const catchCount = (s.catches || []).length
-    if (catchCount === 0) return
-    const phase = moonPhaseName(s.session_date)
-    if (phase) byMoonPhase[phase] = (byMoonPhase[phase] || 0) + catchCount
-    const p = s.weather_pressure_hpa
-    if (p != null && p !== '') {
-      const bucket = p < 1000 ? '<1000 hPa' : p < 1010 ? '1000–1010 hPa' : p < 1020 ? '1010–1020 hPa' : '1020+ hPa'
-      byPressureBucket[bucket] = (byPressureBucket[bucket] || 0) + catchCount
+  const monthOrder = ['leden', 'únor', 'březen', 'duben', 'květen', 'červen', 'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec']
+  const hourBucketOrder = ['noc (0–5)', 'ráno (5–9)', 'dopoledne (9–12)', 'odpoledne (12–17)', 'večer (17–21)', 'pozdní večer (21–24)']
+
+  function hourBucket(hour) {
+    if (hour < 5) return 'noc (0–5)'
+    if (hour < 9) return 'ráno (5–9)'
+    if (hour < 12) return 'dopoledne (9–12)'
+    if (hour < 17) return 'odpoledne (12–17)'
+    if (hour < 21) return 'večer (17–21)'
+    return 'pozdní večer (21–24)'
+  }
+
+  function buildCorrelationStats(category) {
+    const byMoonPhase = {}, byPressureBucket = {}, byPressureTrend = {}, bySpaLevel = {}, byMonth = {}, byHour = {}
+    let total = 0, withHour = 0
+    sessions.forEach((s) => {
+      ;(s.catches || []).forEach((c) => {
+        if (c.category !== category) return
+        total += 1
+        // Appka upřednostní datum/čas samotného úlovku (appka ho od
+        // opravy přechodu přes půlnoc počítá přesněji) a teprve bez
+        // něj spadne na datum výpravy.
+        const dateStr = c.caught_at ? c.caught_at.slice(0, 10) : s.session_date
+        const phase = dateStr ? moonPhaseName(dateStr) : null
+        if (phase) byMoonPhase[phase] = (byMoonPhase[phase] || 0) + 1
+        const p = c.weather_pressure_hpa ?? s.weather_pressure_hpa
+        if (p != null && p !== '') {
+          const bucket = p < 1000 ? '<1000 hPa' : p < 1010 ? '1000–1010 hPa' : p < 1020 ? '1010–1020 hPa' : '1020+ hPa'
+          byPressureBucket[bucket] = (byPressureBucket[bucket] || 0) + 1
+        }
+        const trend = c.weather_pressure_trend ?? s.weather_pressure_trend
+        if (trend != null) {
+          const key = trend > 0 ? 'roste' : trend < 0 ? 'klesá' : 'stabilní'
+          byPressureTrend[key] = (byPressureTrend[key] || 0) + 1
+        }
+        const sessionSpa = s.water_stations?.length > 0 ? s.water_stations[0].spa_level : s.water_spa_level
+        const spa = c.water_spa_level ?? sessionSpa
+        if (spa != null) bySpaLevel[spa] = (bySpaLevel[spa] || 0) + 1
+        if (dateStr) {
+          const month = monthOrder[Number(dateStr.slice(5, 7)) - 1]
+          if (month) byMonth[month] = (byMonth[month] || 0) + 1
+        }
+        if (c.caught_at) {
+          byHour[hourBucket(new Date(c.caught_at).getHours())] = (byHour[hourBucket(new Date(c.caught_at).getHours())] || 0) + 1
+          withHour += 1
+        }
+      })
+    })
+    return {
+      total, withHour,
+      moonRows: Object.entries(byMoonPhase).sort((a, b) => b[1] - a[1]),
+      pressureRows: pressureOrder.filter((k) => byPressureBucket[k]).map((k) => [k, byPressureBucket[k]]),
+      trendRows: trendOrder.filter((k) => byPressureTrend[k]).map((k) => [k, byPressureTrend[k]]),
+      spaRows: spaOrder.filter((k) => bySpaLevel[k]).map((k) => [k, bySpaLevel[k]]),
+      monthRows: monthOrder.filter((k) => byMonth[k]).map((k) => [k, byMonth[k]]),
+      hourRows: hourBucketOrder.filter((k) => byHour[k]).map((k) => [k, byHour[k]]),
     }
-    const trend = s.weather_pressure_trend
-    if (trend != null) {
-      const key = trend > 0 ? 'roste' : trend < 0 ? 'klesá' : 'stabilní'
-      byPressureTrend[key] = (byPressureTrend[key] || 0) + catchCount
-    }
-    // u výprav složených z víc stanic bereme první -- je to jen orientační přehled, ne přesná analýza
-    const spa = s.water_stations?.length > 0 ? s.water_stations[0].spa_level : s.water_spa_level
-    if (spa != null) bySpaLevel[spa] = (bySpaLevel[spa] || 0) + catchCount
-  })
-  const moonRows = Object.entries(byMoonPhase).sort((a, b) => b[1] - a[1])
-  const pressureRows = pressureOrder.filter((k) => byPressureBucket[k]).map((k) => [k, byPressureBucket[k]])
-  const trendRows = trendOrder.filter((k) => byPressureTrend[k]).map((k) => [k, byPressureTrend[k]])
-  const spaRows = spaOrder.filter((k) => bySpaLevel[k]).map((k) => [k, bySpaLevel[k]])
+  }
+  const dravecCorr = buildCorrelationStats('dravec')
+  const bilaCorr = buildCorrelationStats('bila')
+
+  // --- nejlovnější nástraha (odděleně dravec/bílá, stejný důvod jako výše) ---
+  function topBaits(category, limit = 3) {
+    const map = {}
+    sessions.forEach((s) => {
+      ;(s.catches || []).forEach((c) => {
+        if (c.category !== category) return
+        const name = (c.bait || '').trim()
+        if (!name) return
+        const key = name.toLowerCase()
+        if (!map[key]) map[key] = { label: name, n: 0 }
+        map[key].n += 1
+      })
+    })
+    return Object.values(map).sort((a, b) => b.n - a.n).slice(0, limit)
+  }
+  const topBaitsDravec = topBaits('dravec')
+  const topBaitsBila = topBaits('bila')
+
+  // --- nejlovnější revír -- appka tady úmyslně NEROZDĚLUJE podle
+  // kategorie, revír sám o sobě není dravčí ani bílý -- počty podle
+  // kategorie appka jen doplňkově uvede u každého řádku.
+  function topRevirs(limit = 5) {
+    const map = {}
+    sessions.forEach((s) => {
+      ;(s.catches || []).forEach((c) => {
+        const name = (c.revir || s.revir || '').trim()
+        if (!name) return
+        const key = name.toLowerCase()
+        if (!map[key]) map[key] = { label: name, celkem: 0, dravec: 0, bila: 0 }
+        map[key].celkem += 1
+        if (c.category === 'dravec') map[key].dravec += 1
+        if (c.category === 'bila') map[key].bila += 1
+      })
+    })
+    return Object.values(map).sort((a, b) => b.celkem - a.celkem).slice(0, limit)
+  }
+  const revirRows = topRevirs()
+
+  function renderCorrelation(corr) {
+    if (corr.total === 0) return <p className="rod-bait">zatím žádný úlovek</p>
+    return (
+      <>
+        {corr.moonRows.length > 0 && (
+          <>
+            <div className="stats-total" style={{ marginTop: 8 }}>Podle fáze měsíce</div>
+            <div className="stats-species" style={{ marginTop: 4 }}>
+              {corr.moonRows.map(([phase, n]) => (
+                <span className="bait-chip" key={phase}><IconMoonPhase phase={phase} size={13} /> {phase} — {n}×</span>
+              ))}
+            </div>
+          </>
+        )}
+        {corr.pressureRows.length > 0 && (
+          <>
+            <div className="stats-total" style={{ marginTop: 10 }}>Podle tlaku</div>
+            <div className="stats-species" style={{ marginTop: 4 }}>
+              {corr.pressureRows.map(([bucket, n]) => (
+                <span className="bait-chip" key={bucket}><IconGauge size={13} /> {bucket} — {n}×</span>
+              ))}
+            </div>
+          </>
+        )}
+        {corr.trendRows.length > 0 && (
+          <>
+            <div className="stats-total" style={{ marginTop: 10 }}>Podle trendu tlaku</div>
+            <div className="stats-species" style={{ marginTop: 4 }}>
+              {corr.trendRows.map(([trend, n]) => (
+                <span className="bait-chip" key={trend}>
+                  <IconPressureTrend trend={trend === 'roste' ? 1 : trend === 'klesá' ? -1 : 0} size={13} /> {trend} — {n}×
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+        {corr.spaRows.length > 0 && (
+          <>
+            <div className="stats-total" style={{ marginTop: 10 }}>Podle vodního stavu</div>
+            <div className="stats-species" style={{ marginTop: 4 }}>
+              {corr.spaRows.map(([level, n]) => (
+                <span className="bait-chip" key={level}>{SPA_LEVEL_INFO[level]?.icon} {SPA_LEVEL_INFO[level]?.label} — {n}×</span>
+              ))}
+            </div>
+          </>
+        )}
+        {corr.monthRows.length > 0 && (
+          <>
+            <div className="stats-total" style={{ marginTop: 10 }}>Podle měsíce v roce</div>
+            <div className="stats-species" style={{ marginTop: 4 }}>
+              {corr.monthRows.map(([month, n]) => (
+                <span className="bait-chip" key={month}>{month} — {n}×</span>
+              ))}
+            </div>
+          </>
+        )}
+        {corr.hourRows.length > 0 && (
+          <>
+            <div className="stats-total" style={{ marginTop: 10 }}>Podle denní doby</div>
+            <div className="stats-species" style={{ marginTop: 4 }}>
+              {corr.hourRows.map(([bucket, n]) => (
+                <span className="bait-chip" key={bucket}>{bucket} — {n}×</span>
+              ))}
+            </div>
+            <p className="help-note" style={{ marginTop: 4 }}>Jen z úlovků s vyplněným časem ({corr.withHour} z {corr.total}).</p>
+          </>
+        )}
+      </>
+    )
+  }
 
   return (
     <>
@@ -5039,13 +5237,27 @@ function StatsModal({ sessions, members, userColor }) {
                   ))}
                 </div>
                 <div className="stats-total">Celkem úlovků: {speciesTotal(u.species)}</div>
-                {targetStatsByUser[m.id] && (
+                {(targetStatsByUser[m.id] || whiteFishStatsByUser[m.id]) && (
                   <div className="stats-species" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4, marginTop: 6 }}>
-                    {Object.values(targetStatsByUser[m.id]).map((t) => (
+                    {targetStatsByUser[m.id] && Object.values(targetStatsByUser[m.id]).map((t) => (
                       <span key={t.label} className="bait-chip" style={{ width: '100%' }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><IconTarget size={13} color="var(--amber-deep)" /> {t.label}: {t.successes} z {t.attempts} ({Math.round((t.successes / t.attempts) * 100)}%)</span>
                       </span>
                     ))}
+                    {whiteFishStatsByUser[m.id] && (
+                      <span className="bait-chip" style={{ width: '100%' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><IconTarget size={13} color="var(--water-mid)" /> Bílá ryba: {whiteFishStatsByUser[m.id].successes} z {whiteFishStatsByUser[m.id].attempts} ({Math.round((whiteFishStatsByUser[m.id].successes / whiteFishStatsByUser[m.id].attempts) * 100)}%)</span>
+                      </span>
+                    )}
+                  </div>
+                )}
+                {timeStatsByUser[m.id] && (
+                  <div className="stats-total" style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <IconClock size={13} color="var(--water-mid)" />
+                    Čas u vody: {formatDurationHM(timeStatsByUser[m.id].minutes)}
+                    {timeStatsByUser[m.id].catches.celkem > 0 && (
+                      <span>· {perHour(timeStatsByUser[m.id].minutes, timeStatsByUser[m.id].catches.celkem)} úlovku/h ({timeStatsByUser[m.id].catches.celkem}× celkem, {timeStatsByUser[m.id].catches.dravec}× dravec, {timeStatsByUser[m.id].catches.bila}× bílá)</span>
+                    )}
                   </div>
                 )}
               </div>
@@ -5060,63 +5272,86 @@ function StatsModal({ sessions, members, userColor }) {
               ))}
             </div>
             <div className="stats-total">Celkem úlovků: {totalCatches}</div>
-            {targetRows.length > 0 && (
+            {(targetRows.length > 0 || whiteFishStats.attempts > 0) && (
               <div className="stats-species" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4, marginTop: 6 }}>
                 {targetRows.map((t) => (
                   <span key={t.label} className="bait-chip" style={{ width: '100%' }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><IconTarget size={13} color="var(--amber-deep)" /> {t.label}: {t.successes} z {t.attempts} ({Math.round((t.successes / t.attempts) * 100)}%)</span>
                   </span>
                 ))}
+                {whiteFishStats.attempts > 0 && (
+                  <span className="bait-chip" style={{ width: '100%' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><IconTarget size={13} color="var(--water-mid)" /> Bílá ryba: {whiteFishStats.successes} z {whiteFishStats.attempts} ({Math.round((whiteFishStats.successes / whiteFishStats.attempts) * 100)}%)</span>
+                  </span>
+                )}
               </div>
+            )}
+            {timeStatsTotal.timedSessions > 0 && (
+              <div className="stats-total" style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <IconClock size={13} color="var(--water-mid)" />
+                Čas u vody: {formatDurationHM(timeStatsTotal.minutes)}
+                {timeStatsTotal.catches.celkem > 0 && (
+                  <span>· {perHour(timeStatsTotal.minutes, timeStatsTotal.catches.celkem)} úlovku/h ({timeStatsTotal.catches.celkem}× celkem, {timeStatsTotal.catches.dravec}× dravec, {timeStatsTotal.catches.bila}× bílá)</span>
+                )}
+              </div>
+            )}
+            {timeStatsTotal.timedSessions > 0 && (
+              <p className="help-note" style={{ marginTop: 4 }}>Jen z výprav s vyplněným časem Od/Do ({timeStatsTotal.timedSessions} z {totalVisits}).</p>
             )}
           </div>
 
-          {(moonRows.length > 0 || pressureRows.length > 0 || trendRows.length > 0 || spaRows.length > 0) && (
+          {(dravecCorr.total > 0 || bilaCorr.total > 0) && (
             <div className="stats-row" style={{ borderBottom: 'none' }}>
               <div className="stats-row-head"><strong style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconTrend size={15} /> Kdy se daří</strong></div>
-              {moonRows.length > 0 && (
-                <>
-                  <div className="stats-total" style={{ marginTop: 8 }}>Podle fáze měsíce</div>
-                  <div className="stats-species" style={{ marginTop: 4 }}>
-                    {moonRows.map(([phase, n]) => (
-                      <span className="bait-chip" key={phase}><IconMoonPhase phase={phase} size={13} /> {phase} — {n}×</span>
-                    ))}
-                  </div>
-                </>
+              <p className="help-note">Dravec a bílá ryba appka počítá samostatně — úspěšnost jednoho appka nic neříká o druhém.</p>
+              {dravecCorr.total > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <div className="stats-total" style={{ fontWeight: 600 }}>🐟 Dravec</div>
+                  {renderCorrelation(dravecCorr)}
+                </div>
               )}
-              {pressureRows.length > 0 && (
-                <>
-                  <div className="stats-total" style={{ marginTop: 10 }}>Podle tlaku</div>
-                  <div className="stats-species" style={{ marginTop: 4 }}>
-                    {pressureRows.map(([bucket, n]) => (
-                      <span className="bait-chip" key={bucket}><IconGauge size={13} /> {bucket} — {n}×</span>
-                    ))}
-                  </div>
-                </>
-              )}
-              {trendRows.length > 0 && (
-                <>
-                  <div className="stats-total" style={{ marginTop: 10 }}>Podle trendu tlaku</div>
-                  <div className="stats-species" style={{ marginTop: 4 }}>
-                    {trendRows.map(([trend, n]) => (
-                      <span className="bait-chip" key={trend}>
-                        <IconPressureTrend trend={trend === 'roste' ? 1 : trend === 'klesá' ? -1 : 0} size={13} /> {trend} — {n}×
-                      </span>
-                    ))}
-                  </div>
-                </>
-              )}
-              {spaRows.length > 0 && (
-                <>
-                  <div className="stats-total" style={{ marginTop: 10 }}>Podle vodního stavu</div>
-                  <div className="stats-species" style={{ marginTop: 4 }}>
-                    {spaRows.map(([level, n]) => (
-                      <span className="bait-chip" key={level}>{SPA_LEVEL_INFO[level]?.icon} {SPA_LEVEL_INFO[level]?.label} — {n}×</span>
-                    ))}
-                  </div>
-                </>
+              {bilaCorr.total > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <div className="stats-total" style={{ fontWeight: 600 }}>🎣 Bílá ryba</div>
+                  {renderCorrelation(bilaCorr)}
+                </div>
               )}
               <p className="help-note" style={{ marginTop: 10 }}>Počítáno jen z toho, co máte zapsané — čím víc výprav, tím spolehlivější vzorec.</p>
+            </div>
+          )}
+
+          {(topBaitsDravec.length > 0 || topBaitsBila.length > 0) && (
+            <div className="stats-row" style={{ borderBottom: 'none' }}>
+              <div className="stats-row-head"><strong style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconNastraha size={15} color="var(--water-deep)" /> Nejlovnější nástraha</strong></div>
+              {topBaitsDravec.length > 0 && (
+                <>
+                  <div className="stats-total" style={{ marginTop: 8 }}>Dravec</div>
+                  <div className="stats-species" style={{ marginTop: 4 }}>
+                    {topBaitsDravec.map((b) => <span className="bait-chip" key={b.label}>{b.label} — {b.n}×</span>)}
+                  </div>
+                </>
+              )}
+              {topBaitsBila.length > 0 && (
+                <>
+                  <div className="stats-total" style={{ marginTop: 10 }}>Bílá ryba</div>
+                  <div className="stats-species" style={{ marginTop: 4 }}>
+                    {topBaitsBila.map((b) => <span className="bait-chip" key={b.label}>{b.label} — {b.n}×</span>)}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {revirRows.length > 0 && (
+            <div className="stats-row" style={{ borderBottom: 'none' }}>
+              <div className="stats-row-head"><strong style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconRevir size={15} color="var(--water-deep)" /> Nejlovnější revír</strong></div>
+              <div className="stats-species" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4, marginTop: 6 }}>
+                {revirRows.map((r) => (
+                  <span key={r.label} className="bait-chip" style={{ width: '100%' }}>
+                    {r.label}: {r.celkem}× celkem{r.dravec > 0 ? `, ${r.dravec}× dravec` : ''}{r.bila > 0 ? `, ${r.bila}× bílá` : ''}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
       </div>
@@ -5274,6 +5509,9 @@ function SessionEditModal({ draft, setDraft, onSave, onClose, onDelete, onReloca
               </div>
             </div>
             <p className="hint-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><IconMoonPhase phase={moonPhaseName(draft.date)} size={13} /> {moonPhaseName(draft.date)}</p>
+            {crossesMidnight(draft.timeFrom, draft.timeTo) && (
+              <p className="hint-text">🌙 Výprava přes půlnoc — trvání {formatDurationHM(sessionDurationMinutes({ time_from: draft.timeFrom, time_to: draft.timeTo }))}.</p>
+            )}
 
             <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy}>
               {weatherBusy ? 'Zjišťuji…' : <><IconRefresh size={13} /> Přepočítat podmínky pro nové datum</>}
@@ -5767,6 +6005,10 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
               </div>
             </div>
 
+            {crossesMidnight(draft.timeFrom, draft.timeTo) && (
+              <p className="hint-text">🌙 Výprava přes půlnoc — trvání {formatDurationHM(sessionDurationMinutes({ time_from: draft.timeFrom, time_to: draft.timeTo }))}.</p>
+            )}
+
             <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy} style={{ marginTop: 10 }}>
               {weatherBusy ? 'Zjišťuji…' : <><IconRefresh size={13} /> Doplnit podmínky automaticky</>}
             </button>
@@ -5918,8 +6160,13 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
   async function handleFetchWeather() {
     if (!draft.time) { setWeatherError('Nejdřív vyplň čas úlovku.'); return }
     setWeatherBusy(true); setWeatherError(null)
+    // U výpravy přes půlnoc appka appce spočítá skutečné datum úlovku
+    // (čas menší než začátek výpravy appka bere jako "už příští den"),
+    // ať appka dohledá počasí/vodu pro správný kalendářní den, ne pro
+    // den, kdy výprava jen začala.
+    const catchDate = actualDateForTime(session.session_date, session.time_from, draft.time)
     try {
-      const w = await fetchWeather(draft.point.lat, draft.point.lng, session.session_date, draft.time)
+      const w = await fetchWeather(draft.point.lat, draft.point.lng, catchDate, draft.time)
       setDraft((d) => ({ ...d, weather_temp_c: w.temp, weather_pressure_hpa: w.pressure, weather_pressure_trend: w.pressureTrend, weather_wind: w.wind, weather_desc: w.desc }))
     } catch (e) {
       setWeatherError(e.message)
@@ -5930,7 +6177,7 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
       const byRevir = !linkedStation ? findStationsByRevir(draft.revir || session.revir, locationsCatalog) : []
       const station = linkedStation || byRevir[0] || (await findNearestStations(draft.point.lat, draft.point.lng, 1, extractRiverName(draft.revir || session.revir || session.title)))[0]
       if (station) {
-        const water = await fetchWaterConditions(station.objID, session.session_date, draft.time)
+        const water = await fetchWaterConditions(station.objID, catchDate, draft.time)
         if (water) {
           setDraft((d) => ({
             ...d,
