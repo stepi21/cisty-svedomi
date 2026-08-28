@@ -10,6 +10,7 @@ import BaitPicker from './BaitPicker.jsx'
 import LocationsModal from './LocationsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
 import { fetchWaterConditions, fetchLiveConditions, findNearestStations, WATER_PRECISION_LABEL, SPA_LEVEL_INFO } from '../lib/hydrology.js'
+import { estimateWeightKg, hasWeightEstimate } from '../lib/weightEstimate.js'
 import { crossesMidnight, actualDateForTime, sessionDurationMinutes, formatDurationHM } from '../lib/sessionTime.js'
 import { uploadPhoto } from '../lib/storage.js'
 import { buildRiverAreasFromLine } from '../lib/riverShape.js'
@@ -5610,13 +5611,13 @@ function StatsModal({ sessions, members, userColor }) {
               <p className="help-note">Dravce a bílou rybu appka počítá samostatně — úspěšnost jednoho nic neříká o druhém.</p>
               {dravecCorr.total > 0 && (
                 <div style={{ marginTop: 10 }}>
-                  <div className="stats-total" style={{ fontWeight: 600 }}>🐟 Dravec</div>
+                  <div className="stats-total" style={{ fontWeight: 600 }}><span className="s-tag category-dravec">Dravec</span></div>
                   {renderCorrelation(dravecCorr)}
                 </div>
               )}
               {bilaCorr.total > 0 && (
                 <div style={{ marginTop: 16 }}>
-                  <div className="stats-total" style={{ fontWeight: 600 }}>🎣 Bílá ryba</div>
+                  <div className="stats-total" style={{ fontWeight: 600 }}><span className="s-tag category-bila">Bílá ryba</span></div>
                   {renderCorrelation(bilaCorr)}
                 </div>
               )}
@@ -6543,6 +6544,14 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
                 <input className="text-input" type="time" value={draft.time} onChange={(e) => set('time', e.target.value)} />
               </div>
             </div>
+            {!draft.weight && draft.length && hasWeightEstimate(draft.species) && estimateWeightKg(draft.species, draft.length) != null && (
+              <p className="hint-text" style={{ marginTop: -6, marginBottom: 8 }}>
+                Odhad z délky: ~{estimateWeightKg(draft.species, draft.length)} kg{' '}
+                <button type="button" className="new-btn" style={{ marginLeft: 6 }} onClick={() => set('weight', estimateWeightKg(draft.species, draft.length))}>
+                  Použít
+                </button>
+              </p>
+            )}
             <button type="button" className="new-btn" onClick={handleFetchWeather} disabled={weatherBusy} style={{ marginBottom: 8 }}>
               {weatherBusy ? 'Zjišťuji…' : <><IconRefresh size={13} /> Dopočítat podmínky pro tento čas</>}
             </button>
