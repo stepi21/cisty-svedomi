@@ -565,8 +565,19 @@ main{ position:relative; display:flex; flex-direction:column; min-height:0; }
 .catch-row .c-sub{ font-family:'IBM Plex Mono', monospace; font-size:var(--fs-xs); color:var(--ink-soft); }
 
 /* ---------- ticket modal ---------- */
-.modal-bg{ position:fixed; inset:0; background:rgba(18,59,82,.55); display:none; align-items:center; justify-content:center; z-index:999; padding:20px; overflow-y:auto; }
+/* Schválně BEZ align-items:center na kontejneru -- u obsahu vyššího než
+   okno appka centrovaný flex prvek nahoře ořízne a appka se k té ořízlé
+   části nikdy nedostane, ani scrollováním (známá chyba centrovaného
+   flexu s přetečením). Vystředění appka řeší přes margin:auto na
+   .ticket níže -- krátký obsah zůstane vystředěný jako dřív, dlouhý
+   appka nechá normálně odscrollovat od horního okraje. Navíc
+   overscroll-behavior:contain appce zastaví scroll appky na tomhle
+   modálu v tom, aby po dojetí na konec propadl na obsah POD modálem --
+   typicky u modálu vnořeného uvnitř jiného, např. výběr nástrahy
+   uvnitř úpravy úlovku. */
+.modal-bg{ position:fixed; inset:0; background:rgba(18,59,82,.55); display:none; justify-content:center; z-index:999; padding:20px; overflow-y:auto; overscroll-behavior:contain; }
 .modal-bg.show{ display:flex; }
+.modal-bg > .ticket{ margin:auto; }
 .ticket{ background:var(--white); width:100%; max-width:400px; border-radius:14px; position:relative; box-shadow:0 30px 60px rgba(0,0,0,.35); max-height:90vh; overflow-y:auto; }
 .ticket-top{ background:var(--water-deep); color:var(--white); padding:16px 20px; position:relative; }
 .ticket-top .eyebrow{ font-family:'IBM Plex Mono', monospace; font-size:var(--fs-2xs); letter-spacing:.1em; text-transform:uppercase; color:var(--amber); }
