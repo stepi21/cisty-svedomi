@@ -273,6 +273,16 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [baitsStartAdding, setBaitsStartAdding] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false) // "☰ Více" — méně časté akce schované z hlavičky
   const moreMenuRef = useRef(null)
+  const [showSessionMenu, setShowSessionMenu] = useState(false) // "⋯" u detailu výpravy — appka sem schovává "Nová jako tahle" / "Přesunout bod" / "Upravit výpravu", ať appka nemá v hlavičce detailu 4 tlačítka najednou (appka appce "Zobrazit na mapě" úplně zrušila -- appka appce k tomu slouží klikací mini-mapka hned pod tím)
+  const sessionMenuRef = useRef(null)
+  useEffect(() => {
+    if (!showSessionMenu) return
+    function handleClickOutside(e) {
+      if (sessionMenuRef.current && !sessionMenuRef.current.contains(e.target)) setShowSessionMenu(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showSessionMenu])
   useEffect(() => {
     if (!showMoreMenu) return
     function handleClickOutside(e) {
@@ -3883,11 +3893,21 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
               <div className="det-block">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
                   <h3>Podmínky</h3>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    <button className="new-btn" onClick={() => jumpToMapView(activeSession)}><IconMap size={13} /> Zobrazit na mapě</button>
-                    <button className="new-btn" onClick={() => duplicateSession(activeSession)}><IconDuplicate size={13} /> Nová jako tahle</button>
-                    {canEdit && !LURE_TYPES.includes(activeSession.type) && <button className="new-btn" onClick={() => startRelocateFromCard(activeSession)}><IconRevir size={13} /> Přesunout bod</button>}
-                    {canEdit && <button className="new-btn" onClick={() => startEditSession(activeSession)}><IconEdit size={13} /> Upravit výpravu</button>}
+                  <div style={{ position: 'relative' }} ref={sessionMenuRef}>
+                    <button className="new-btn hamburger-btn" onClick={() => setShowSessionMenu((v) => !v)} title="Další možnosti">
+                      <IconMenu size={16} color="var(--water-deep)" />
+                    </button>
+                    {showSessionMenu && (
+                      <div className="type-picker" style={{ position: 'absolute', top: '100%', right: 0, left: 'auto', transform: 'none', marginTop: 6, minWidth: 200, paddingTop: 10, zIndex: 950 }}>
+                        <button className="type-btn" onClick={() => { setShowSessionMenu(false); duplicateSession(activeSession) }}><IconDuplicate size={14} /> Nová jako tahle</button>
+                        {canEdit && !LURE_TYPES.includes(activeSession.type) && (
+                          <button className="type-btn" onClick={() => { setShowSessionMenu(false); startRelocateFromCard(activeSession) }}><IconRevir size={14} /> Přesunout bod</button>
+                        )}
+                        {canEdit && (
+                          <button className="type-btn" onClick={() => { setShowSessionMenu(false); startEditSession(activeSession) }}><IconEdit size={14} /> Upravit výpravu</button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 'var(--fs-sm2)', color: 'var(--ink-soft)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -3995,7 +4015,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                   <div className="coord-list">
                     {(activeSession.rods || []).map((r) => (
                       <button key={r.id} className="coord-chip" type="button" onClick={() => jumpToMapView(activeSession, { lat: r.lat, lng: r.lng, zoom: 17 })}>
-                        <IconRevir size={13} color="var(--water-mid)" dotColor="var(--paper)" /> {r.name}: {r.lat?.toFixed(4)}, {r.lng?.toFixed(4)}
+                        <IconRevir size={13} color="var(--water-mid)" dotColor="var(--paper)" /> {r.name}
                       </button>
                     ))}
                   </div>
@@ -4018,7 +4038,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                     {(activeSession.rods || []).map((r, i) => (
                       <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <button className="coord-chip" type="button" style={{ flex: 1 }} onClick={() => jumpToMapView(activeSession, { lat: r.lat, lng: r.lng, zoom: 17 })}>
-                          <IconRevir size={13} color="var(--water-mid)" dotColor="var(--paper)" /> Místo {i + 1}: {r.lat?.toFixed(4)}, {r.lng?.toFixed(4)}
+                          <IconRevir size={13} color="var(--water-mid)" dotColor="var(--paper)" /> Místo {i + 1}
                         </button>
                         {canEdit && (
                           <button className="new-btn" type="button" title="Přesunout" onClick={() => startRelocateLurePlace(activeSession, r)}><IconRevir size={13} /></button>
@@ -4948,9 +4968,18 @@ function SessionMiniMap({ session, userColor, onOpen }) {
     <div
       onClick={onOpen}
       title="Zobrazit na mapě"
-      style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--paper-line)', cursor: 'pointer', isolation: 'isolate' }}
+      style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--paper-line)', cursor: 'pointer', isolation: 'isolate', position: 'relative' }}
     >
       <div ref={mapEl} style={{ width: '100%', height: 130, pointerEvents: 'none' }} />
+      <span
+        style={{
+          position: 'absolute', right: 8, bottom: 8, zIndex: 2,
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          background: 'rgba(255,255,255,.92)', color: 'var(--water-deep)',
+          padding: '4px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+          boxShadow: '0 2px 6px rgba(0,0,0,.18)',
+        }}
+      ><IconMap size={11} /> Otevřít mapu</span>
     </div>
   )
 }
