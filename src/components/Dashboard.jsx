@@ -3541,17 +3541,26 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     function openCatch(c) { setBaitsInitialKey(null); setLocationsReturnId(null); setTicketCatch(c) }
 
     function CatchRow({ c }) {
+      const thumb = c.photo_thumb_url || c.photo_url
       return (
-        <div className="record-row" style={{ borderLeft: `3px solid ${userColor(c.sessionRef.user_id)}`, paddingLeft: 15 }} onClick={() => openCatch(c)}>
-          <div className="record-head">
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-              <div className="fish-mini" style={{ flex: 'none', width: 26, height: 26 }} dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />
-              <strong style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.species}</strong>
-            </span>
-            <span className="record-length">{c.length_cm ?? '—'} cm</span>
+        <div
+          className="record-row record-row-thumbed"
+          style={{ borderLeft: `3px solid ${userColor(c.sessionRef.user_id)}` }}
+          onClick={() => openCatch(c)}
+        >
+          <div className="record-row-thumb" style={{ background: thumb ? undefined : CATEGORY_COLOR[c.category] }}>
+            {thumb
+              ? <img src={thumb} alt={c.species} loading="lazy" />
+              : <div style={{ width: 20 }} dangerouslySetInnerHTML={{ __html: fishSVG('#fff') }} />}
           </div>
-          <div className="c-sub" style={{ marginTop: 4 }}>
-            {c.caught_at ? c.caught_at.slice(0, 10) : c.sessionRef.session_date} · {userName(c.sessionRef.user_id)} · {c.sessionRef.title}{c.revir ? ` · ${c.revir}` : ''}
+          <div className="record-row-body">
+            <div className="record-head">
+              <strong style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.species}</strong>
+              <span className="record-length">{c.length_cm ?? '—'} cm</span>
+            </div>
+            <div className="c-sub" style={{ marginTop: 4 }}>
+              {c.caught_at ? c.caught_at.slice(0, 10) : c.sessionRef.session_date} · {userName(c.sessionRef.user_id)} · {c.sessionRef.title}{c.revir ? ` · ${c.revir}` : ''}
+            </div>
           </div>
         </div>
       )
@@ -3707,15 +3716,22 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           {(() => {
             const weeks = computeWeeklyActivity(visibleSessions)
             const maxTotal = Math.max(1, ...weeks.map((w) => w.dravec + w.bila))
+            const seasonTotal = weeks.reduce((sum, w) => sum + w.dravec + w.bila, 0)
             return (
               <div className="season-chart-wrap">
-                <div className="season-chart-label">Sezóna {new Date().getFullYear()} · úlovky po týdnech</div>
+                <div className="season-chart-label">
+                  <span>Sezóna {new Date().getFullYear()} · úlovky po týdnech{seasonTotal > 0 ? ` · ${seasonTotal} celkem` : ''}</span>
+                  <span className="season-chart-legend">
+                    <span><i className="dot" style={{ background: 'var(--water-mid)' }} />Dravci</span>
+                    <span><i className="dot" style={{ background: 'var(--amber)' }} />Bílá ryba</span>
+                  </span>
+                </div>
                 <div className="season-chart">
                   {weeks.map((w, i) => {
                     const total = w.dravec + w.bila
                     if (total === 0) return <div key={i} className="season-chart-bar"><div className="season-chart-seg empty" /></div>
-                    const dravecH = Math.round((w.dravec / maxTotal) * 44)
-                    const bilaH = Math.round((w.bila / maxTotal) * 44)
+                    const dravecH = Math.round((w.dravec / maxTotal) * 60)
+                    const bilaH = Math.round((w.bila / maxTotal) * 60)
                     return (
                       <div key={i} className="season-chart-bar" title={`Týden ${i + 1}: ${total} úlovky`}>
                         {w.bila > 0 && <div className="season-chart-seg bila" style={{ height: Math.max(2, bilaH) }} />}
