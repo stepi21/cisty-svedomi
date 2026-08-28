@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { IconClose } from '../lib/icons.jsx'
 
 export default function BaitPicker({ value, category, catalog, onChange, onAddBait, placeholder }) {
@@ -37,7 +38,7 @@ export default function BaitPicker({ value, category, catalog, onChange, onAddBa
         <span className="bait-picker-chevron">▾</span>
       </button>
 
-      {open && (
+      {open && createPortal(
         <div className="modal-bg show bait-picker-modal" onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
           <div className="ticket" style={{ maxWidth: 360 }}>
             <div className="ticket-top">
@@ -80,7 +81,8 @@ export default function BaitPicker({ value, category, catalog, onChange, onAddBa
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )
