@@ -45,7 +45,7 @@ export function estimateWeightKg(speciesName, lengthCm) {
   const length = Number(lengthCm)
   if (!k || !length || length <= 0) return null
   const kg = (k * Math.pow(length, 3)) / 100000
-  return Math.round(kg * 100) / 100
+  return Math.round(kg * 10) / 10
 }
 
 export function hasWeightEstimate(speciesName) {
