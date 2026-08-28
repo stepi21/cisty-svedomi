@@ -200,6 +200,9 @@ header h1 .accent{ color:var(--amber); }
     height:var(--bottom-nav-h); padding:0;
     color:#E7EFEC;
   }
+  html.standalone-app .bottom-tab-bar .new-btn.active-toggle{
+    color:var(--amber); background:rgba(217,160,84,.18);
+  }
   html.standalone-app .bottom-tab-bar .nav-label{ display:none; }
   html.standalone-app .bottom-tab-bar .new-btn svg{ width:auto; height:25px; }
   html.standalone-app .bottom-tab-bar .new-btn:last-child svg{ height:20px; }
