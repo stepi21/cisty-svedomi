@@ -425,6 +425,14 @@ header h1 .accent{ color:var(--amber); }
 
 
 /* ---------- feed na Domů — fotka jako dominanta karty ---------- */
+.index-loading{ padding:12px 14px; font-size:var(--fs-base); color:var(--ink-soft); font-style:italic; }
+.index-row{ display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:0 14px 12px; }
+.index-cell{ border-radius:8px; padding:10px 12px; }
+.index-cell.category-dravec{ background:#5C7A85; color:#fff; }
+.index-cell.category-bila{ background:#C4A572; color:#3A2A0F; }
+.index-cell-label{ font-family:'IBM Plex Mono', monospace; font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:.04em; opacity:.85; }
+.index-cell-value{ font-family:'Fraunces', serif; font-weight:600; font-size:var(--fs-lg); margin-top:2px; }
+
 .leaderboard-card{ margin:0 18px 14px; background:var(--white); border:1px solid var(--paper-line); border-radius:12px; overflow:hidden; }
 .leaderboard-head{ display:flex; align-items:center; gap:6px; padding:12px 14px; border-bottom:1px solid #EFEBDF; font-family:'IBM Plex Mono', monospace; font-size:var(--fs-xs); text-transform:uppercase; letter-spacing:.08em; color:var(--ink-soft); }
 .leaderboard-empty{ padding:14px; font-size:var(--fs-base); color:var(--ink-soft); }
