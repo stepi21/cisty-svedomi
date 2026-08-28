@@ -294,6 +294,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [searchQuery, setSearchQuery] = useState('') // hledání ve výpravách (název, revír, druh, nástraha)
   const [catchesCategory, setCatchesCategory] = useState('all') // filtr dravec/bílá ryba v panelu Úlovky
   const [catchesSortMode, setCatchesSortMode] = useState('species') // 'species' | 'date' | 'user' -- appka defaultně řadí podle druhu, tam appka ukazuje rekord
+  const [dateListLimit, setDateListLimit] = useState(30) // "Podle data" appka appka nevypíše najednou stovky řádků s fotkami -- appka je appce nabídne po dávkách (viz renderCatchesList)
   const [speciesGalleryKey, setSpeciesGalleryKey] = useState(null) // otevřený druh v "poličce trofejí" -- null = appka ukazuje poličku, jinak celou galerii daného druhu
 
   useEffect(() => {
@@ -3513,7 +3514,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             <button
               key={cat}
               className={`filter-chip ${catchesCategory === cat ? `active ${cat}` : ''}`}
-              onClick={() => setCatchesCategory(cat)}
+              onClick={() => { setCatchesCategory(cat); setDateListLimit(30) }}
             >
               {cat === 'all' ? 'Vše' : cat === 'dravec' ? 'Dravci' : 'Bílá ryba'}
             </button>
@@ -3521,7 +3522,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         </div>
         <div className="filter-row">
           {[['species', 'Podle druhu'], ['date', 'Podle data'], ['user', 'Podle rybáře']].map(([val, label]) => (
-            <button key={val} className={`filter-chip ${catchesSortMode === val ? 'active' : ''}`} onClick={() => { setCatchesSortMode(val); setSpeciesGalleryKey(null) }}>{label}</button>
+            <button key={val} className={`filter-chip ${catchesSortMode === val ? 'active' : ''}`} onClick={() => { setCatchesSortMode(val); setSpeciesGalleryKey(null); setDateListLimit(30) }}>{label}</button>
           ))}
         </div>
       </>
@@ -3568,10 +3569,29 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
     const byDate = (a, b) => (b.caught_at || b.sessionRef.session_date || '').localeCompare(a.caught_at || a.sessionRef.session_date || '')
 
-    // ---------- Podle data: appka to nechá jako obyčejný chronologický seznam ----------
+    // ---------- Podle data: appka to nechá jako obyčejný chronologický seznam --
+    // ale nevypíše ho celý najednou. Appka appce dřív s velkou partou a delší
+    // sezónou uměla vykreslit stovky řádků s náhledovými fotkami naráz, což
+    // appce zbytečně stahovalo desítky fotek, co uživatel ani neuviděl bez
+    // rolování. Appka teď appce ukáže jen prvních `dateListLimit` a zbytek
+    // appka dotáhne až na vyžádání (tlačítko níž), stejně jako appka appce
+    // dělá u feedu na Domů. ----------
     if (catchesSortMode === 'date') {
       const sorted = [...filtered].sort(byDate)
-      return <>{header}{sorted.map((c) => <CatchRow key={c.id} c={c} />)}</>
+      const shown = sorted.slice(0, dateListLimit)
+      return (
+        <>
+          {header}
+          {shown.map((c) => <CatchRow key={c.id} c={c} />)}
+          {sorted.length > shown.length && (
+            <div style={{ padding: '14px 18px 20px', textAlign: 'center' }}>
+              <button className="new-btn" onClick={() => setDateListLimit((n) => n + 30)}>
+                Zobrazit další ({sorted.length - shown.length} zbývá)
+              </button>
+            </div>
+          )}
+        </>
+      )
     }
 
     // ---------- Podle rybáře: appka seskupí podle uživatele ----------
