@@ -118,7 +118,7 @@ function resolveHydroStations(linkedLocationIds, locationsCatalog) {
 }
 
 // Najde stanici ČHMÚ podle STEJNÉHO čísla revíru, co appka už dřív měla
-// ručně potvrzené u JINÉHO místa v katalogu -- appka appku hledá i bez
+// ručně potvrzené u JINÉHO místa v katalogu -- appka ji hledá i bez
 // ohledu na to, jestli je aktuální bod s tímhle katalogovým záznamem
 // vůbec geometricky (GPS) propojený. Řeší situace u soutoků/souběžných
 // toků, kdy appka podle vzdušné vzdálenosti bez tohohle najde nejbližší
@@ -273,7 +273,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [baitsStartAdding, setBaitsStartAdding] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false) // "☰ Více" — méně časté akce schované z hlavičky
   const moreMenuRef = useRef(null)
-  const [showSessionMenu, setShowSessionMenu] = useState(false) // "⋯" u detailu výpravy — appka sem schovává "Nová jako tahle" / "Přesunout bod" / "Upravit výpravu", ať appka nemá v hlavičce detailu 4 tlačítka najednou (appka appce "Zobrazit na mapě" úplně zrušila -- appka appce k tomu slouží klikací mini-mapka hned pod tím)
+  const [showSessionMenu, setShowSessionMenu] = useState(false) // "⋯" u detailu výpravy — appka sem schovává "Nová jako tahle" / "Přesunout bod" / "Upravit výpravu", ať appka nemá v hlavičce detailu 4 tlačítka najednou ("Zobrazit na mapě" appka úplně zrušila -- k tomu slouží klikací mini-mapka hned pod tím)
   const sessionMenuRef = useRef(null)
   useEffect(() => {
     if (!showSessionMenu) return
@@ -304,8 +304,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [searchQuery, setSearchQuery] = useState('') // hledání ve výpravách (název, revír, druh, nástraha)
   const [catchesCategory, setCatchesCategory] = useState('all') // filtr dravec/bílá ryba v panelu Úlovky
   const [catchesSortMode, setCatchesSortMode] = useState('species') // 'species' | 'date' | 'user' -- appka defaultně řadí podle druhu, tam appka ukazuje rekord
-  const [dateListLimit, setDateListLimit] = useState(30) // "Podle data" appka appka nevypíše najednou stovky řádků s fotkami -- appka je appce nabídne po dávkách (viz renderCatchesList)
-  const [userGroupLimits, setUserGroupLimits] = useState({}) // "Podle rybáře" appka appka řeší stejný problém jako dateListLimit, ale appka to musí dělat PER RYBÁŘ -- jeden globální strop napříč partou appce by mohl skupinu druhého/třetího rybáře nechat appce vůbec nezobrazenou, kdyby limit appka appce vyčerpala už appce v seznamu prvního. Klíč appka appce je user_id, chybějící appka appka bere jako DEFAULT_USER_GROUP_LIMIT (viz níž).
+  const [dateListLimit, setDateListLimit] = useState(30) // "Podle data" appka nevypíše najednou stovky řádků s fotkami -- nabídne appka je po dávkách (viz renderCatchesList)
+  const [userGroupLimits, setUserGroupLimits] = useState({}) // "Podle rybáře" řeší stejný problém jako dateListLimit, ale appka to musí dělat PER RYBÁŘ -- jeden globální strop napříč partou by mohl skupinu druhého/třetího rybáře nechat vůbec nezobrazenou, kdyby appka limit vyčerpala už v seznamu prvního. Klíčem appka bere user_id, chybějící hodnotu bere jako DEFAULT_USER_GROUP_LIMIT (viz níž).
   const [speciesGalleryKey, setSpeciesGalleryKey] = useState(null) // otevřený druh v "poličce trofejí" -- null = appka ukazuje poličku, jinak celou galerii daného druhu
 
   useEffect(() => {
@@ -319,15 +319,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // Appka přestala sama uzavírat/měřit viditelnou výšku (appka to
   // zkoušela přes "100dvh" i přes výšku naměřenou pomocí visualViewport,
   // ani jedno se neukázalo spolehlivé napříč Safari/Chrome/appkou na
-  // ploše). Appka appku místo toho nechá chovat se jako normální webová
+  // ploše). Appka se místo toho nechá chovat jako normální webová
   // stránka -- appka se nikam nezamyká, appka nechá scrollovat celou
-  // stránku a appka appce spoléhá na nativní chování prohlížeče (stejně
+  // stránku a spoléhá na nativní chování prohlížeče (stejně
   // jako běžná stránka, třeba Seznam.cz).
 
   // Spodní navigační lištu appka ukazuje jen v appce nainstalované na
   // plochu (žádná lišta prohlížeče kolem) -- v běžné záložce appka
   // navigaci nechá nahoře v hlavičce, jako appka fungovala předtím.
-  // Appku appka pozná přes "window.navigator.standalone" (specifický iOS
+  // appka pozná nainstalovanou verzi přes "window.navigator.standalone" (specifický iOS
   // příznak, spolehlivější než jen CSS "display-mode: standalone") a
   // uloží to jako třídu na <html>, ať appka může v CSS rozlišit obě
   // situace jednoduchým selektorem.
@@ -941,7 +941,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   // Najde nejbližší pojmenovaná místa z historie (výpravy i katalog) k
-  // danému GPS bodu -- appka appce nabídne jméno/revír k převzetí, ať se
+  // danému GPS bodu -- appka nabídne jméno/revír k převzetí, ať se
   // nemusí u známého místa psát pokaždé ručně znovu. Seskupuje podle jména,
   // appka ukáže jen nejbližší výskyt každého odlišného jména (kvůli
   // soutokům/blízkým, ale odlišným místům appka nikdy nerozhoduje sama --
@@ -1162,14 +1162,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     // velký efekt jen vyčistil vrstvy výše a dál pro 'map' nic nedělá.
     if (activePanel === 'map') return
 
-    // Appka mapu appce úplně vynechá, pokud je zrovna schovaná přes CSS
+    // Appka mapu úplně vynechá, pokud je zrovna schovaná přes CSS
     // (Domů/Úlovky/Nástrahy/Měrné stanice, nebo Výpravy jen v klidu bez
-    // rozpracovaného umísťování/kreslení) -- stejná podmínka appka appce
-    // používá o kus níž u invalidateSize(). Bez tohoto appka appce
+    // rozpracovaného umísťování/kreslení) -- stejnou podmínku appka
+    // používá o kus níž u invalidateSize(). Bez tohoto by appka
     // zbytečně přepočítávala značku pro KAŽDÝ úlovek v CELÉ historii
     // appky (souhrnný pohled níž) při každém přepnutí záložky, i když tu
-    // mapu appka appce vůbec nikdo neviděl -- hlavní příčina znatelného
-    // zpomalení při přechodu na Úlovky, appka appce s velikostí fotek
+    // mapu nikdo neviděl -- hlavní příčina znatelného
+    // zpomalení při přechodu na Úlovky, s velikostí fotek to
     // nesouvisí.
     const mapHiddenNow = activePanel === 'home' || activePanel === 'stations' ||
       activePanel === 'records' || activePanel === 'stats' || activePanel === 'help' || activePanel === 'settings' ||
@@ -1374,7 +1374,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     // ukáže přesně tohle a nic jiného, ať appka nemusí řešit, jak najít
     // jednu výpravu v hromadě cizích. U přívlače appka nakreslí VŠECHNY
     // body výpravy (ne jen ten první), přesně proto appka tenhle režim
-    // appce udělala -- zoomToShowLayer na shluknuté mapě tohle neumí.
+    // udělala -- zoomToShowLayer na shluknuté mapě tohle neumí.
     if (mapFocusSessionId) {
       const s = sessions.find((x) => x.id === mapFocusSessionId)
       if (!s) return
@@ -1395,7 +1395,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           bounds.push([r.lat, r.lng])
         })
       } else {
-        // Bodové typy appka appce navíc ukáže bod "kde stojíš" (appka ho
+        // Bodové typy appka navíc ukáže bod "kde stojíš" (appka ho
         // nastavuje přes GPS/ruční klik, je to jiná souřadnice než pruty).
         if (s.lat != null && s.lng != null) {
           L.marker([s.lat, s.lng], { icon: makePointIcon() }).bindPopup(s.title).addTo(mapTabMarkersLayer.current)
@@ -1460,7 +1460,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
         // U přívlače appka může mít i DALŠÍ místa (jez z obou stran řeky
         // apod.) -- appka je na týhle souhrnné mapě nakreslí stejně jako
-        // hlavní bod (tečka výpravy appka), ať appka na Mapě neschovává
+        // hlavní bod (tečka výpravy), ať appka na Mapě neschovává
         // celou výpravu jen za JEDEN bod, kde jich reálně bylo víc.
         if (LURE_TYPES.includes(s.type)) {
           ;(s.rods || []).slice(1).forEach((r) => {
@@ -2617,14 +2617,14 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   function switchPanel(panel) {
     cancelAllPlacementFlows()
     const isRepeat = activePanel === panel
-    // appka appce uloží scrollovou pozici Domů těsně předtím, než z něj
+    // appka uloží scrollovou pozici Domů těsně předtím, než z něj
     // odejde -- ať se po návratu jedním kliknutím vrátí přesně tam.
     if (activePanel === 'home' && panel !== 'home' && sidebarRef.current) {
       homeScrollRef.current = sidebarRef.current.scrollTop
     }
     if (panel === 'home') {
       pendingHomeScrollModeRef.current = isRepeat ? 'top' : 'restore'
-      setHomeNavNonce((n) => n + 1) // appka appce zaručí, že se scroll efekt spustí i při druhém kliku (activePanel se textově nezmění)
+      setHomeNavNonce((n) => n + 1) // appka zaručí, že se scroll efekt spustí i při druhém kliku (activePanel se textově nezmění)
     }
     setActivePanel(panel)
     setSearchQuery('')
@@ -2634,11 +2634,10 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     setMobileSheetOpen(panel !== 'map')
     setMapFocusSessionId(null)
     setMapFocusPoint(null)
-    // Úlovky appka appce vždycky otevře na výchozím pohledu (polička druhů,
+    // Úlovky appka vždycky otevře na výchozím pohledu (polička druhů,
     // ne rozkliknutý konkrétní druh) -- appka to dřív resetovala jen při
     // druhém kliku na už aktivní záložku (isRepeat), takže příchod odjinud
-    // (např. tlačítko "Zobrazit všechny úlovky" na Domů) appku appce
-    // nechal na naposledy prohlíženém druhu (třeba "Amuři").
+    // (např. tlačítko "Zobrazit všechny úlovky" na Domů) appku nechal na naposledy prohlíženém druhu (třeba "Amuři").
     if (panel === 'catches') {
       setCatchesSortMode('species')
       setSpeciesGalleryKey(null)
@@ -2736,7 +2735,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   // Appka doskočí ze detailu výpravy rovnou na záložku Mapa, ale appka
   // NEukáže celou agregovanou mapu se všemi vrstvami -- appka rovnou
   // přepne do fokusovaného režimu (jen tahle výprava, viz mapFocusSessionId
-  // výše). Appka tím appce vyřeší i výpravy s víc body (přívlač) -- appka
+  // výše). Appka tím vyřeší i výpravy s víc body (přívlač) -- appka
   // ukáže všechny, ne jen jeden zvýrazněný marker uprostřed cizích.
   function jumpToMapView(session, focusPoint) {
     switchPanel('map')
@@ -3256,11 +3255,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
 
-  // appka appce používá stejné 4 tlačítka na dvou místech: nahoře v
+  // appka používá stejné 4 tlačítka na dvou místech: nahoře v
   // hlavičce (desktop a mobil v běžné záložce prohlížeče) a dole jako
-  // samostatnou lištu (appka nainstalovaná na plochu, kde appka appce
-  // funguje "position:sticky" -- viz styles.css). Appka appce sdílí
-  // jednu definici, ať appka appka appce nemusí appka udržovat dvě
+  // samostatnou lištu (appka nainstalovaná na plochu, kde ta lišta
+  // funguje "position:sticky" -- viz styles.css). Appka sdílí
+  // jednu definici, ať nemusí appka udržovat dvě
   // kopie stejného seznamu tlačítek.
   function renderTabButtons() {
     return (
@@ -3581,11 +3580,11 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     const byDate = (a, b) => (b.caught_at || b.sessionRef.session_date || '').localeCompare(a.caught_at || a.sessionRef.session_date || '')
 
     // ---------- Podle data: appka to nechá jako obyčejný chronologický seznam --
-    // ale nevypíše ho celý najednou. Appka appce dřív s velkou partou a delší
-    // sezónou uměla vykreslit stovky řádků s náhledovými fotkami naráz, což
-    // appce zbytečně stahovalo desítky fotek, co uživatel ani neuviděl bez
-    // rolování. Appka teď appce ukáže jen prvních `dateListLimit` a zbytek
-    // appka dotáhne až na vyžádání (tlačítko níž), stejně jako appka appce
+    // ale nevypíše ho celý najednou. S velkou partou a delší
+    // sezónou by appka uměla vykreslit stovky řádků s náhledovými fotkami naráz, což
+    // by zbytečně stahovalo desítky fotek, co uživatel ani neuviděl bez
+    // rolování. Appka teď ukáže jen prvních `dateListLimit` a zbytek
+    // dotáhne až na vyžádání (tlačítko níž), stejně jako appka
     // dělá u feedu na Domů. ----------
     if (catchesSortMode === 'date') {
       const sorted = [...filtered].sort(byDate)
@@ -3605,12 +3604,12 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       )
     }
 
-    // ---------- Podle rybáře: appka seskupí podle uživatele, ale appka appce
-    // zase nevykreslí každou skupinu celou najednou -- appka appce dá per
+    // ---------- Podle rybáře: appka seskupí podle uživatele, ale
+    // zase nevykreslí každou skupinu celou najednou -- appka dá per
     // rybáři vlastní limit + vlastní tlačítko "Zobrazit další" (viz
-    // userGroupLimits appka appka výš). Jeden globální strop napříč celou
-    // partou appce by appka nechala třeba druhého rybáře appce vůbec
-    // nezobrazeného, kdyby appka limit appce appce vyčerpala už appce appka na
+    // userGroupLimits výš). Jeden globální strop napříč celou
+    // partou by nechal třeba druhého rybáře vůbec
+    // nezobrazeného, kdyby appka limit vyčerpala už na
     // seznamu prvního. ----------
     if (catchesSortMode === 'user') {
       const DEFAULT_USER_GROUP_LIMIT = 15
@@ -3720,7 +3719,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   // appka tímhle počítá krátký přehled sezóny nad seznamem výprav -- kolik
   // úlovků bylo který týden a jestli šlo hlavně o dravce nebo bílou rybu.
-  // appka záměrně bere úlovky (ne výpravy), protože ty appce lépe ukážou,
+  // appka záměrně bere úlovky (ne výpravy), protože ty lépe ukážou,
   // kdy se fakt dařilo, ne jen kdy appka byla u vody.
   function computeWeeklyActivity(list) {
     const year = new Date().getFullYear()
@@ -4664,7 +4663,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       {/* Spodní navigační lišta appka ukazuje jen v appce nainstalované na
           plochu (CSS řeší .bottom-tab-bar -- jinde display:none). Musí být
           tady, AŽ ZA .layout, ne uvnitř <header> jako horní verze --
-          "position:sticky" appka appce vždycky vůči svému vlastnímu
+          "position:sticky" se počítá vždy vůči svému vlastnímu
           rodiči v DOM, ne vůči celé stránce, takže potřebuje sáhnout přes
           celou zbývající výšku appky, ne jen přes krátkou hlavičku. */}
       <nav className="bottom-tab-bar">
@@ -4933,7 +4932,7 @@ function SessionMiniMap({ session, userColor, onOpen }) {
         bounds.push([r.lat, r.lng])
       })
     } else {
-      // Bodové typy appka appce navíc ukáže bod "kde stojíš" -- appka ho
+      // Bodové typy appka navíc ukáže bod "kde stojíš" -- appka ho
       // nastavuje přes GPS (živá výprava) nebo ručním umístěním (zpětná
       // výprava), a je to jiná souřadnice než jednotlivé pruty (appka je
       // klikáš samostatně, o kus dál). Velká mapa ho appka kreslí vždycky,
@@ -5080,8 +5079,8 @@ function StatsModal({ sessions, members, userColor }) {
   // Kapr a plavaná nemají žádné textové pole "cíl" jako přívlač výše --
   // appka úspěch odvodí přímo z TYPU výpravy: výprava typu "kapr" nebo
   // "plavana" je úspěšná, pokud má aspoň jeden úlovek s kategorií
-  // "bila" (appka appce ho tam appka appce dá i ručně, kdyby náhodou
-  // chytil na kapří výpravě dravce -- appka to appce nezapočítá jako
+  // "bila" (appka ji tam dá i ručně, kdyby náhodou
+  // chytil na kapří výpravě dravce -- appka to nezapočítá jako
   // úspěch bílé ryby).
   const WHITE_FISH_TYPES = ['kapr', 'plavana']
   const whiteFishStats = { attempts: 0, successes: 0 }
@@ -5099,7 +5098,7 @@ function StatsModal({ sessions, members, userColor }) {
 
   // --- čas u vody ---
   // Appka počítá jen z výprav, co mají vyplněné oba časy (appka to
-  // nedělá povinné) -- appka to appce transparentně poznamená pod
+  // nedělá povinné) -- appka to transparentně poznamená pod
   // celkovým souhrnem.
   const timeStatsByUser = {}
   const timeStatsTotal = { minutes: 0, timedSessions: 0, catches: { celkem: 0, dravec: 0, bila: 0 } }
@@ -5127,7 +5126,7 @@ function StatsModal({ sessions, members, userColor }) {
     return (catches / (minutes / 60)).toFixed(1)
   }
 
-  // --- "Kdy se daří" -- appka appce appku počítá samostatně pro
+  // --- "Kdy se daří" -- appka to počítá samostatně pro
   // dravce a pro bílou rybu -- úspěšnost dravce v nějakou denní dobu
   // neznamená nic pozitivního pro bílou rybu.
   const pressureOrder = ['<1000 hPa', '1000–1010 hPa', '1010–1020 hPa', '1020+ hPa']
@@ -5389,7 +5388,7 @@ function StatsModal({ sessions, members, userColor }) {
           {(dravecCorr.total > 0 || bilaCorr.total > 0) && (
             <div className="stats-row" style={{ borderBottom: 'none' }}>
               <div className="stats-row-head"><strong style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconTrend size={15} /> Kdy se daří</strong></div>
-              <p className="help-note">Dravec a bílá ryba appka počítá samostatně — úspěšnost jednoho appka nic neříká o druhém.</p>
+              <p className="help-note">Dravce a bílou rybu appka počítá samostatně — úspěšnost jednoho nic neříká o druhém.</p>
               {dravecCorr.total > 0 && (
                 <div style={{ marginTop: 10 }}>
                   <div className="stats-total" style={{ fontWeight: 600 }}>🐟 Dravec</div>
@@ -5990,8 +5989,8 @@ function SessionFormPanel({ draft, setDraft, onArmRod, onSave, onClose, baitPhot
         waterStationName: s.name, waterPrecision: water?.precision ?? null, waterSpaLevel: water?.spa_level ?? null,
       }))
       // Appka opravu zapamatuje pro příště (uloží ji do katalogu míst) --
-      // výprava appce sama ještě neexistuje v appce databázi, appka tak
-      // jen doplní id do linkedLocationIds, appka appce se propojí sama
+      // výprava sama ještě neexistuje v appce databázi, appka tak
+      // jen doplní id do linkedLocationIds -- propojení proběhne samo,
       // až appka výpravu doopravdy uloží (viz saveSession).
       if (onPersistStation) {
         const locId = await onPersistStation(draft.point, draft.title, draft.revir, draft.linkedLocationIds, s)
@@ -6246,7 +6245,7 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
   async function handleFetchWeather() {
     if (!draft.time) { setWeatherError('Nejdřív vyplň čas úlovku.'); return }
     setWeatherBusy(true); setWeatherError(null)
-    // U výpravy přes půlnoc appka appce spočítá skutečné datum úlovku
+    // U výpravy přes půlnoc appka spočítá skutečné datum úlovku
     // (čas menší než začátek výpravy appka bere jako "už příští den"),
     // ať appka dohledá počasí/vodu pro správný kalendářní den, ne pro
     // den, kdy výprava jen začala.
