@@ -295,6 +295,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   const [catchesCategory, setCatchesCategory] = useState('all') // filtr dravec/bílá ryba v panelu Úlovky
   const [catchesSortMode, setCatchesSortMode] = useState('species') // 'species' | 'date' | 'user' -- appka defaultně řadí podle druhu, tam appka ukazuje rekord
   const [dateListLimit, setDateListLimit] = useState(30) // "Podle data" appka appka nevypíše najednou stovky řádků s fotkami -- appka je appce nabídne po dávkách (viz renderCatchesList)
+  const [userGroupLimits, setUserGroupLimits] = useState({}) // "Podle rybáře" appka appka řeší stejný problém jako dateListLimit, ale appka to musí dělat PER RYBÁŘ -- jeden globální strop napříč partou appce by mohl skupinu druhého/třetího rybáře nechat appce vůbec nezobrazenou, kdyby limit appka appce vyčerpala už appce v seznamu prvního. Klíč appka appce je user_id, chybějící appka appka bere jako DEFAULT_USER_GROUP_LIMIT (viz níž).
   const [speciesGalleryKey, setSpeciesGalleryKey] = useState(null) // otevřený druh v "poličce trofejí" -- null = appka ukazuje poličku, jinak celou galerii daného druhu
 
   useEffect(() => {
@@ -3514,7 +3515,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             <button
               key={cat}
               className={`filter-chip ${catchesCategory === cat ? `active ${cat}` : ''}`}
-              onClick={() => { setCatchesCategory(cat); setDateListLimit(30) }}
+              onClick={() => { setCatchesCategory(cat); setDateListLimit(30); setUserGroupLimits({}) }}
             >
               {cat === 'all' ? 'Vše' : cat === 'dravec' ? 'Dravci' : 'Bílá ryba'}
             </button>
@@ -3522,7 +3523,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         </div>
         <div className="filter-row">
           {[['species', 'Podle druhu'], ['date', 'Podle data'], ['user', 'Podle rybáře']].map(([val, label]) => (
-            <button key={val} className={`filter-chip ${catchesSortMode === val ? 'active' : ''}`} onClick={() => { setCatchesSortMode(val); setSpeciesGalleryKey(null); setDateListLimit(30) }}>{label}</button>
+            <button key={val} className={`filter-chip ${catchesSortMode === val ? 'active' : ''}`} onClick={() => { setCatchesSortMode(val); setSpeciesGalleryKey(null); setDateListLimit(30); setUserGroupLimits({}) }}>{label}</button>
           ))}
         </div>
       </>
@@ -3594,8 +3595,15 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       )
     }
 
-    // ---------- Podle rybáře: appka seskupí podle uživatele ----------
+    // ---------- Podle rybáře: appka seskupí podle uživatele, ale appka appce
+    // zase nevykreslí každou skupinu celou najednou -- appka appce dá per
+    // rybáři vlastní limit + vlastní tlačítko "Zobrazit další" (viz
+    // userGroupLimits appka appka výš). Jeden globální strop napříč celou
+    // partou appce by appka nechala třeba druhého rybáře appce vůbec
+    // nezobrazeného, kdyby appka limit appce appce vyčerpala už appce appka na
+    // seznamu prvního. ----------
     if (catchesSortMode === 'user') {
+      const DEFAULT_USER_GROUP_LIMIT = 15
       const byUser = {}
       filtered.forEach((c) => {
         const uid = c.sessionRef.user_id
@@ -3605,15 +3613,27 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       return (
         <>
           {header}
-          {userIds.map((uid) => (
-            <div key={uid}>
-              <div className="month-header">
-                <span className="user-dot" style={{ background: userColor(uid), marginRight: 6 }} />
-                {userName(uid)} <span className="month-count">({byUser[uid].length})</span>
+          {userIds.map((uid) => {
+            const list = byUser[uid].sort(byDate)
+            const limit = userGroupLimits[uid] || DEFAULT_USER_GROUP_LIMIT
+            const shown = list.slice(0, limit)
+            return (
+              <div key={uid}>
+                <div className="month-header">
+                  <span className="user-dot" style={{ background: userColor(uid), marginRight: 6 }} />
+                  {userName(uid)} <span className="month-count">({list.length})</span>
+                </div>
+                {shown.map((c) => <CatchRow key={c.id} c={c} />)}
+                {list.length > shown.length && (
+                  <div style={{ padding: '10px 18px 16px', textAlign: 'center' }}>
+                    <button className="new-btn" onClick={() => setUserGroupLimits((m) => ({ ...m, [uid]: limit + 20 }))}>
+                      Zobrazit další ({list.length - shown.length} zbývá)
+                    </button>
+                  </div>
+                )}
               </div>
-              {byUser[uid].sort(byDate).map((c) => <CatchRow key={c.id} c={c} />)}
-            </div>
-          ))}
+            )
+          })}
         </>
       )
     }
