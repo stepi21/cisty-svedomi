@@ -12,14 +12,21 @@ export default function Onboarding({ userId, onDone }) {
     e.preventDefault()
     setBusy(true)
     setError(null)
-    const { data, error } = await supabase
+    // Appka si id nové skupiny vygeneruje sama a pošle ho rovnou v insertu,
+    // místo aby si ho nechala vrátit přes .select().single(). Důvod: insert
+    // s RETURNING appka appce musí projít i SELECT politikou na "groups"
+    // (is_group_member), a tu appka splní až AFTER trigger handle_new_group(),
+    // co přidá zakladatele do group_members -- ale AFTER triggery se spouští
+    // až po vyhodnocení RETURNING, takže ta kontrola vždy spadla dřív, než
+    // trigger stihl proběhnout. Appka tedy id zná předem a žádná data zpátky
+    // nepotřebuje, takže se týhle kontrole úplně vyhne.
+    const newGroupId = crypto.randomUUID()
+    const { error } = await supabase
       .from('groups')
-      .insert({ name: groupName, created_by: userId })
-      .select()
-      .single()
+      .insert({ id: newGroupId, name: groupName, created_by: userId })
     setBusy(false)
     if (error) { setError(error.message); return }
-    onDone(data.id)
+    onDone(newGroupId)
   }
 
   async function handleJoin(e) {
