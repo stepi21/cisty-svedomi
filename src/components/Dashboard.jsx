@@ -872,7 +872,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     if (target === 'catch-point') {
       setPlacementTarget(null)
       const s = activeSessionRef.current
-      setDraftCatch({ point, species: '', category: TYPE_CATEGORY[s?.type] || 'dravec', length: '', weight: '', bait: '', rodId: '', time: '', photoFile: null, baitPhotoFile: null, revir: s?.revir || '' })
+      setDraftCatch({ point, species: '', category: TYPE_CATEGORY[s?.type] || 'dravec', length: '', weight: '', weightEstimated: false, bait: '', rodId: '', time: '', photoFile: null, baitPhotoFile: null, revir: s?.revir || '' })
       return
     }
 
@@ -2486,7 +2486,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   function chooseCatchOnRod(rod) {
     setCatchChoosing(false)
     const knownPhoto = rod.bait ? baitPhotoLookup()[rod.bait.trim().toLowerCase()] : null
-    setDraftCatch({ point: { lat: rod.lat, lng: rod.lng }, species: '', category: TYPE_CATEGORY[activeSession?.type] || 'dravec', length: '', weight: '', bait: rod.bait || '', rodId: rod.id, time: '', photoFile: null, baitPhotoFile: null, bait_photo_url: knownPhoto || null, revir: activeSession?.revir || '' })
+    setDraftCatch({ point: { lat: rod.lat, lng: rod.lng }, species: '', category: TYPE_CATEGORY[activeSession?.type] || 'dravec', length: '', weight: '', weightEstimated: false, bait: rod.bait || '', rodId: rod.id, time: '', photoFile: null, baitPhotoFile: null, bait_photo_url: knownPhoto || null, revir: activeSession?.revir || '' })
   }
 
   function chooseCatchOnMap() {
@@ -2596,7 +2596,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       }
       const { error } = await supabase.from('catches').insert({
         session_id: session.id, group_id: groupId, rod_id: c.rodId || null,
-        species: c.species, category: c.category, length_cm: c.length || null, weight_kg: c.weight || null,
+        species: c.species, category: c.category, length_cm: c.length || null, weight_kg: c.weight || null, weight_estimated: c.weight ? !!c.weightEstimated : false,
         bait: c.bait, caught_at: caughtAt, lat: c.point.lat, lng: c.point.lng,
         photo_url, photo_thumb_url, bait_photo_url, bait_photo_thumb_url,
         location_id, revir,
@@ -4288,7 +4288,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                         <div className="fish-mini" dangerouslySetInnerHTML={{ __html: fishSVG(CATEGORY_COLOR[c.category]) }} />
                         <div>
                           <div className="c-name">{c.species} {matchesTarget && <span title="Odpovídá cíli výpravy" style={{ display: 'inline-flex' }}><IconTarget size={12} color="var(--amber-deep)" /></span>}</div>
-                          <div className="c-sub">{c.length_cm} cm · {c.weight_kg} kg</div>
+                          <div className="c-sub" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            {c.length_cm} cm · {c.weight_kg} kg {c.weight_kg != null && c.weight_estimated && <IconApprox size={12} />}
+                          </div>
                         </div>
                       </div>
                     )
@@ -6537,7 +6539,7 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
               </div>
               <div>
                 <label className="field-label">Váha (kg)</label>
-                <input className="text-input" type="number" step="0.1" value={draft.weight} onChange={(e) => set('weight', e.target.value)} />
+                <input className="text-input" type="number" step="0.1" value={draft.weight} onChange={(e) => setDraft((d) => ({ ...d, weight: e.target.value, weightEstimated: false }))} />
               </div>
               <div className="input-row-auto">
                 <label className="field-label">Čas</label>
@@ -6547,7 +6549,7 @@ function CatchFormPanel({ draft, setDraft, rods, session, onSave, onClose, baitP
             {!draft.weight && draft.length && hasWeightEstimate(draft.species) && estimateWeightKg(draft.species, draft.length) != null && (
               <p className="hint-text" style={{ marginTop: -6, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
                 <IconApprox size={14} /> Odhad z délky: {estimateWeightKg(draft.species, draft.length)} kg
-                <button type="button" className="new-btn" style={{ marginLeft: 4 }} onClick={() => set('weight', estimateWeightKg(draft.species, draft.length))}>
+                <button type="button" className="new-btn" style={{ marginLeft: 4 }} onClick={() => setDraft((d) => ({ ...d, weight: estimateWeightKg(draft.species, draft.length), weightEstimated: true }))}>
                   Použít
                 </button>
               </p>
