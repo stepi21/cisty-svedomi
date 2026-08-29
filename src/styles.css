@@ -190,7 +190,16 @@ header h1 .accent{ color:var(--amber); }
 .bottom-tab-bar{ display:none; }
 @media (max-width:860px){
   html.standalone-app .bottom-tab-bar{
-    display:flex; position:fixed; left:0; right:0; bottom:0; z-index:460;
+    display:flex; position:fixed; left:0; right:0; z-index:460;
+    /* appka na živém testu (debug overlay) zjistila, že "bottom:0" se
+       na iOS/WebKit občas váže na chybně malou hodnotu window.innerHeight
+       / visualViewport.height (o pár desítek px míň, než je skutečná
+       fyzická výška displeje) -- appka lištu proto místo "bottom:0" kotví
+       přes "top", počítaný z --real-vh. Tuhle proměnnou appka nastavuje v
+       JS z window.screen.height (fyzický rozměr displeje, appka ho nemůže
+       mít nikdy špatně, na rozdíl od viewportu) -- viz efekt v
+       Dashboard.jsx. */
+    top:calc(var(--real-vh, 100dvh) - var(--bottom-nav-h) - env(safe-area-inset-bottom));
     background:var(--water-deep);
     padding-bottom:env(safe-area-inset-bottom);
     box-shadow:0 -2px 10px rgba(0,0,0,.15);
@@ -316,7 +325,7 @@ header h1 .accent{ color:var(--amber); }
      appka tak měla lištu vysunutou pod dolní okraj viditelné plochy).
      Selektor :has() appce dovolí tohle zapnout jen pro tenhle jeden
      případ, beze zásahu do ostatních panelů. */
-  .app:has(> .layout:not(.no-map):not(.no-map-keep-detail)){ min-height:100vh; min-height:100dvh; }
+  .app:has(> .layout:not(.no-map):not(.no-map-keep-detail)){ min-height:100vh; min-height:100dvh; min-height:var(--real-vh, 100dvh); }
   .mobile-sheet:not(.full-panel){
     display:flex !important;
     position:absolute !important; left:0 !important; right:0 !important; bottom:0 !important; z-index:60 !important;
