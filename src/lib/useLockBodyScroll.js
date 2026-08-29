@@ -30,13 +30,37 @@ export function useLockBodyScroll() {
       body.style.width = prevWidth
       body.style.overflow = prevOverflow
       window.scrollTo(0, scrollY)
-      // iOS Safari v appce nainstalované na plochu (standalone) mívá po
-      // vypnutí position:fixed na body zaseknutý vnitřní výpočet
-      // viewportu -- vypadá to přesně jako "kousek pozadí navíc pod
-      // spodní lištou", co samo od sebe zmizí až po dalším gestu/otočení
-      // appky. Vynucený "resize" event appce to nahodí sám, ať appka
-      // nemusí čekat, až to opraví uživatel sám.
-      window.dispatchEvent(new Event('resize'))
+      // iOS/WebKit po vypnutí position:fixed na body někdy špatně
+      // přepočítá pozici OSTATNÍCH fixed prvků (typicky spodní
+      // navigační lišta appky nainstalované na plochu) -- lišta zůstane
+      // posunutá o kousek výš, než je skutečný spodek obrazovky, a pod
+      // ní vykoukne podkladová barva stránky. Syntetický "resize" event
+      // appka zkoušela dřív, ale WebKit ho v tomhle případě ne vždy
+      // bere v potaz. Spolehlivější je krátké poškubnutí scrollem (o
+      // 1px a zpět) -- to WebKit donutí přepočítat pozici fixed prvků
+      // vůči aktuálnímu viewportu, protože jde o skutečnou změnu
+      // scrollování, ne jen o oznámený event.
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollY + 1)
+        requestAnimationFrame(() => {
+          window.scrollTo(0, scrollY)
+          window.dispatchEvent(new Event('resize'))
+        })
+      })
+      // Scroll appka umí poškubnout jen tam, kde je vůbec čím -- na
+      // krátkých stránkách (např. záložka Mapa s min-height:100dvh) se
+      // stránka nedá scrollovat vůbec, takže výše by nemělo co
+      // pohnout. Jako spolehlivější náhradu appka krátce přepíše obsah
+      // <meta name="viewport"> a hned zpátky -- WebKit na tenhle
+      // konkrétní podnět reaguje přepočítáním CELÉHO viewportu (včetně
+      // pozice fixed prvků jako spodní lišta), bez ohledu na to, jestli
+      // appka má co scrollovat.
+      const viewportMeta = document.querySelector('meta[name="viewport"]')
+      if (viewportMeta) {
+        const original = viewportMeta.getAttribute('content')
+        viewportMeta.setAttribute('content', original + ', shrink-to-fit=yes')
+        requestAnimationFrame(() => viewportMeta.setAttribute('content', original))
+      }
     }
   }, [])
 }
