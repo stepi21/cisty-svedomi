@@ -30,6 +30,30 @@ export function useLockBodyScroll() {
       body.style.width = prevWidth
       body.style.overflow = prevOverflow
       window.scrollTo(0, scrollY)
+      // Appka na Mapě (a jiném "plovoucím" layoutu) vynucuje na .app
+      // pevné min-height:100dvh (viz styles.css), ať appka na krátkém
+      // obsahu (prázdná mapa) pořád sahá přesně na doraz obrazovky.
+      // Přesně tahle hodnota se po přepnutí <body> na position:fixed a
+      // zpět na WebKitu (Safari/Android) občas "zatuchne" -- prohlížeč
+      // použije starou velikost viewportu, dokud ho něco nedonutí
+      // přepočítat. Projevuje se to jako kousek podkladové barvy navíc
+      // pod spodní lištou. Na Domů/Úlovcích appka žádné takové vynucené
+      // min-height nemá (obsah jen přirozeně scrolluje), takže se tam
+      // stejná neshoda ztratí v běžném scrollu -- appka to tam dřív
+      // považovala za "vyřešené", ve skutečnosti šlo jen o to, že to
+      // nešlo vidět.
+      //
+      // Oprava: appka na okamžik zruší inline min-height na .app a hned
+      // ho vrátí zpátky na prázdnou hodnotu -- to donutí WebKit
+      // přepočítat CSS pravidlo (100dvh) úplně od začátku, s aktuálním
+      // (už odemčeným) viewportem, místo aby appka jela se starou
+      // zapamatovanou hodnotou.
+      const appEl = document.querySelector('.app')
+      if (appEl) {
+        appEl.style.minHeight = '0px'
+        void appEl.offsetHeight // vynutit synchronní přepočet layoutu
+        appEl.style.minHeight = ''
+      }
     }
   }, [])
 }
