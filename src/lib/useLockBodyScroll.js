@@ -30,6 +30,13 @@ export function useLockBodyScroll() {
       body.style.width = prevWidth
       body.style.overflow = prevOverflow
       window.scrollTo(0, scrollY)
+      // iOS Safari v appce nainstalované na plochu (standalone) mívá po
+      // vypnutí position:fixed na body zaseknutý vnitřní výpočet
+      // viewportu -- vypadá to přesně jako "kousek pozadí navíc pod
+      // spodní lištou", co samo od sebe zmizí až po dalším gestu/otočení
+      // appky. Vynucený "resize" event appce to nahodí sám, ať appka
+      // nemusí čekat, až to opraví uživatel sám.
+      window.dispatchEvent(new Event('resize'))
     }
   }, [])
 }
