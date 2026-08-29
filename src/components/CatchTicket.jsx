@@ -74,7 +74,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
   const [weatherError, setWeatherError] = useState(null)
   const [form, setForm] = useState({
     species: c.species, category: c.category, revir: c.revir || '',
-    length_cm: c.length_cm ?? '', weight_kg: c.weight_kg ?? '', bait: c.bait ?? '',
+    length_cm: c.length_cm ?? '', weight_kg: c.weight_kg ?? '', weight_estimated: c.weight_estimated ?? false, bait: c.bait ?? '',
     time: c.caught_at ? toLocalTimeInput(c.caught_at) : '',
     photoFile: null, baitPhotoFile: null, bait_photo_url: c.bait_photo_url || null,
     weather_temp_c: c.weather_temp_c ?? null, weather_pressure_hpa: c.weather_pressure_hpa ?? null,
@@ -172,7 +172,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
         : c.caught_at
       const { error } = await supabase.from('catches').update({
         species: form.species, category: form.category, revir: form.revir || null,
-        length_cm: form.length_cm || null, weight_kg: form.weight_kg || null,
+        length_cm: form.length_cm || null, weight_kg: form.weight_kg || null, weight_estimated: form.weight_kg ? form.weight_estimated : false,
         bait: form.bait, photo_url, photo_thumb_url, bait_photo_url, bait_photo_thumb_url, caught_at,
         weather_temp_c: form.weather_temp_c, weather_pressure_hpa: form.weather_pressure_hpa, weather_pressure_trend: form.weather_pressure_trend,
         weather_wind: form.weather_wind, weather_desc: form.weather_desc,
@@ -242,7 +242,12 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
               </div>
               <div className="ticket-stats">
                 <div className="stat"><div className="num">{c.length_cm ?? '—'} cm</div><div className="lab">délka</div></div>
-                <div className="stat"><div className="num">{c.weight_kg ?? '—'} kg</div><div className="lab">váha</div></div>
+                <div className="stat">
+                  <div className="num" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+                    {c.weight_kg ?? '—'} kg {c.weight_kg != null && c.weight_estimated && <IconApprox size={13} />}
+                  </div>
+                  <div className="lab">váha</div>
+                </div>
               </div>
               {c.revir && <div className="ticket-line"><span className="lab">Revír</span><span className="val">{c.revir}</span></div>}
               <div className="ticket-line"><span className="lab">Nástraha</span><span className="val">{c.bait || '—'}</span></div>
@@ -311,7 +316,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
                 </div>
                 <div>
                   <label className="field-label">Váha (kg)</label>
-                  <input className="text-input" type="number" step="0.1" value={form.weight_kg} onChange={(e) => setForm({ ...form, weight_kg: e.target.value })} />
+                  <input className="text-input" type="number" step="0.1" value={form.weight_kg} onChange={(e) => setForm({ ...form, weight_kg: e.target.value, weight_estimated: false })} />
                 </div>
                 <div className="input-row-auto">
                   <label className="field-label">Čas</label>
@@ -321,7 +326,7 @@ export default function CatchTicket({ catchData: c, session, catcherName, canEdi
               {!form.weight_kg && form.length_cm && hasWeightEstimate(form.species) && estimateWeightKg(form.species, form.length_cm) != null && (
                 <p className="hint-text" style={{ marginTop: -6, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
                   <IconApprox size={14} /> Odhad z délky: {estimateWeightKg(form.species, form.length_cm)} kg
-                  <button type="button" className="new-btn" style={{ marginLeft: 4 }} onClick={() => setForm({ ...form, weight_kg: estimateWeightKg(form.species, form.length_cm) })}>
+                  <button type="button" className="new-btn" style={{ marginLeft: 4 }} onClick={() => setForm({ ...form, weight_kg: estimateWeightKg(form.species, form.length_cm), weight_estimated: true })}>
                     Použít
                   </button>
                 </p>
