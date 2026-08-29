@@ -18,6 +18,15 @@ import { useLockBodyScroll } from '../lib/useLockBodyScroll.js'
 
 const iconCarp = `<svg viewBox="0 0 24 24" fill="none"><path d="M3 12c0-4 5-7 10-7s8 3 8 7-3 7-8 7-10-3-10-7Z" stroke="#2C6E71" stroke-width="1.6"/><circle cx="16" cy="10.5" r="1" fill="#2C6E71"/></svg>`
 const iconSpin = `<svg viewBox="0 0 24 24" fill="none"><path d="M4 20 L18 6" stroke="#6B7A4F" stroke-width="1.8"/><circle cx="4" cy="20" r="2" stroke="#6B7A4F" stroke-width="1.6"/><path d="M18 6 l3 -1 -1 3" stroke="#6B7A4F" stroke-width="1.6"/></svg>`
+// Appka appce dřív měla jen appce tyhle dvě appce ikony appce -- appka appce appce appce appce vše appce appce
+// kromě appce kapra appce appce dostávalo appce appce appce`iconSpin`appce appce. Appka appce doplněny appce
+// appce appce vlastní appce appce appce ikony appce appce appce pro appce appce muška/plavaná/jiné appce, appka
+// appce appce appce appce`iconSpin`appce appce appce appce appce appce zůstává appce appce appce appce jen appce appce
+// appce appce appce appce pro appce appce appce appce`privlac`appce.
+const iconMuska = `<svg viewBox="0 0 24 24" fill="none"><path d="M12 3 C9 6 9 10 12 21" stroke="#B97F35" stroke-width="1.6"/><path d="M12 6 L8 8 M12 9 L7 11 M12 12 L8 14 M12 15 L9 17" stroke="#B97F35" stroke-width="1.2"/><path d="M12 18 q2 2 0 3" stroke="#B97F35" stroke-width="1.4" fill="none"/></svg>`
+const iconPlavana = `<svg viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="9" rx="3" ry="5" stroke="#6B7A4F" stroke-width="1.6"/><path d="M12 14 L12 19 Q12 21 14 21" stroke="#6B7A4F" stroke-width="1.4" fill="none"/><circle cx="9" cy="9" r="0.9" fill="#6B7A4F"/></svg>`
+const iconJine = `<svg viewBox="0 0 24 24" fill="none"><path d="M3 20 L18 4" stroke="#5B5F52" stroke-width="1.8" stroke-linecap="round"/><circle cx="18" cy="4" r="1.6" stroke="#5B5F52" stroke-width="1.4"/></svg>`
+const SESSION_TYPE_ICON = { kapr: iconCarp, privlac: iconSpin, muska: iconMuska, plavana: iconPlavana, jine: iconJine }
 const fishSVG = (color) => `
   <svg viewBox="0 0 64 34" xmlns="http://www.w3.org/2000/svg">
     <path d="M4,17 C4,8 18,3 32,3 C46,3 58,9 60,17 C58,25 46,31 32,31 C18,31 4,26 4,17 Z" fill="${color}"/>
@@ -4075,7 +4084,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                             style={{ borderLeft: `3px solid ${userColor(s.user_id)}`, paddingLeft: 15 }}
                             onClick={() => { setActiveId(s.id); setViewMode('detail') }}
                           >
-                            <div className="s-icon" dangerouslySetInnerHTML={{ __html: s.type === 'kapr' ? iconCarp : iconSpin }} />
+                            <div className="s-icon" dangerouslySetInnerHTML={{ __html: SESSION_TYPE_ICON[s.type] || iconSpin }} />
                             <div className="s-body">
                               <div className="s-title">{s.title}</div>
                               <div className="s-sub">
