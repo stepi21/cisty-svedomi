@@ -5061,6 +5061,17 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             setTicketCatch(null)
             if (baitsInitialKey) setShowBaits(true)
             if (locationsReturnId) setShowLocations(true)
+            // Úlovek mohl být otevřený kliknutím na ikonku přímo na Mapě
+            // (mapTabInstance) -- samotné zavření lístku nemění žádnou ze
+            // závislostí efektu, co jinak mapu na Mapě přepočítává (viz
+            // invalidateSize() výš u záložky Mapa), takže Leaflet by se
+            // po odemčení scrollu (useLockBodyScroll) nedozvěděl, že má
+            // přepočítat velikost/dlaždice. V appce nainstalované na
+            // ploše (standalone) se to projevovalo jako kousek pozadí
+            // navíc pod spodní lištou, co zmizel až po přepnutí záložky.
+            if (activePanel === 'map') {
+              setTimeout(() => mapTabInstance.current?.invalidateSize(), 50)
+            }
           }}
           onUpdated={loadSessions}
           onDeleted={() => { setTicketCatch(null); loadSessions() }}
