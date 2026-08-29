@@ -415,6 +415,38 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
     document.documentElement.classList.toggle('standalone-app', isStandalone)
   }, [])
 
+  // --real-vh: appka na živém testu (debug overlay, viz DebugOverlay výš)
+  // zjistila, že window.innerHeight/visualViewport.height -- na kterých
+  // staví CSS jednotka "dvh" -- se na iOS po zamknutí/odemknutí scrollu
+  // (useLockBodyScroll) občas zaseknou na chybně MALÉ hodnotě (naměřeno
+  // konkrétně 797 místo skutečných 844 px). Spodní lišta s "bottom:0" pak
+  // skončí o tenhle rozdíl výš, než má, a dole je vidět kousek podkladové
+  // barvy. window.screen.height je fyzický rozměr displeje -- appka ho
+  // nemá jak mít nikdy špatně, na rozdíl od viewportu -- appka ho proto
+  // uloží jako CSS proměnnou a použije místo dvh tam, kde na přesnou
+  // výšku obrazovky záleží (viz .app a .bottom-tab-bar ve styles.css).
+  useEffect(() => {
+    function updateRealVh() {
+      // screen.width/height appka bere podle PŘIROZENÉ orientace telefonu
+      // (na výšku je screen.height ta delší strana) -- appka proto podle
+      // toho, jestli je zrovna okno širší než vyšší (na šířku), vezme tu
+      // odpovídající stranu z obou hodnot displeje.
+      const isLandscapeNow = window.innerWidth > window.innerHeight
+      const screenLonger = Math.max(window.screen.width, window.screen.height)
+      const screenShorter = Math.min(window.screen.width, window.screen.height)
+      const h = isLandscapeNow ? screenShorter : screenLonger
+      document.documentElement.style.setProperty('--real-vh', `${h}px`)
+    }
+    updateRealVh()
+    window.addEventListener('orientationchange', updateRealVh)
+    window.addEventListener('resize', updateRealVh)
+    return () => {
+      window.removeEventListener('orientationchange', updateRealVh)
+      window.removeEventListener('resize', updateRealVh)
+    }
+  }, [])
+
+
 
   function showToast(message) {
     setToast(message)
