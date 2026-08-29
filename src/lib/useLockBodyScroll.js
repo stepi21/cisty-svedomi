@@ -34,33 +34,28 @@ export function useLockBodyScroll() {
       // přepočítá pozici OSTATNÍCH fixed prvků (typicky spodní
       // navigační lišta appky nainstalované na plochu) -- lišta zůstane
       // posunutá o kousek výš, než je skutečný spodek obrazovky, a pod
-      // ní vykoukne podkladová barva stránky. Syntetický "resize" event
-      // appka zkoušela dřív, ale WebKit ho v tomhle případě ne vždy
-      // bere v potaz. Spolehlivější je krátké poškubnutí scrollem (o
-      // 1px a zpět) -- to WebKit donutí přepočítat pozici fixed prvků
-      // vůči aktuálnímu viewportu, protože jde o skutečnou změnu
-      // scrollování, ne jen o oznámený event.
-      requestAnimationFrame(() => {
-        window.scrollTo(0, scrollY + 1)
+      // ní vykoukne podkladová barva stránky.
+      //
+      // Syntetický "resize" event ani poškubnutí scrollem/meta-viewport
+      // appka zkoušela dřív -- na živém testu se ukázalo, že Safari si
+      // jich nevšímá. Jediné, co bug spolehlivě opravilo, byl přechod
+      // na jinou záložku a zpět -- to totiž mění CSS třídy na .layout
+      // (appka přepíná "no-map" <-> plovoucí layout Mapy), tedy
+      // SKUTEČNOU změnu DOM, ne jen oznámený event. Appka tenhle
+      // mechanismus napodobí přímo na liště: krátce ji vyřadí z
+      // vykreslení (display:none), počká na skutečný vykreslovací
+      // snímek prohlížeče, a pak ji vrátí zpět -- to WebKit donutí
+      // přepočítat její fixed pozici úplně od začátku, stejně jako to
+      // udělá přechod mezi záložkami.
+      const bar = document.querySelector('.bottom-tab-bar')
+      if (bar) {
+        const prevDisplay = bar.style.display
+        bar.style.display = 'none'
         requestAnimationFrame(() => {
-          window.scrollTo(0, scrollY)
-          window.dispatchEvent(new Event('resize'))
+          bar.style.display = prevDisplay
         })
-      })
-      // Scroll appka umí poškubnout jen tam, kde je vůbec čím -- na
-      // krátkých stránkách (např. záložka Mapa s min-height:100dvh) se
-      // stránka nedá scrollovat vůbec, takže výše by nemělo co
-      // pohnout. Jako spolehlivější náhradu appka krátce přepíše obsah
-      // <meta name="viewport"> a hned zpátky -- WebKit na tenhle
-      // konkrétní podnět reaguje přepočítáním CELÉHO viewportu (včetně
-      // pozice fixed prvků jako spodní lišta), bez ohledu na to, jestli
-      // appka má co scrollovat.
-      const viewportMeta = document.querySelector('meta[name="viewport"]')
-      if (viewportMeta) {
-        const original = viewportMeta.getAttribute('content')
-        viewportMeta.setAttribute('content', original + ', shrink-to-fit=yes')
-        requestAnimationFrame(() => viewportMeta.setAttribute('content', original))
       }
+      window.dispatchEvent(new Event('resize'))
     }
   }, [])
 }
