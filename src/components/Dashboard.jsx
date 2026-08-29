@@ -55,6 +55,11 @@ const AREA_TYPES = []
 // LURE_TYPES je nezávislé na kreslení -- appka ho používá jen pro věci,
 // co s plochou/bodem nesouvisí (pole "Cíl", popisek "Místo" místo "Prut").
 const LURE_TYPES = ['privlac']
+// Užší konstanta jen pro kreslení bodů na mapě: muška se má na mapě
+// chovat jako přívlač (jen bod "kde stojím", žádné prutové kolečko
+// navíc), ale jinde v appce (popisky "Prut"/"Místo", chování formulářů...)
+// zůstává bodovým typem -- to pořád řeší LURE_TYPES beze změny.
+const MAP_LURE_LOOK_TYPES = ['privlac', 'muska']
 const TYPE_CATEGORY = { kapr: 'bila', privlac: 'dravec', muska: 'dravec', plavana: 'bila', jine: null }
 
 // --- sloučení názvu/revíru víc katalogových míst do jednoho popisku výpravy ---
@@ -1429,7 +1434,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       // Barva appka bere vlastní barvu uživatele (stejná jako na Mapě),
       // ne napevno danou barvu -- jinak by appka ukazovala jinou barvu na
       // souhrnné mapě a jinou v detailu téže výpravy.
-      const isLureSession = LURE_TYPES.includes(activeSession.type)
+      const isLureSession = MAP_LURE_LOOK_TYPES.includes(activeSession.type)
       L.circleMarker([activeSession.lat, activeSession.lng], {
         radius: 8, color: userColor(activeSession.user_id), weight: 2, fillColor: '#fff', fillOpacity: 0.9,
       }).bindPopup(`<b>${activeSession.title}</b>`).addTo(markersLayer.current)
@@ -1529,7 +1534,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         html: `<div style="width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid ${color};box-shadow:0 2px 8px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:10px;color:${color}">${num ?? ''}</div>`,
         className: '', iconSize: [22, 22], iconAnchor: [11, 11],
       })
-      if (LURE_TYPES.includes(s.type)) {
+      if (MAP_LURE_LOOK_TYPES.includes(s.type)) {
         if (s.lat != null && s.lng != null) {
           L.marker([s.lat, s.lng], { icon: makePointIcon(1) }).bindPopup(`${s.title} (Místo 1)`).addTo(mapTabMarkersLayer.current)
           bounds.push([s.lat, s.lng])
@@ -1607,7 +1612,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         // apod.) -- appka je na týhle souhrnné mapě nakreslí stejně jako
         // hlavní bod (tečka výpravy), ať appka na Mapě neschovává
         // celou výpravu jen za JEDEN bod, kde jich reálně bylo víc.
-        if (LURE_TYPES.includes(s.type)) {
+        if (MAP_LURE_LOOK_TYPES.includes(s.type)) {
           ;(s.rods || []).slice(1).forEach((r) => {
             if (r.lat == null || r.lng == null) return
             L.marker([r.lat, r.lng], { icon })
@@ -5031,14 +5036,26 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             // (useLockBodyScroll) a appka v appce nainstalované na ploše
             // má spodní lištu jako position:sticky. Obě věci najednou
             // krátce nechávaly nekonzistentní layout (kousek pozadí pod
-            // lištou), co zmizelo až po dalším přepnutí záložky. Appka dá
-            // prohlížeči jeden snímek navíc, ať scroll/lišta doběhne dřív,
-            // než appka mapu vůbec otevře.
+            // lištou), co zmizelo až po dalším přepnutí záložky.
+            //
+            // Jeden snímek navíc appce stačil, JEN pokud šlo zároveň o
+            // první příchod na Mapu -- tam se navíc sbaloval postranní
+            // panel (mobileSheetOpen true->false), a to sbalení náhodou
+            // překrylo zbytek nekonzistentního snímku. Při návratu na
+            // Mapu, na které appka už předtím byla (mobileSheetOpen
+            // false->false, žádná změna, žádné sbalení), appce tahle
+            // maska chyběla a kousek pozadí zůstával viditelný o něco
+            // déle. Appka proto čeká na DVA snímky (běžný vzorec "počkej,
+            // až prohlížeč fakt domaluje", ne jen "počkej na příští tik"),
+            // ať appka nemusí spoléhat na to, jestli se panel náhodou
+            // sbaluje, nebo ne.
             requestAnimationFrame(() => {
-              if (!s) { switchPanel('map'); return }
-              setActiveId(s.id)
-              setViewMode('detail')
-              jumpToMapView(s, { lat: c.lat, lng: c.lng, zoom: 16 })
+              requestAnimationFrame(() => {
+                if (!s) { switchPanel('map'); return }
+                setActiveId(s.id)
+                setViewMode('detail')
+                jumpToMapView(s, { lat: c.lat, lng: c.lng, zoom: 16 })
+              })
             })
           }}
           onOpenSession={() => {
@@ -5134,7 +5151,7 @@ function SessionMiniMap({ session, userColor, onOpen }) {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map)
 
     const bounds = []
-    const isLure = LURE_TYPES.includes(session.type)
+    const isLure = MAP_LURE_LOOK_TYPES.includes(session.type)
     const makePointIcon = (num) => L.divIcon({
       html: `<div style="width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid ${userColor};box-shadow:0 1px 5px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:8px;color:${userColor}">${num ?? ''}</div>`,
       className: '', iconSize: [16, 16], iconAnchor: [8, 8],
