@@ -3,6 +3,62 @@ import L from 'leaflet'
 import 'leaflet.markercluster'
 import { supabase } from '../supabaseClient'
 import CatchTicket from './CatchTicket.jsx'
+
+// DOČASNÁ diagnostická komponenta -- appka nemá Web Inspector k dispozici,
+// tohle je náhrada: tlačítko "🐞 Debug" ukáže živá čísla (výška viewportu,
+// pozice/padding spodní lišty, scroll) přímo na displeji telefonu, ať jde
+// bug vyfotit místo dalšího slepého hádání. Po vyřešení bugu appka tuhle
+// komponentu (i její vykreslení níž) zase odstraní.
+function DebugOverlay() {
+  const [open, setOpen] = useState(false)
+  const [info, setInfo] = useState('')
+
+  function measure() {
+    const bar = document.querySelector('.bottom-tab-bar')
+    const appEl = document.querySelector('.app')
+    const barRect = bar?.getBoundingClientRect()
+    const appRect = appEl?.getBoundingClientRect()
+    const barStyle = bar ? getComputedStyle(bar) : null
+    const appStyle = appEl ? getComputedStyle(appEl) : null
+    const vv = window.visualViewport
+    setInfo([
+      `window.innerHeight: ${window.innerHeight}`,
+      `documentElement.clientHeight: ${document.documentElement.clientHeight}`,
+      `visualViewport.height: ${vv ? Math.round(vv.height) : 'n/a'}`,
+      `visualViewport.offsetTop: ${vv ? Math.round(vv.offsetTop) : 'n/a'}`,
+      `scrollY: ${window.scrollY}`,
+      `--- .app ---`,
+      `min-height (computed): ${appStyle ? appStyle.minHeight : 'n/a'}`,
+      `rect top/bottom/height: ${appRect ? Math.round(appRect.top) : 'n/a'} / ${appRect ? Math.round(appRect.bottom) : 'n/a'} / ${appRect ? Math.round(appRect.height) : 'n/a'}`,
+      `--- .bottom-tab-bar ---`,
+      `position: ${barStyle ? barStyle.position : 'n/a'}`,
+      `padding-bottom: ${barStyle ? barStyle.paddingBottom : 'n/a'}`,
+      `rect top/bottom: ${barRect ? Math.round(barRect.top) : 'n/a'} / ${barRect ? Math.round(barRect.bottom) : 'n/a'}`,
+    ].join('\n'))
+  }
+
+  useEffect(() => {
+    if (!open) return
+    measure()
+    const id = setInterval(measure, 400)
+    return () => clearInterval(id)
+  }, [open])
+
+  return (
+    <div style={{ position: 'fixed', right: 8, top: open ? 8 : 'auto', bottom: open ? 'auto' : 130, zIndex: 99999 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{ background: '#B4432E', color: '#fff', border: 'none', borderRadius: 20, padding: '7px 12px', fontSize: 12, fontFamily: 'monospace', fontWeight: 700 }}
+      >{open ? '✕ Zavřít debug' : '🐞 Debug'}</button>
+      {open && (
+        <pre style={{ marginTop: 6, background: 'rgba(0,0,0,.88)', color: '#5CFF8A', fontSize: 10.5, lineHeight: 1.5, padding: 10, borderRadius: 8, whiteSpace: 'pre-wrap', maxWidth: 260 }}>
+          {info}
+        </pre>
+      )}
+    </div>
+  )
+}
 import HelpModal from './HelpModal.jsx'
 import BaitsModal, { computeBaitsList } from './BaitsModal.jsx'
 import { IconVyprava, IconRevir, IconNastraha, IconUlovek, IconMenu, IconTrophy, IconChart, IconDownload, IconHelp, IconSettings, IconEdit, IconTrash, IconCamera, IconCalendar, IconDuplicate, IconTarget, IconThermometer, IconGauge, IconDroplet, IconWind, IconCheck, IconClose, IconSearch, IconMapEdit, IconBookmark, IconLive, IconZoom, IconRefresh, IconTrend, IconOffline, IconLocate, IconMoonPhase, IconPressureTrend, IconBoat, IconRiverAuto, IconBell, IconHome, IconMap, IconClock, IconApprox } from '../lib/icons.jsx'
@@ -4907,6 +4963,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       <nav className="bottom-tab-bar">
         {renderTabButtons()}
       </nav>
+      <DebugOverlay />
 
       {draftSession && !(placementTarget && placementTarget.startsWith('rod-')) && (
         <SessionFormPanel
