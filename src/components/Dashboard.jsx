@@ -1436,9 +1436,13 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
           // uživatele -- stejnou jako hlavní bod, ne barvou prutů (appka
           // je totiž koncepčně "další stejný bod", ne odlišný prut).
           if (isLureSession && i === 0) return
-          const color = isLureSession ? userColor(activeSession.user_id) : rodColors[i % rodColors.length]
+          const rodColor = isLureSession ? userColor(activeSession.user_id) : rodColors[i % rodColors.length]
           L.circleMarker([r.lat ?? activeSession.lat, r.lng ?? activeSession.lng], {
-            radius: 8, color, weight: 2, fillColor: isLureSession ? '#fff' : color, fillOpacity: isLureSession ? 0.9 : 0.5,
+            radius: 8,
+            color: isLureSession ? rodColor : '#fff',
+            weight: 2,
+            fillColor: isLureSession ? '#fff' : rodColor,
+            fillOpacity: isLureSession ? 0.9 : 1,
           }).bindPopup(isLureSession ? 'Další místo' : `<b>${r.name}</b>`).addTo(markersLayer.current)
         })
       }
