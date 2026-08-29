@@ -5061,23 +5061,6 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
             setTicketCatch(null)
             if (baitsInitialKey) setShowBaits(true)
             if (locationsReturnId) setShowLocations(true)
-            // Úlovek mohl být otevřený kliknutím na ikonku přímo na Mapě.
-            // Appka na živém testu zjistila, že samotné zavření lístku
-            // (ani invalidateSize() na mapě) tohle nespraví -- jediné, co
-            // spolehlivě opravilo layout (kousek pozadí navíc pod
-            // spodní lištou v appce na ploše), byl přechod na jinou
-            // záložku a zpět. Ten totiž donutí appku celý efekt Mapy
-            // znovu spustit -- appka smaže a znovu nakreslí VŠECHNY
-            // značky, což teprve donutí prohlížeč přepočítat i layout
-            // kolem (Leaflet sám o sobě, přes invalidateSize(), na to
-            // nestačil). Appka tenhle mechanismus napodobí přímo tady
-            // (bump mapResetNonce), BEZ nastavení mapForceResetRef --
-            // appka tak jen znovu vykreslí značky, ale nepřehodí
-            // uživateli přiblížení/pozici mapy (mapTabHasFitRef už je
-            // true, appka fitBounds přeskočí).
-            if (activePanel === 'map') {
-              setMapResetNonce((n) => n + 1)
-            }
           }}
           onUpdated={loadSessions}
           onDeleted={() => { setTicketCatch(null); loadSessions() }}
