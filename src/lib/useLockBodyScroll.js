@@ -30,32 +30,6 @@ export function useLockBodyScroll() {
       body.style.width = prevWidth
       body.style.overflow = prevOverflow
       window.scrollTo(0, scrollY)
-      // iOS/WebKit po vypnutí position:fixed na body někdy špatně
-      // přepočítá pozici OSTATNÍCH fixed prvků (typicky spodní
-      // navigační lišta appky nainstalované na plochu) -- lišta zůstane
-      // posunutá o kousek výš, než je skutečný spodek obrazovky, a pod
-      // ní vykoukne podkladová barva stránky.
-      //
-      // Syntetický "resize" event ani poškubnutí scrollem/meta-viewport
-      // appka zkoušela dřív -- na živém testu se ukázalo, že Safari si
-      // jich nevšímá. Jediné, co bug spolehlivě opravilo, byl přechod
-      // na jinou záložku a zpět -- to totiž mění CSS třídy na .layout
-      // (appka přepíná "no-map" <-> plovoucí layout Mapy), tedy
-      // SKUTEČNOU změnu DOM, ne jen oznámený event. Appka tenhle
-      // mechanismus napodobí přímo na liště: krátce ji vyřadí z
-      // vykreslení (display:none), počká na skutečný vykreslovací
-      // snímek prohlížeče, a pak ji vrátí zpět -- to WebKit donutí
-      // přepočítat její fixed pozici úplně od začátku, stejně jako to
-      // udělá přechod mezi záložkami.
-      const bar = document.querySelector('.bottom-tab-bar')
-      if (bar) {
-        const prevDisplay = bar.style.display
-        bar.style.display = 'none'
-        requestAnimationFrame(() => {
-          bar.style.display = prevDisplay
-        })
-      }
-      window.dispatchEvent(new Event('resize'))
     }
   }, [])
 }
