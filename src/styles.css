@@ -100,16 +100,17 @@ body{
   html:not(.standalone-app) .app{ min-height:0; }
 }
 header{ background:var(--water-deep); color:var(--white); padding:16px 20px; }
-.head-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
-.head-logo-group{ display:flex; align-items:center; gap:10px; min-width:0; }
+.head-row{ display:flex; align-items:center; gap:10px; }
+.head-logo-group{ display:flex; align-items:center; gap:10px; min-width:0; flex:none; }
+.head-live-wrap{ display:flex; align-items:center; justify-content:center; flex:1; min-width:0; }
 .head-icons-group{ display:flex; align-items:center; gap:8px; flex:none; }
-.app-logo-img{ height:32px; display:block; }
+.app-logo-img{ height:36px; display:block; }
 .new-btn.live-toggle{ border-style:solid; font-weight:600; }
 .new-btn.live-toggle.active{ animation:live-pulse 1.8s infinite; }
-.head-logo-group .new-btn.live-toggle{ background:var(--amber); border-color:var(--amber); color:var(--ink); }
-.head-logo-group .new-btn.live-toggle:hover{ background:var(--amber-deep); border-color:var(--amber-deep); color:#fff; }
-.head-logo-group .new-btn.live-toggle.active{ background:#B4432E; border-color:#B4432E; color:#fff; }
-.head-logo-group .new-btn.live-toggle.active:hover{ background:#8F3423; border-color:#8F3423; }
+.head-live-wrap .new-btn.live-toggle{ background:var(--amber); border-color:var(--amber); color:var(--ink); }
+.head-live-wrap .new-btn.live-toggle:hover{ background:var(--amber-deep); border-color:var(--amber-deep); color:#fff; }
+.head-live-wrap .new-btn.live-toggle.active{ background:#B4432E; border-color:#B4432E; color:#fff; }
+.head-live-wrap .new-btn.live-toggle.active:hover{ background:#8F3423; border-color:#8F3423; }
 .new-btn.hamburger-btn{ font-size:22px; padding:9px 14px; line-height:1; flex:none; background:var(--white); color:var(--water-deep); border:1px solid var(--white); }
 .new-btn.hamburger-btn:hover{ background:var(--paper); color:var(--water-deep); border-color:var(--paper); }
 /* appka tady zmenšuje logo, tlačítko Chytat/Probíhá i ikonky zvonečku/menu jen
@@ -119,19 +120,10 @@ header{ background:var(--water-deep); color:var(--white); padding:16px 20px; }
 @media (max-width:860px){
   header{ padding:14px 16px; padding-top:calc(14px + env(safe-area-inset-top)); }
   .head-row{ gap:6px; }
-  .head-logo-group{ gap:9px; }
   .head-icons-group{ gap:5px; }
-  .app-logo-img{ height:24px; }
+  .app-logo-img{ height:27px; }
   .new-btn.live-toggle{ padding:4px 10px; }
   .new-btn.hamburger-btn{ padding:7px 10px; }
-}
-/* Appka v appce nainstalované na plochu appce má v hlavičce jen jeden
-   řádek (taby jsou dole, viz .head-secondary-row) -- appka tam proto má
-   víc jistoty a mezeru mezi názvem appky a tlačítkem Chytat mohla trochu
-   uvolnit. V běžné záložce prohlížeče appka nechává mezeru užší, protože
-   tam appka pod ní pořád potřebuje i druhý řádek s taby. */
-@media (max-width:860px){
-  html.standalone-app .head-logo-group{ gap:13px; }
 }
 .notif-bell-btn{ position:relative; }
 .notif-badge{

@@ -4371,6 +4371,8 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         <div className="head-row">
           <div className="head-logo-group">
             <img src="/logo-horizontal.png" alt="Nahodit" className="app-logo-img" />
+          </div>
+          <div className="head-live-wrap">
             {myLiveSession ? (
               <button
                 className="new-btn live-toggle active"
