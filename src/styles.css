@@ -80,6 +80,7 @@ body{
 .btn-primary:hover:not(:disabled){ background:var(--water-mid); }
 .error-text{ color:#B4432E; font-size:var(--fs-base); margin-top:8px; }
 .hint-text{ font-size:var(--fs-sm2); color:var(--ink-soft); background:var(--paper); border:1px solid var(--paper-line); border-radius:8px; padding:8px 10px; margin-bottom:4px; }
+.invite-hint{ font-size:var(--fs-sm2); color:var(--water-mid); background:var(--water-soft); border:1px solid #C9DCE2; border-radius:8px; padding:9px 12px; margin:2px 0 16px; }
 
 .tab-row{ display:flex; gap:6px; margin-bottom:14px; }
 .tab-btn{
