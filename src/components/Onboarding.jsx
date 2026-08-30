@@ -1,10 +1,19 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
 
+// Pokud appku otevřeš přes odkaz s ?invite=KOD, rovnou přepneme na
+// záložku "Mám kód pozvánky" a pole předvyplníme.
+function getInviteFromUrl() {
+  if (typeof window === 'undefined') return ''
+  const params = new URLSearchParams(window.location.search)
+  return params.get('invite') || ''
+}
+
 export default function Onboarding({ userId, onDone }) {
-  const [mode, setMode] = useState('create') // 'create' | 'join'
+  const initialInvite = getInviteFromUrl()
+  const [mode, setMode] = useState(initialInvite ? 'join' : 'create') // 'create' | 'join'
   const [groupName, setGroupName] = useState('')
-  const [inviteCode, setInviteCode] = useState('')
+  const [inviteCode, setInviteCode] = useState(initialInvite)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -12,21 +21,14 @@ export default function Onboarding({ userId, onDone }) {
     e.preventDefault()
     setBusy(true)
     setError(null)
-    // Appka si id nové skupiny vygeneruje sama a pošle ho rovnou v insertu,
-    // místo aby si ho nechala vrátit přes .select().single(). Důvod: insert
-    // s RETURNING appka appce musí projít i SELECT politikou na "groups"
-    // (is_group_member), a tu appka splní až AFTER trigger handle_new_group(),
-    // co přidá zakladatele do group_members -- ale AFTER triggery se spouští
-    // až po vyhodnocení RETURNING, takže ta kontrola vždy spadla dřív, než
-    // trigger stihl proběhnout. Appka tedy id zná předem a žádná data zpátky
-    // nepotřebuje, takže se týhle kontrole úplně vyhne.
-    const newGroupId = crypto.randomUUID()
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('groups')
-      .insert({ id: newGroupId, name: groupName, created_by: userId })
+      .insert({ name: groupName, created_by: userId })
+      .select()
+      .single()
     setBusy(false)
     if (error) { setError(error.message); return }
-    onDone(newGroupId)
+    onDone(data.id)
   }
 
   async function handleJoin(e) {
@@ -44,8 +46,14 @@ export default function Onboarding({ userId, onDone }) {
   return (
     <div className="center-screen">
       <div className="login-card">
-        <div className="login-eyebrow">NAHODIT</div>
+        <div className="login-eyebrow">ČISTÝ SVĚDOMÍ</div>
         <h1 className="login-title">Ještě jeden krok</h1>
+
+        {initialInvite && (
+          <p className="invite-hint">
+            Kód pozvánky jsme ti předvyplnili — jen ho níže potvrď.
+          </p>
+        )}
 
         <div className="tab-row">
           <button
