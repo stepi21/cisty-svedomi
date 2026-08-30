@@ -220,6 +220,18 @@ header{ background:var(--water-deep); color:var(--white); padding:16px 20px; }
   margin-top:10px; background:#8F3423; border:1px solid #B4432E;
   padding:8px 14px; border-radius:8px; font-size:var(--fs-base); color:#fff;
 }
+.demo-banner{
+  margin-top:10px; background:var(--amber-deep); border:1px solid var(--amber);
+  padding:8px 14px; border-radius:8px; font-size:var(--fs-base); color:#fff; font-weight:600;
+}
+/* Appka v demo appce vizuálně ztlumí zápisová tlačítka (uložit/smazat) --
+   appka jim samotné kliknutí odchytává centrálně v JS (viz Dashboard.jsx),
+   tohle jen appka dá uživateli najevo, že tlačítko nic neudělá, ještě než
+   na něj klikne. */
+.app.demo-readonly .btn-primary,
+.app.demo-readonly .new-btn.danger-btn{
+  opacity:.45; cursor:not-allowed;
+}
 .save-toast{
   position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
   background:var(--water-deep); color:var(--white); padding:10px 22px; border-radius:24px;

@@ -8,6 +8,7 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [groupId, setGroupId] = useState(null)
+  const [isDemoGroup, setIsDemoGroup] = useState(false)
   const [loading, setLoading] = useState(true)
   const [recovering, setRecovering] = useState(false)
 
@@ -47,12 +48,13 @@ export default function App() {
 
     const { data: membership } = await supabase
       .from('group_members')
-      .select('group_id, groups(name)')
+      .select('group_id, groups(name, is_demo)')
       .eq('user_id', session.user.id)
       .limit(1)
       .maybeSingle()
 
     setGroupId(membership ? membership.group_id : null)
+    setIsDemoGroup(membership?.groups?.is_demo === true)
     setLoading(false)
   }
 
@@ -77,6 +79,7 @@ export default function App() {
       groupId={groupId}
       userId={session.user.id}
       profile={profile}
+      isDemoGroup={isDemoGroup}
       onSignOut={() => supabase.auth.signOut()}
     />
   )

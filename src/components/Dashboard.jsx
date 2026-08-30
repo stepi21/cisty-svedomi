@@ -151,7 +151,7 @@ function findStationsByRevir(revir, locationsCatalog) {
   return Array.from(seen.values())
 }
 
-export default function Dashboard({ groupId, userId, profile, onSignOut }) {
+export default function Dashboard({ groupId, userId, profile, isDemoGroup, onSignOut }) {
   const [sessions, setSessions] = useState([])
   // Index aktivity ryb na Domů -- appka porovná DNEŠNÍ podmínky (fáze
   // měsíce, tlak, trend tlaku, vodní stav u appce nejbližší stanice) s
@@ -358,6 +358,30 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       || window.matchMedia('(display-mode: standalone)').matches
     document.documentElement.classList.toggle('standalone-app', isStandalone)
   }, [])
+
+  // Demo skupina je jen pro prohlížení -- appka centrálně (na úrovni
+  // celého dokumentu, v CAPTURE fázi, tedy DŘÍV než klik doputuje k
+  // libovolnému React onClick handleru) odchytí kliknutí na tlačítka se
+  // třídou btn-primary (uložit/vytvořit) nebo danger-btn (smazat) a
+  // appka ho zastaví -- namísto aby appka musela každý z těch zápisů
+  // (nová výprava, úlovek, nástraha, prut, revír, smazání čehokoli...)
+  // procházet a upravovat zvlášť. Skutečnou pojistkou proti zápisu
+  // zůstává RLS politika v Supabase (řeší appka nezávisle na tomhle) --
+  // tohle appka dělá jen kvůli hezčímu chování v appce samotné, ať
+  // uživatel dostane rovnou srozumitelnou českou hlášku, ne technickou
+  // chybu z Postgresu.
+  useEffect(() => {
+    if (!isDemoGroup) return
+    function blockWrites(e) {
+      const target = e.target.closest('.btn-primary, .new-btn.danger-btn')
+      if (!target) return
+      e.preventDefault()
+      e.stopPropagation()
+      showToast('Demo appka je jen pro prohlížení -- založ si vlastní appku, ať můžeš zapisovat.')
+    }
+    document.addEventListener('click', blockWrites, true)
+    return () => document.removeEventListener('click', blockWrites, true)
+  }, [isDemoGroup])
 
   // --real-vh: appka na živém testu (na displeji zobrazená diagnostická
   // zjistila, že window.innerHeight/visualViewport.height -- na kterých
@@ -4354,7 +4378,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
   }
 
   return (
-    <div className="app">
+    <div className={`app${isDemoGroup ? ' demo-readonly' : ''}`}>
       <datalist id="known-baits-dravec">
         {allKnownBaits('dravec').map((b) => <option key={b} value={b} />)}
       </datalist>
@@ -4485,6 +4509,9 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
         )}
         {!isOnline && (
           <div className="offline-banner" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconOffline size={15} /> Nejsi připojený k internetu — rozepsaná data zůstávají vyplněná, zkus uložit až se signál vrátí.</div>
+        )}
+        {isDemoGroup && (
+          <div className="demo-banner">🔒 Prohlížíš demo appku -- je jen pro čtení, nic se v ní neuloží.</div>
         )}
       </header>
 
