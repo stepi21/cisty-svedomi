@@ -725,7 +725,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
 
   const activeSession = sessions.find((s) => s.id === activeId) || null
   // appka tímhle zjišťuje, jestli má uživatel rozjetou živou výpravu -- podle
-  // toho hlavičkové tlačítko vedle loga přepíná mezi "Chytat" (jantarová,
+  // toho hlavičkové tlačítko vedle loga přepíná mezi "Chytám" (jantarová,
   // spustí novou živou výpravu) a "Probíhá" (pulzující červená, skočí zpátky
   // do detailu té rozjeté výpravy). Appka to schválně váže jen na vlastní
   // výpravu -- appka nemá důvod tady hlídat rozjeté výpravy zbytku party.
@@ -4370,7 +4370,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
       <header>
         <div className="head-row">
           <div className="head-logo-group">
-            <h1>Nahodit</h1>
+            <img src="/logo-horizontal.png" alt="Nahodit" className="app-logo-img" />
             {myLiveSession ? (
               <button
                 className="new-btn live-toggle active"
@@ -4378,7 +4378,7 @@ export default function Dashboard({ groupId, userId, profile, onSignOut }) {
                 title="Rozjetá výprava"
               ><IconLive size={11} color="#fff" /> Probíhá</button>
             ) : (
-              <button className="new-btn live-toggle" onClick={startNewSessionLive} title="Spustit živou výpravu">Chytat</button>
+              <button className="new-btn live-toggle" onClick={startNewSessionLive} title="Spustit živou výpravu">Chytám</button>
             )}
           </div>
           <div className="head-icons-group">

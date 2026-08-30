@@ -103,8 +103,7 @@ header{ background:var(--water-deep); color:var(--white); padding:16px 20px; }
 .head-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .head-logo-group{ display:flex; align-items:center; gap:10px; min-width:0; }
 .head-icons-group{ display:flex; align-items:center; gap:8px; flex:none; }
-header h1{ font-family:'Fraunces', serif; font-weight:600; font-size:var(--fs-4xl); margin:0; white-space:nowrap; }
-header h1 .accent{ color:var(--amber); }
+.app-logo-img{ height:32px; display:block; }
 .new-btn.live-toggle{ border-style:solid; font-weight:600; }
 .new-btn.live-toggle.active{ animation:live-pulse 1.8s infinite; }
 .head-logo-group .new-btn.live-toggle{ background:var(--amber); border-color:var(--amber); color:var(--ink); }
@@ -122,7 +121,7 @@ header h1 .accent{ color:var(--amber); }
   .head-row{ gap:6px; }
   .head-logo-group{ gap:9px; }
   .head-icons-group{ gap:5px; }
-  header h1{ font-size:20px; }
+  .app-logo-img{ height:24px; }
   .new-btn.live-toggle{ padding:4px 10px; }
   .new-btn.hamburger-btn{ padding:7px 10px; }
 }
