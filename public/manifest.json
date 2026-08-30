@@ -1,7 +1,7 @@
 {
-  "name": "Čistý svědomí",
-  "short_name": "Čistý svědomí",
-  "description": "Sdílený rybářský deník pro partu kamarádů.",
+  "name": "Nahodit",
+  "short_name": "Nahodit",
+  "description": "Rybářský deník -- výpravy a úlovky, sám nebo s partou.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#EDE9DC",

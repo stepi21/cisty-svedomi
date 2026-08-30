@@ -103,7 +103,7 @@ function SetNewPassword({ onDone }) {
   return (
     <div className="center-screen">
       <div className="login-card">
-        <div className="login-eyebrow">ČISTÝ SVĚDOMÍ</div>
+        <div className="login-eyebrow">NAHODIT</div>
         <h1 className="login-title">Nové heslo</h1>
         <form onSubmit={handleSubmit}>
           <label className="field-label">Nové heslo</label>

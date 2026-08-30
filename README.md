@@ -1,4 +1,4 @@
-# Čistý svědomí — appka
+# Nahodit — appka
 
 React appka napojená na Supabase. Postup níže nepotřebuje žádný terminál.
 
@@ -10,7 +10,7 @@ V **SQL Editoru** spusť soubor `migration_2.sql` (přidá pole pro oblast výpr
 
 1. Jdi na **github.com** → přihlas se / založ účet (přes e-mail, žádný terminál potřeba)
 2. **+** vpravo nahoře → **New repository**
-3. Název např. `cisty-svedomi`, ponech **Public** nebo **Private** (obojí je pro Vercel free tier v pořádku)
+3. Název např. `nahodit`, ponech **Public** nebo **Private** (obojí je pro Vercel free tier v pořádku)
 4. **Create repository**
 5. Na stránce repa klikni **uploading an existing file** (nebo Add file → Upload files)
 6. **Rozbal si tento zip na svém počítači** a celý obsah složky (ne samotnou složku, ale co je uvnitř — `package.json`, `src`, `index.html` atd.) přetáhni myší do okna GitHubu
@@ -28,17 +28,17 @@ Tyto dvě hodnoty budeš potřebovat v kroku 3.
 
 1. Jdi na **vercel.com** → přihlas se přes GitHub účet (ten samý, co v kroku 1)
 2. **Add New… → Project**
-3. Vyber repozitář `cisty-svedomi` → **Import**
+3. Vyber repozitář `nahodit` → **Import**
 4. V sekci **Environment Variables** přidej:
    - `VITE_SUPABASE_URL` = (Project URL z kroku 2)
    - `VITE_SUPABASE_ANON_KEY` = (anon public klíč z kroku 2)
 5. **Deploy**
-6. Po pár minutách appka poběží na adrese typu `cisty-svedomi.vercel.app`
+6. Po pár minutách appka poběží na adrese typu `nahodit.vercel.app`
 
 ## 4) Doladit Supabase pro tuhle adresu
 
 V Supabase: **Authentication → URL Configuration**:
-- **Site URL**: vlož adresu appky z kroku 3 (např. `https://cisty-svedomi.vercel.app`)
+- **Site URL**: vlož adresu appky z kroku 3 (např. `https://nahodit.vercel.app`)
 - **Redirect URLs**: přidej stejnou adresu (klidně i s `/**` na konci)
 
 Bez tohoto kroku by přihlašovací magic link posílal lidi na špatnou adresu.
