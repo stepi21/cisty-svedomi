@@ -46,15 +46,51 @@ export default function App() {
       .single()
     setProfile(profileData)
 
-    const { data: membership } = await supabase
-      .from('group_members')
-      .select('group_id, groups(name, is_demo)')
-      .eq('user_id', session.user.id)
-      .limit(1)
-      .maybeSingle()
+    // Pokud appka běží s ?invite=KOD v adrese, appka se o pozvánku vždy
+    // pokusí -- i když už uživatel nějakou skupinu má (typicky: má
+    // vlastní partu, ale klikl na demo odkaz). Bez tohohle appka dřív
+    // vzala jen "první nalezené" členství a pozvánku z URL úplně
+    // ignorovala, takže uživatel skončil ve své vlastní skupině místo
+    // v demu.
+    const inviteCode = new URLSearchParams(window.location.search).get('invite')
+    let activeGroupId = null
+    let activeIsDemo = false
 
-    setGroupId(membership ? membership.group_id : null)
-    setIsDemoGroup(membership?.groups?.is_demo === true)
+    if (inviteCode) {
+      const { data: joinedGroupId, error: joinError } = await supabase.rpc(
+        'accept_group_invite',
+        { invite_code: inviteCode }
+      )
+      if (!joinError && joinedGroupId) {
+        activeGroupId = joinedGroupId
+        const { data: g } = await supabase
+          .from('groups')
+          .select('is_demo')
+          .eq('id', joinedGroupId)
+          .single()
+        activeIsDemo = g?.is_demo === true
+        // Kód z adresy appka po úspěšném zpracování smaže -- ať appka
+        // nezkouší invite znovu při každém refreshi stránky.
+        window.history.replaceState({}, '', window.location.pathname)
+      }
+      // Pokud pozvánka selže (neplatná/vypršelá), appka potichu spadne
+      // na běžné hledání členství níž -- uživatel uvidí svou vlastní
+      // skupinu, pokud nějakou má, místo aby appka zůstala viset.
+    }
+
+    if (!activeGroupId) {
+      const { data: membership } = await supabase
+        .from('group_members')
+        .select('group_id, groups(name, is_demo)')
+        .eq('user_id', session.user.id)
+        .limit(1)
+        .maybeSingle()
+      activeGroupId = membership ? membership.group_id : null
+      activeIsDemo = membership?.groups?.is_demo === true
+    }
+
+    setGroupId(activeGroupId)
+    setIsDemoGroup(activeIsDemo)
     setLoading(false)
   }
 
