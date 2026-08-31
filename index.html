@@ -3,28 +3,45 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Nahodit</title>
 
-    <!-- Standardní web manifest -- hlavně pro Android/Chrome "Přidat na
-         plochu" a jako obecný popis appky pro prohlížeč. -->
-    <link id="app-manifest" rel="manifest" href="/manifest.json">
+    <!-- Appka na ploše telefonu se spouští na start_url z manifestu -- NE
+         na adrese, ze které appku na plochu přidáš (ověřeno na iPhonu).
+         Pokud appka běží s ?invite=KOD v adrese, potřebuje appka
+         manifest s tímhle kódem zapečeným přímo do start_url (viz
+         /api/manifest.js) -- ikonka na ploše ho pak najde vždycky, i bez
+         adresy v URL.
+
+         DŮLEŽITÉ: manifest (a titulek stránky) appka MUSÍ zapsat tímhle
+         skriptem HNED na začátku hlavičky, přes document.write -- ne až
+         přepisovat později přes JS. Když appka měla v HTML napevno
+         <link rel="manifest" href="/manifest.json"> a teprve pak ho
+         skriptem přepsala, prohlížeč si tu PŮVODNÍ (špatnou) adresu
+         manifestu stihl stáhnout dřív, než skript vůbec doběhl -- appka
+         v "Přidat na plochu" pak ukazovala starý název a čistou adresu
+         bez kódu, i když skript proběhl v pořádku. document.write tady
+         běží jako součást parsování stránky, takže se špatná verze
+         manifestu nikdy nestihne ani začít stahovat. -->
+    <script>
+      (function () {
+        var invite = new URLSearchParams(window.location.search).get('invite')
+        var manifestHref = invite ? '/api/manifest?invite=' + encodeURIComponent(invite) : '/manifest.json'
+        var title = invite ? 'Nahodit — DEMO' : 'Nahodit'
+        var appleTitle = invite ? 'Nahodit DEMO' : 'Nahodit'
+        document.write(
+          '<link id="app-manifest" rel="manifest" href="' + manifestHref + '">' +
+          '<title>' + title + '</title>' +
+          '<meta name="apple-mobile-web-app-title" content="' + appleTitle + '">'
+        )
+      })()
+    </script>
+
     <meta name="theme-color" content="#123B52">
-
-    <!-- Appka na ploše telefonu se spouští na start_url z manifestu výše --
-         NE na adrese, ze které appku na plochu přidáš (ověřeno na iPhonu:
-         appka na ploše "zapomněla" kód pozvánky z demo odkazu, i když jsme
-         appku na plochu přidali přímo z něj). Pokud appka běží s
-         ?invite=KOD v adrese, přepneme odkaz na manifest na dynamickou
-         verzi (viz /api/manifest.js), která má start_url s tímhle kódem
-         už zapečený uvnitř -- appka na ploše ho pak najde vždycky, i bez
-         adresy v URL. -->
 
     <!-- iOS Safari se řídí těmito tagy vlastními, ne manifestem výše --
          "capable" appce zajistí, že appka po přidání na plochu poběží bez
          adresního řádku a tlačítek prohlížeče kolem, jako opravdická appka. -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Nahodit">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
@@ -35,25 +52,6 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-    <script>
-      (function () {
-        var invite = new URLSearchParams(window.location.search).get('invite')
-        if (invite) {
-          document.getElementById('app-manifest').setAttribute(
-            'href',
-            '/api/manifest?invite=' + encodeURIComponent(invite)
-          )
-          // iPhone si název appky na ploše bere z titulku stránky (a z
-          // apple-mobile-web-app-title), ne z manifestu výše -- appka
-          // proto přepne i tohle, ať jde demo appka na ikoně na první
-          // pohled odlišit od appky s vlastní partou.
-          document.title = 'Nahodit — DEMO'
-          var appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]')
-          if (appleTitle) appleTitle.setAttribute('content', 'Nahodit DEMO')
-        }
-      })()
-    </script>
   </head>
   <body>
     <div id="root"></div>
