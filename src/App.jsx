@@ -93,9 +93,13 @@ export default function App() {
           .eq('id', joinedGroupId)
           .single()
         activeIsDemo = g?.is_demo === true
-        // Kód z adresy appka po úspěšném zpracování smaže -- ať appka
-        // nezkouší invite znovu při každém refreshi stránky.
-        window.history.replaceState({}, '', window.location.pathname)
+        // Kód appka z adresy smaže jen u skutečné (nedemo) pozvánky --
+        // u dema ho tam appka záměrně nechává, ať i po refreshi stránky
+        // appka pozná, že se má vrátit do dema, ne do uživatelovy
+        // vlastní skupiny.
+        if (!activeIsDemo) {
+          window.history.replaceState({}, '', window.location.pathname)
+        }
       }
       // Pokud pozvánka selže (neplatná/vypršelá), appka potichu spadne
       // na běžné hledání členství níž -- uživatel uvidí svou vlastní
