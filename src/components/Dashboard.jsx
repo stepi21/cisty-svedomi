@@ -511,10 +511,18 @@ export default function Dashboard({ groupId, userId, profile, isDemoGroup, onSig
   async function loadMembers() {
     const { data } = await supabase
       .from('group_members')
-      .select('user_id, joined_at, profiles(display_name, color)')
+      .select('user_id, role, joined_at, profiles(display_name, color)')
       .eq('group_id', groupId)
       .order('joined_at')
-    if (data) setMembers(data.map((m) => ({ id: m.user_id, name: m.profiles?.display_name || '?', color: m.profiles?.color || null })))
+    // "visitor" je někdo, kdo si jen prohlíží demo appku přes pozvánkový
+    // kód -- appka ho musí zapsat do group_members, aby vůbec směl číst
+    // data (RLS), ale do žebříčku a seznamu členů nepatří, protože nejde
+    // o skutečného člena party.
+    if (data) setMembers(
+      data
+        .filter((m) => m.role !== 'visitor')
+        .map((m) => ({ id: m.user_id, name: m.profiles?.display_name || '?', color: m.profiles?.color || null }))
+    )
   }
 
   function userColor(uid) {
