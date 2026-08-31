@@ -7,8 +7,17 @@
 
     <!-- Standardní web manifest -- hlavně pro Android/Chrome "Přidat na
          plochu" a jako obecný popis appky pro prohlížeč. -->
-    <link rel="manifest" href="/manifest.json">
+    <link id="app-manifest" rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#123B52">
+
+    <!-- Appka na ploše telefonu se spouští na start_url z manifestu výše --
+         NE na adrese, ze které appku na plochu přidáš (ověřeno na iPhonu:
+         appka na ploše "zapomněla" kód pozvánky z demo odkazu, i když jsme
+         appku na plochu přidali přímo z něj). Pokud appka běží s
+         ?invite=KOD v adrese, přepneme odkaz na manifest na dynamickou
+         verzi (viz /api/manifest.js), která má start_url s tímhle kódem
+         už zapečený uvnitř -- appka na ploše ho pak najde vždycky, i bez
+         adresy v URL. -->
 
     <!-- iOS Safari se řídí těmito tagy vlastními, ne manifestem výše --
          "capable" appce zajistí, že appka po přidání na plochu poběží bez
@@ -26,6 +35,25 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+      (function () {
+        var invite = new URLSearchParams(window.location.search).get('invite')
+        if (invite) {
+          document.getElementById('app-manifest').setAttribute(
+            'href',
+            '/api/manifest?invite=' + encodeURIComponent(invite)
+          )
+          // iPhone si název appky na ploše bere z titulku stránky (a z
+          // apple-mobile-web-app-title), ne z manifestu výše -- appka
+          // proto přepne i tohle, ať jde demo appka na ikoně na první
+          // pohled odlišit od appky s vlastní partou.
+          document.title = 'Nahodit — DEMO'
+          var appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]')
+          if (appleTitle) appleTitle.setAttribute('content', 'Nahodit DEMO')
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
