@@ -22,7 +22,8 @@ export default function App() {
       // Onboarding, i když uživatel skupinu dávno měl. Řešení: pokud session
       // existuje, appka nechá loading zapnuté -- vypne ho až loadMembership(),
       // teprve když zná i groupId. Bez session logicky nic dalšího čekat netřeba.
-      if (!data.session) setLoading(false)
+      if (data.session) return
+      maybeAutoJoinDemo()
     })
     const { data: listener } = supabase.auth.onAuthStateChange((event, sess) => {
       setSession(sess)
@@ -31,6 +32,29 @@ export default function App() {
     })
     return () => listener.subscription.unsubscribe()
   }, [])
+
+  // Pokud appku otevřeš přes odkaz s ?invite=KOD a ten kód vede na DEMO
+  // skupinu, appka tě rovnou anonymně přihlásí -- bez e-mailu, bez čekání
+  // na přihlašovací odkaz v poště. Tohle řeší i to, že appka na ploše
+  // telefonu (hlavně na iPhonu) běží technicky odděleně od prohlížeče,
+  // takže přihlášení z prohlížeče se do appky na ploše stejně nepropíše --
+  // anonymní přihlášení tenhle mezikrok úplně obejde, funguje to samo
+  // vždy znovu, přesně tam, kde je otevřené. Pro běžné (nedemo) pozvánky
+  // appka nechá normální přihlášení e-mailem beze změny, protože si tam
+  // uživatel chce identitu uchovat napříč zařízeními.
+  async function maybeAutoJoinDemo() {
+    const inviteCode = new URLSearchParams(window.location.search).get('invite')
+    if (!inviteCode) { setLoading(false); return }
+
+    const { data: isDemo } = await supabase.rpc('is_demo_invite', { invite_code: inviteCode })
+    if (!isDemo) { setLoading(false); return }
+
+    const { error } = await supabase.auth.signInAnonymously()
+    // Úspěšné anonymní přihlášení samo vyvolá onAuthStateChange výše a
+    // appka pokračuje běžnou cestou (loadMembership níž). Při chybě appka
+    // nechá loading vypnutý a ukáže normální přihlašovací obrazovku.
+    if (error) setLoading(false)
+  }
 
   useEffect(() => {
     if (!session) { setGroupId(null); setProfile(null); return }
@@ -43,7 +67,7 @@ export default function App() {
       .from('profiles')
       .select('*')
       .eq('id', session.user.id)
-      .single()
+      .maybeSingle()
     setProfile(profileData)
 
     // Pokud appka běží s ?invite=KOD v adrese, appka se o pozvánku vždy
