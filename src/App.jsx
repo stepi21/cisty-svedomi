@@ -14,6 +14,23 @@ export default function App() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
+      const inviteCode = new URLSearchParams(window.location.search).get('invite')
+      // Anonymní (demo) účet appka nikdy nemá pouštět do "čisté" appky --
+      // je zavěšený jen na demo skupinu (role visitor) a nemá žádný
+      // e-mail, přes který by se dal později obnovit. Bez tohohle appka
+      // po dřívějším vyzkoušení dema, s ještě přihlášeným anonymním
+      // účtem v prohlížeči, otevřela demo i na čistém odkazu bez
+      // ?invite= -- appka totiž anonymnímu účtu najde jediné členství,
+      // co má (demo), a to ukáže. Řešení: appka anonymní účet odhlásí
+      // vždy, když appku otevřeš BEZ kódu pozvánky -- s kódem v adrese
+      // (znovu otevřené demo) anonymní účet appka naopak v klidu nechá.
+      if (data.session?.user?.is_anonymous && !inviteCode) {
+        supabase.auth.signOut().then(() => {
+          setSession(null)
+          maybeAutoJoinDemo()
+        })
+        return
+      }
       setSession(data.session)
       // Appka tu dřív vypínala "Načítám…" hned, jakmile zjistila přihlášení --
       // ale to je jen půlka odpovědi. Skupina (groupId) se dozví až
