@@ -55,9 +55,6 @@ export default function Login() {
       <div className="login-card">
         <div className="login-eyebrow">NAHODIT</div>
         <h1 className="login-title">Deník pro rybáře</h1>
-        <p style={{ fontSize: 10, opacity: 0.5, wordBreak: 'break-all', marginBottom: 8 }}>
-          DEBUG: {typeof window !== 'undefined' ? window.location.href : ''}
-        </p>
 
         {mode !== 'reset' && (
           <div className="tab-row">
