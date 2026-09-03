@@ -48,6 +48,14 @@ export function sessionDurationMinutes(session) {
   return minutes
 }
 
+// Aktuální lokální čas jako "HH:MM" -- appka tímhle přednastaví čas
+// úlovku u ŽIVÉ výpravy (uživatel je fyzicky na místě a rybu vytáhl
+// právě teď), zůstává ale běžný <input type="time">, takže appka ho
+// v případě potřeby dovolí ručně přepsat.
+export function nowHHMM() {
+  return new Date().toTimeString().slice(0, 5)
+}
+
 // "4 h 30 min" / "45 min" / "2 h" -- appka zformátuje minuty na
 // čitelný text.
 export function formatDurationHM(minutes) {
