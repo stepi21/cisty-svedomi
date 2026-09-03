@@ -11,7 +11,7 @@ import LocationsModal from './LocationsModal.jsx'
 import { fetchWeather, moonPhaseName } from '../lib/weather.js'
 import { fetchWaterConditions, fetchLiveConditions, findNearestStations, WATER_PRECISION_LABEL, SPA_LEVEL_INFO } from '../lib/hydrology.js'
 import { estimateWeightKg, hasWeightEstimate } from '../lib/weightEstimate.js'
-import { crossesMidnight, actualDateForTime, sessionDurationMinutes, formatDurationHM } from '../lib/sessionTime.js'
+import { crossesMidnight, actualDateForTime, sessionDurationMinutes, formatDurationHM, nowHHMM } from '../lib/sessionTime.js'
 import { uploadPhoto } from '../lib/storage.js'
 import { buildRiverAreasFromLine } from '../lib/riverShape.js'
 import { useLockBodyScroll } from '../lib/useLockBodyScroll.js'
@@ -765,6 +765,21 @@ export default function Dashboard({ groupId, userId, profile, isDemoGroup, onSig
   const canEdit = activeSession && activeSession.user_id === userId
   const activeSessionRef = useRef(null)
   useEffect(() => { activeSessionRef.current = activeSession }, [activeSession])
+  // Appka appce hlídá "zombie" activeId -- ukazuje na výpravu, která už v
+  // načtených datech není (appka ji smazala, smazal ji jiný člen party,
+  // nebo se activeId jen obnovilo ze staršího nav_state v localStorage).
+  // Dřív appka v tomhle stavu zůstala viset na detailu prázdné/neexistující
+  // výpravy a při dalším pokusu appka hlásila nepříjemnou chybu -- appka
+  // teď sama, rovnou, přepne zpátky na přehled a appce to řekne.
+  useEffect(() => {
+    if (loading) return
+    if (activeId && !sessions.some((s) => s.id === activeId)) {
+      setActiveId(null)
+      setViewMode('aggregate')
+      showToast('Tahle výprava už neexistuje -- byla smazána.')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions, loading, activeId])
   const relocateSessionIdRef = useRef(null)
   const relocateCatchIdRef = useRef(null)
   const addRodToSessionRef = useRef(null) // {sessionId, type} -- výprava, ke které appka přidává nový prut/místo (funguje i u už uložené výpravy)
@@ -948,7 +963,7 @@ export default function Dashboard({ groupId, userId, profile, isDemoGroup, onSig
     if (target === 'catch-point') {
       setPlacementTarget(null)
       const s = activeSessionRef.current
-      setDraftCatch({ point, species: '', category: TYPE_CATEGORY[s?.type] || 'dravec', length: '', weight: '', weightEstimated: false, bait: '', rodId: '', time: '', photoFile: null, baitPhotoFile: null, revir: s?.revir || '' })
+      setDraftCatch({ point, species: '', category: TYPE_CATEGORY[s?.type] || 'dravec', length: '', weight: '', weightEstimated: false, bait: '', rodId: '', time: s?.status === 'in_progress' ? nowHHMM() : '', photoFile: null, baitPhotoFile: null, revir: s?.revir || '' })
       return
     }
 
@@ -2566,7 +2581,7 @@ export default function Dashboard({ groupId, userId, profile, isDemoGroup, onSig
   function chooseCatchOnRod(rod) {
     setCatchChoosing(false)
     const knownPhoto = rod.bait ? baitPhotoLookup()[rod.bait.trim().toLowerCase()] : null
-    setDraftCatch({ point: { lat: rod.lat, lng: rod.lng }, species: '', category: TYPE_CATEGORY[activeSession?.type] || 'dravec', length: '', weight: '', weightEstimated: false, bait: rod.bait || '', rodId: rod.id, time: '', photoFile: null, baitPhotoFile: null, bait_photo_url: knownPhoto || null, revir: activeSession?.revir || '' })
+    setDraftCatch({ point: { lat: rod.lat, lng: rod.lng }, species: '', category: TYPE_CATEGORY[activeSession?.type] || 'dravec', length: '', weight: '', weightEstimated: false, bait: rod.bait || '', rodId: rod.id, time: activeSession?.status === 'in_progress' ? nowHHMM() : '', photoFile: null, baitPhotoFile: null, bait_photo_url: knownPhoto || null, revir: activeSession?.revir || '' })
   }
 
   function chooseCatchOnMap() {
@@ -3191,11 +3206,40 @@ export default function Dashboard({ groupId, userId, profile, isDemoGroup, onSig
 
   async function deleteSession() {
     if (!window.confirm('Opravdu smazat celou výpravu včetně všech úlovků a prutů? Nedá se to vrátit zpět.')) return
-    const { error } = await supabase.from('sessions').delete().eq('id', editingSession.id)
-    if (error) { alert(error.message); return }
-    setEditingSession(null)
-    if (activeId === editingSession.id) { setActiveId(null); setViewMode('aggregate') }
-    await loadSessions()
+    const deletingId = editingSession.id
+    try {
+      // Appka radši smaže navázané záznamy (místa, úlovky, pruty) sama,
+      // po jedné tabulce, místo aby spoléhala jen na cascade delete v
+      // databázi. Díky tomu appka umí přesně pojmenovat, KDE to selhalo
+      // (např. RLS na úlovku přidaném jiným členem party), místo jedné
+      // obecné chyby z velkého DELETE nad "sessions", po které appka
+      // dřív nechala editační okno viset i s "dead" výpravou v seznamu.
+      const { error: locErr } = await supabase.from('session_locations').delete().eq('session_id', deletingId)
+      if (locErr) { alert('Nepodařilo se smazat propojení výpravy s místy: ' + locErr.message); return }
+      const { error: catchErr } = await supabase.from('catches').delete().eq('session_id', deletingId)
+      if (catchErr) { alert('Nepodařilo se smazat úlovky výpravy: ' + catchErr.message); return }
+      const { error: rodErr } = await supabase.from('rods').delete().eq('session_id', deletingId)
+      if (rodErr) { alert('Nepodařilo se smazat pruty výpravy: ' + rodErr.message); return }
+      const { data, error } = await supabase.from('sessions').delete().eq('id', deletingId).select()
+      if (error) { alert(error.message); return }
+      if (!data || data.length === 0) {
+        // Appka sem dorazí i v případě, že RLS delete "tiše" nesmaže nic
+        // (0 řádků, ale bez chyby) -- appka to radši ohlásí rovnou, než
+        // aby výprava jen zdánlivě zmizela z okna a appka na ni pak
+        // hlásila "neexistuje" při dalším otevření ze seznamu.
+        alert('Výpravu se nepodařilo smazat (appka k tomu nemá oprávnění, nebo už byla smazána).')
+        return
+      }
+      // Appka hned zavře editační okno a rovnou odstraní výpravu i z
+      // lokálního seznamu -- nečeká na doběhnutí loadSessions(), ať
+      // výprava nezůstane byť na okamžik viset ve "Výpravách".
+      setEditingSession(null)
+      setSessions((prev) => prev.filter((s) => s.id !== deletingId))
+      if (activeId === deletingId) { setActiveId(null); setViewMode('aggregate') }
+      await loadSessions()
+    } catch (err) {
+      alert('Smazání se nepovedlo (možná vypadlo připojení). Zkus to prosím znovu.\n\n' + err.message)
+    }
   }
 
   function allKnownBaits(category) {
