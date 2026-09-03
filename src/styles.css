@@ -339,6 +339,18 @@ header{ background:var(--water-deep); color:var(--white); padding:16px 20px; }
   }
   .mobile-sheet:not(.full-panel).expanded{ height:75% !important; }
   .mobile-sheet:not(.full-panel).map-panel.expanded{ height:auto !important; max-height:min(45%, 320px) !important; }
+  /* V appce na ploše appka pod mapou navíc drží fixní spodní tab lištu
+     (.bottom-tab-bar, position:fixed, neprůhledná, z-index:460) -- ta
+     plovoucí varianta lišty výše má ale "bottom:0" počítané vůči
+     .layout, což ji posadí až za/pod tuhle tab lištu (z-index:60 <
+     460), takže vizuálně zmizí, i když technicky v DOMu zůstává.
+     Appka jí proto v standalone appce posune spodní hranu přesně o
+     výšku tab lišty + safe area, stejným výpočtem, jaký appka už
+     používá u .bottom-tab-bar a .save-toast -- lišta tak zůstane nad
+     tab lištou, přesně jako appka appce dělala předtím. */
+  html.standalone-app .mobile-sheet:not(.full-panel){
+    bottom:calc(var(--bottom-nav-h) + env(safe-area-inset-bottom)) !important;
+  }
 }
 
 /* Appka na ploše potřebuje "výpravu v klidu" (mobile-sheet.full-panel,
